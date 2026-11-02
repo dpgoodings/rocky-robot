@@ -1,0 +1,3049 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sci-Fi Voice Comms — Plug-and-Play Voice Assistant (BMO Edition)</title>
+  <style>
+    :root {
+      --bg-deep: #090c11;
+      --bg-panel: rgba(18, 24, 34, 0.88);
+      --accent: #f5a623;
+      --accent-soft: rgba(245, 166, 35, 0.13);
+      --accent-glow: rgba(245, 166, 35, 0.42);
+      --border: rgba(245, 166, 35, 0.25);
+      --bmo-shell: #53b09c;
+      --bmo-shell-dark: #3b8978;
+      --bmo-ink: #142826;
+      --cyan: #38bdf8;
+      --emerald: #34d399;
+      --text: #f3f4f6;
+      --muted: #9ca3af;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(circle at 50% 16%, #16202e 0%, var(--bg-deep) 72%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 16px 38px;
+      transition: background 0.35s ease;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 840px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 13px 20px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      backdrop-filter: blur(12px);
+      transition: border-color 0.3s ease;
+    }
+
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-dot {
+      width: 11px; height: 11px; border-radius: 50%;
+      background: var(--accent); box-shadow: 0 0 12px var(--accent);
+      transition: all 0.3s ease;
+    }
+    .brand h1 { font-size: 1.04rem; font-weight: 650; letter-spacing: 0.02em; }
+    .brand span { font-size: 0.77rem; color: var(--muted); display: block; }
+
+    .header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .add-voice-btn {
+      background: var(--accent-soft);
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      font-size: 0.76rem;
+      font-weight: 700;
+      padding: 5px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .add-voice-btn:hover {
+      background: var(--accent);
+      color: #090c11;
+    }
+    .reload-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 5px 10px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .reload-btn:hover { color: var(--text); border-color: var(--accent); }
+
+    .health-pill {
+      font-size: 0.77rem; padding: 5px 12px; border-radius: 999px;
+      background: rgba(52, 211, 153, 0.12);
+      border: 1px solid rgba(52, 211, 153, 0.35);
+      color: var(--emerald); font-weight: 600;
+    }
+    .health-pill.loading {
+      background: rgba(245, 166, 35, 0.12);
+      border-color: rgba(245, 166, 35, 0.35);
+      color: #f5a623;
+    }
+
+    .char-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+    .char-card {
+      background: var(--bg-panel);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      border-radius: 14px; padding: 11px 16px;
+      cursor: pointer; text-align: left; color: var(--muted);
+      transition: all 0.2s ease; display: flex; flex-direction: column; gap: 3px;
+    }
+    .char-card:hover { color: var(--text); border-color: rgba(255, 255, 255, 0.22); }
+    .char-card.active {
+      color: var(--text);
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      box-shadow: 0 0 22px var(--accent-soft);
+    }
+    .char-title {
+      font-size: 0.94rem; font-weight: 700;
+      display: flex; justify-content: space-between; align-items: center; gap: 6px;
+    }
+    .char-badges { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+    .char-wake {
+      font-size: 0.72rem; padding: 2px 8px; border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08); font-weight: 600;
+    }
+    .char-del {
+      font-size: 0.70rem; line-height: 1; padding: 3px 6px; border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06); color: var(--muted);
+      border: 1px solid transparent; cursor: pointer; transition: all 0.15s ease;
+    }
+    .char-del:hover { color: #fb7185; border-color: rgba(251, 113, 133, 0.45); background: rgba(251, 113, 133, 0.12); }
+    .char-sub { font-size: 0.76rem; color: var(--muted); }
+
+    .modes {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+      background: var(--bg-panel); padding: 6px; border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .mode-btn {
+      background: transparent; border: none; color: var(--muted);
+      padding: 8px 12px; border-radius: 10px; cursor: pointer;
+      font-size: 0.84rem; font-weight: 600; transition: all 0.2s ease;
+    }
+    .mode-btn:hover { color: var(--text); }
+    .mode-btn.active {
+      background: rgba(255, 255, 255, 0.09);
+      color: var(--accent); border: 1px solid var(--border);
+    }
+
+    /* ================= BMO EXPRESSION STAGE ================= */
+    .stage {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 20px 22px 18px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      position: relative;
+      transition: border-color 0.3s ease;
+    }
+
+    .fs-btn {
+      position: absolute;
+      top: 13px;
+      right: 14px;
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 5px 10px;
+      border-radius: 9px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      z-index: 5;
+    }
+    .fs-btn:hover { color: var(--text); border-color: var(--accent); }
+
+    .bmo-chassis {
+      background: linear-gradient(165deg, #67c4af 0%, var(--bmo-shell) 55%, var(--bmo-shell-dark) 100%);
+      border: 3.5px solid var(--bmo-ink);
+      border-radius: 26px;
+      padding: 14px 16px 13px;
+      box-shadow:
+        0 14px 36px rgba(0, 0, 0, 0.46),
+        0 0 28px var(--accent-glow),
+        inset 0 2px 0 rgba(255, 255, 255, 0.34);
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: transform 0.14s ease, box-shadow 0.25s ease, background 0.35s ease;
+    }
+    .bmo-chassis:hover { transform: translateY(-1px); }
+    .bmo-chassis:active { transform: translateY(1px) scale(0.992); }
+
+    .bmo-top-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 4px;
+    }
+    .bmo-speaker {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+    .bmo-speaker i {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--bmo-ink);
+      opacity: 0.72;
+      display: inline-block;
+    }
+    .bmo-mood-pill {
+      font-size: 0.67rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--bmo-ink);
+      background: rgba(255, 255, 255, 0.35);
+      border: 1.5px solid rgba(20, 40, 38, 0.45);
+      border-radius: 999px;
+      padding: 1px 9px;
+    }
+
+    .bmo-screen-wrap {
+      position: relative;
+      width: 320px;
+      height: 196px;
+      border-radius: 18px;
+      border: 3.5px solid var(--bmo-ink);
+      overflow: hidden;
+      background: #cdeee0;
+      box-shadow: inset 0 4px 12px rgba(16, 42, 36, 0.14);
+    }
+
+    #bmoCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .bmo-controls-deco {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 2px 8px 0;
+    }
+    .bmo-slot {
+      width: 92px;
+      height: 7px;
+      background: #1b3835;
+      border-radius: 4px;
+      border: 1.5px solid var(--bmo-ink);
+    }
+    .bmo-btns {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .bmo-dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      border: 2px solid var(--bmo-ink);
+      display: inline-block;
+    }
+    .bmo-dot.yellow { background: #facc15; }
+    .bmo-dot.blue { background: #38bdf8; }
+    .bmo-dot.red { background: #fb7185; width: 13px; height: 13px; }
+    .bmo-dot.green { background: #4ade80; }
+
+    /* Full-Screen BMO Companion Face Mode */
+    body.fullscreen-bmo {
+      padding: 0;
+      overflow: hidden;
+    }
+    body.fullscreen-bmo header,
+    body.fullscreen-bmo .char-grid,
+    body.fullscreen-bmo .modes,
+    body.fullscreen-bmo .chat-box,
+    body.fullscreen-bmo .text-bar,
+    body.fullscreen-bmo details.tuning {
+      display: none !important;
+    }
+    body.fullscreen-bmo .container {
+      max-width: 100vw;
+      height: 100vh;
+    }
+    body.fullscreen-bmo .stage {
+      height: 100vh;
+      border-radius: 0;
+      border: none;
+      justify-content: center;
+      background: linear-gradient(165deg, #64c1ac 0%, var(--bmo-shell) 60%, var(--bmo-shell-dark) 100%);
+    }
+    body.fullscreen-bmo .bmo-chassis {
+      padding: 20px 24px;
+      border-width: 4px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+    }
+    body.fullscreen-bmo .bmo-screen-wrap {
+      width: min(84vw, 720px);
+      height: min(62vh, 450px);
+      border-radius: 26px;
+      border-width: 4px;
+    }
+    body.fullscreen-bmo .status-line { color: #0f2422; font-size: 1.12rem; }
+    body.fullscreen-bmo .sub-status { color: rgba(15, 36, 34, 0.78); }
+    body.fullscreen-bmo .fs-btn {
+      background: rgba(15, 36, 34, 0.75);
+      color: #ecfdf5;
+    }
+
+    .status-line { font-size: 0.99rem; font-weight: 600; text-align: center; }
+    .sub-status { font-size: 0.81rem; color: var(--muted); text-align: center; min-height: 1.2em; }
+    .followup-badge {
+      display: none; font-size: 0.76rem; color: var(--emerald);
+      background: rgba(52, 211, 153, 0.12); border: 1px solid rgba(52, 211, 153, 0.35);
+      padding: 4px 12px; border-radius: 999px;
+    }
+    .followup-badge.visible { display: inline-block; }
+
+    .chat-box {
+      background: var(--bg-panel); border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 18px; padding: 16px 18px; max-height: 290px;
+      overflow-y: auto; display: flex; flex-direction: column; gap: 12px;
+    }
+    .empty-chat { color: var(--muted); font-size: 0.87rem; text-align: center; padding: 14px 10px; line-height: 1.5; }
+    .turn {
+      display: flex; flex-direction: column; gap: 6px;
+      padding-bottom: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .turn:last-child { border-bottom: none; padding-bottom: 0; }
+    .msg-user {
+      align-self: flex-end; background: rgba(56, 189, 248, 0.13);
+      border: 1px solid rgba(56, 189, 248, 0.28); padding: 8px 13px;
+      border-radius: 14px 14px 3px 14px; font-size: 0.9rem; max-width: 85%;
+    }
+    .msg-ai {
+      align-self: flex-start; padding: 10px 14px;
+      border-radius: 14px 14px 14px 3px; font-size: 0.94rem;
+      line-height: 1.45; max-width: 90%;
+      background: var(--bubble-bg, rgba(245, 166, 35, 0.13));
+      border: 1px solid var(--bubble-border, rgba(245, 166, 35, 0.35));
+    }
+    .speaker-tag {
+      font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em; margin-bottom: 3px; display: block; opacity: 0.85;
+    }
+    .meta-row { display: flex; align-items: center; gap: 10px; font-size: 0.74rem; color: var(--muted); flex-wrap: wrap; }
+    .replay-btn {
+      background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.14);
+      color: var(--accent); border-radius: 6px; padding: 2px 8px; font-size: 0.73rem; cursor: pointer;
+    }
+
+    .text-bar { display: flex; gap: 8px; }
+    .text-bar input {
+      flex: 1; background: var(--bg-panel); border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 12px; padding: 12px 15px; color: var(--text); font-size: 0.92rem; outline: none;
+    }
+    .text-bar input:focus { border-color: var(--accent); }
+    .btn {
+      background: var(--accent); color: #0e130f; font-weight: 700;
+      border: none; padding: 0 18px; border-radius: 12px; cursor: pointer;
+      font-size: 0.88rem; transition: background 0.25s ease;
+    }
+    .btn.secondary {
+      background: rgba(255, 255, 255, 0.08); color: var(--text);
+      font-weight: 600; border: 1px solid rgba(255, 255, 255, 0.14);
+    }
+
+    details.tuning {
+      background: var(--bg-panel); border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px; padding: 12px 16px;
+    }
+    details.tuning summary { cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--muted); }
+    .sliders {
+      margin-top: 14px; display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 14px;
+    }
+    .control-group { display: flex; flex-direction: column; gap: 5px; font-size: 0.8rem; color: var(--muted); }
+    .control-group select, .control-group input[type="range"] {
+      accent-color: var(--accent); background: #1e2433; color: var(--text);
+      border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; padding: 5px;
+    }
+    .emo-bar {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.07);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    .emo-bar span { font-size: 0.76rem; color: var(--muted); margin-right: 4px; }
+    .emo-chip {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--text);
+      font-size: 0.73rem;
+      padding: 3px 9px;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+    .emo-chip:hover { border-color: var(--accent); color: var(--accent); }
+    .cli-hint {
+      margin-top: 10px;
+      padding: 8px 11px;
+      border-radius: 9px;
+      background: rgba(0, 0, 0, 0.28);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      font-size: 0.74rem;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+
+    /* ================= ADD VOICE MODAL ================= */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(5, 8, 13, 0.78);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      z-index: 100;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal-card {
+      width: 100%;
+      max-width: 660px;
+      max-height: 92vh;
+      overflow-y: auto;
+      background: #111722;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 20px 22px;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.65);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-header h2 { font-size: 1.05rem; font-weight: 700; }
+    .modal-close {
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: var(--muted);
+      border-radius: 8px;
+      padding: 4px 10px;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+    .modal-close:hover { color: var(--text); border-color: var(--accent); }
+    .preset-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .preset-bar span { font-size: 0.76rem; color: var(--muted); margin-right: 4px; }
+    .preset-chip {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: var(--text);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+    .preset-chip:hover { border-color: var(--accent); color: var(--accent); }
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(185px, 1fr));
+      gap: 11px;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 0.77rem;
+      color: var(--muted);
+    }
+    .field.full { grid-column: 1 / -1; }
+    .field input[type="text"],
+    .field input[type="number"],
+    .field input[type="file"],
+    .field select,
+    .field textarea {
+      background: #192131;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 9px;
+      padding: 8px 10px;
+      color: var(--text);
+      font-size: 0.84rem;
+      font-family: inherit;
+      outline: none;
+    }
+    .field input[type="color"] {
+      width: 100%;
+      height: 35px;
+      background: #192131;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 9px;
+      padding: 2px 4px;
+      cursor: pointer;
+    }
+    .field textarea { resize: vertical; min-height: 76px; line-height: 1.4; }
+    .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); }
+    .modal-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding-top: 6px;
+    }
+    .modal-status { font-size: 0.8rem; color: var(--emerald); flex: 1; }
+    .modal-status.err { color: #fb7185; }
+
+    /* ================= ESP32-CAM ROBOT VISION HUD ================= */
+    .cam-section {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 14px 18px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: all 0.3s ease;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    }
+    .cam-section.collapsed { display: none; }
+    .cam-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .cam-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .cam-title {
+      font-size: 0.88rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: #38bdf8;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .cam-badge {
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-family: monospace;
+      background: rgba(56, 189, 248, 0.15);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      color: #38bdf8;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .cam-badge.online {
+      background: rgba(16, 185, 129, 0.15);
+      border-color: rgba(16, 185, 129, 0.4);
+      color: #34d399;
+    }
+    .cam-badge.offline {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #f87171;
+    }
+    .cam-badge-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 6px currentColor;
+    }
+    .cam-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .cam-viewport {
+      position: relative;
+      background: #000;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 280px;
+      max-height: 480px;
+      box-shadow: inset 0 0 40px rgba(0,0,0,0.8);
+    }
+    .cam-stream-img {
+      width: 100%;
+      height: auto;
+      max-height: 480px;
+      object-fit: contain;
+      display: block;
+      background: #070b12;
+    }
+    .cam-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 12px 14px;
+      font-family: monospace;
+      font-size: 0.75rem;
+      color: rgba(255, 255, 255, 0.9);
+      text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+    }
+    .cam-overlay-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .cam-rec-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0,0,0,0.55);
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+      font-weight: 700;
+    }
+    .cam-rec-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ef4444;
+      box-shadow: 0 0 8px #ef4444;
+      animation: camPulse 1.3s infinite ease-in-out;
+    }
+    .cam-hud-pill {
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(4px);
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid rgba(255,255,255,0.15);
+      color: #e2e8f0;
+    }
+    .cam-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding-top: 2px;
+    }
+    .cam-btn-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .cam-btn {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.16);
+      color: #f3f4f6;
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 7px 13px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+    .cam-btn:hover {
+      background: rgba(255,255,255,0.12);
+      border-color: #38bdf8;
+      color: #38bdf8;
+    }
+    .cam-btn.primary {
+      background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+      border-color: #38bdf8;
+      color: #fff;
+      box-shadow: 0 0 14px rgba(56, 189, 248, 0.25);
+    }
+    .cam-btn.primary:hover {
+      background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
+      box-shadow: 0 0 20px rgba(56, 189, 248, 0.45);
+    }
+    .cam-ip-box {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0,0,0,0.3);
+      padding: 4px 8px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .cam-ip-box label { font-size: 0.72rem; color: var(--muted); }
+    .cam-ip-input {
+      background: transparent;
+      border: none;
+      color: #38bdf8;
+      font-family: monospace;
+      font-size: 0.76rem;
+      width: 110px;
+      outline: none;
+    }
+    @keyframes camPulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.35; transform: scale(0.85); }
+    }
+  </style>
+</head>
+<body data-character="rocky">
+  <div class="container">
+    <header>
+      <div class="brand">
+        <div class="brand-dot"></div>
+        <div>
+          <h1>SCI-FI VOICE COMMS // BMO EXPRESSION RIG</h1>
+          <span>Plug-and-Play Character Packs • 60 FPS BMO Lip-Sync • Zero-PyTorch INT8 Voices</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button type="button" id="outputModeBtn" class="add-voice-btn" style="border-color:#c084fc;color:#c084fc;" title="Toggle audio output: PC Speakers (afplay) or Browser Audio">🔊 Output: PC Speakers</button>
+        <button type="button" id="toggleCamBtn" class="add-voice-btn" style="border-color:#38bdf8;color:#38bdf8;" title="Show or hide ESP32-CAM live robot vision HUD">📹 ESP-CAM Feed</button>
+        <button type="button" id="openAddVoiceBtn" class="add-voice-btn" title="Add a new character voice pack in the browser">➕ Add Voice</button>
+        <button type="button" id="reloadVoicesBtn" class="reload-btn" title="Hot-reload characters/*.json without restarting">↻ Reload Voices</button>
+        <div id="healthPill" class="health-pill loading">Warming Models…</div>
+      </div>
+    </header>
+
+    <div id="charGrid" class="char-grid"></div>
+
+    <div class="modes">
+      <button id="wakeModeBtn" class="mode-btn active" data-mode="wake">Wake Word ("Hey Rocky" / "Hey Marvin")</button>
+      <button class="mode-btn" data-mode="continuous">1-on-1 Continuous</button>
+      <button class="mode-btn" data-mode="ptt">Tap / Space to Talk</button>
+    </div>
+
+    <!-- ================= ESP32-CAM ROBOT VISION HUD ================= -->
+    <section id="espCamSection" class="cam-section">
+      <div class="cam-header">
+        <div class="cam-title-wrap">
+          <div class="cam-title">🤖 ESP32-CAM EDGE VISION // ROBOT OPTICAL FEED</div>
+          <div id="camStatusBadge" class="cam-badge online">
+            <span class="cam-badge-dot"></span>
+            <span id="camStatusText">Connecting…</span>
+          </div>
+        </div>
+        <div class="cam-header-actions">
+          <div class="cam-ip-box" title="ESP32-S3 Robot IP Address">
+            <label for="camIpInput">Robot IP:</label>
+            <input type="text" id="camIpInput" class="cam-ip-input" value="192.168.4.136" spellcheck="false" />
+          </div>
+          <button type="button" id="camRefreshBtn" class="cam-btn" title="Refresh Telemetry & Feed">↻</button>
+          <button type="button" id="camPauseBtn" class="cam-btn" title="Pause or Resume Video Stream">⏸ Pause</button>
+        </div>
+      </div>
+
+      <div class="cam-viewport" id="camViewport">
+        <img id="camStreamImg" class="cam-stream-img" alt="ESP32-CAM Live Feed" />
+        <div class="cam-overlay">
+          <div class="cam-overlay-row">
+            <div class="cam-rec-indicator">
+              <span class="cam-rec-dot"></span>
+              <span>LIVE • 640x480</span>
+            </div>
+            <div id="camTelemetryTop" class="cam-hud-pill">PSRAM: -- | HEAP: --</div>
+          </div>
+          <div class="cam-overlay-row">
+            <div class="cam-hud-pill">OV2640 • GDMA PSRAM • Heaven</div>
+            <div id="camTelemetryBottom" class="cam-hud-pill">SD: Checking… | RSSI: -- dBm</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cam-controls">
+        <div class="cam-btn-group">
+          <button type="button" id="camInspectBtn" class="cam-btn primary" title="Ask the active character to inspect the camera feed with AI vision">
+            👁️ Ask <span id="camCharName">Rocky</span> to Inspect Scene
+          </button>
+          <button type="button" id="camSnapSdBtn" class="cam-btn" title="Save snapshot directly to robot onboard MicroSD card">
+            📸 Snap to SD Card
+          </button>
+        </div>
+        <div class="cam-btn-group">
+          <button type="button" id="camPopoutBtn" class="cam-btn" title="Open feed in separate browser tab">
+            ⛶ Popout
+          </button>
+          <button type="button" id="camDirectToggleBtn" class="cam-btn" title="Toggle between Server Proxy and Direct Robot connection">
+            Feed: <span id="camRouteMode">Proxy</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <div id="stage" class="stage" data-state="idle">
+      <button type="button" id="fullscreenBtn" class="fs-btn" title="Toggle Full-Screen BMO Face (Esc to exit)">⛶ Full Face</button>
+
+      <div id="orbWrap" class="bmo-chassis" title="Click BMO's screen to enable microphone">
+        <div class="bmo-top-row">
+          <div class="bmo-speaker"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div id="bmoMoodPill" class="bmo-mood-pill">BMO • SLEEPY</div>
+        </div>
+        <div class="bmo-screen-wrap">
+          <canvas id="bmoCanvas" width="320" height="196"></canvas>
+        </div>
+        <div class="bmo-controls-deco">
+          <div class="bmo-slot"></div>
+          <div class="bmo-btns">
+            <span class="bmo-dot yellow"></span>
+            <span class="bmo-dot blue"></span>
+            <span class="bmo-dot green"></span>
+            <span class="bmo-dot red"></span>
+          </div>
+        </div>
+      </div>
+
+      <div id="statusLine" class="status-line">Click BMO once to enable hands-free microphone</div>
+      <div id="subStatus" class="sub-status">Say "Hey BMO, ...", "Hey Rocky, ...", or "Hey Marvin, ..." — BMO's eyes &amp; mouth react in real time!</div>
+      <div id="followupBadge" class="followup-badge">Follow-up listening active</div>
+    </div>
+
+    <div id="chatBox" class="chat-box">
+      <div id="emptyChat" class="empty-chat">
+        Say <strong>"Hey BMO, who wants to play video games?"</strong>, <strong>"Hey Rocky, how hot is Venus?"</strong>, or <strong>"Hey Marvin, how are your diodes?"</strong><br/>
+        (Streams Sentence 1 in ~0.5–2s with synchronized BMO eye &amp; mouth emotions!)
+      </div>
+    </div>
+
+    <form id="textForm" class="text-bar">
+      <input id="textInput" type="text" placeholder="Type a question for Rocky..." autocomplete="off" />
+      <button type="submit" id="askBtn" class="btn">Ask Rocky</button>
+      <button type="button" id="resetBtn" class="btn secondary" title="Clear conversation memory">Reset</button>
+    </form>
+
+    <details class="tuning">
+      <summary>Voice, Speed &amp; BMO Expression Tester</summary>
+      <div class="sliders">
+        <div class="control-group">
+          <label>Pitch Transpose: <strong id="trVal">-5</strong> semitones</label>
+          <input id="transposeSlider" type="range" min="-12" max="12" step="1" value="-5" />
+        </div>
+        <div class="control-group">
+          <label>Speech Speed: <strong id="spVal">1.18x</strong></label>
+          <input id="speedSlider" type="range" min="0.75" max="1.55" step="0.02" value="1.18" />
+        </div>
+        <div class="control-group">
+          <label>Persona Speech Filter</label>
+          <select id="filterSelect">
+            <option value="balanced" selected>Balanced (Character Style)</option>
+            <option value="strict">Strict Character Idioms</option>
+            <option value="off">Off (Voice Clone Only)</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>Mic VAD Sensitivity: <strong id="vadVal">0.016</strong></label>
+          <input id="vadSlider" type="range" min="0.006" max="0.05" step="0.002" value="0.016" />
+        </div>
+        <div class="control-group" style="justify-content:center;gap:6px;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;color:#f3f4f6;">
+            <input id="sayExactChk" type="checkbox" />
+            Text Box: Speak Exact Text (TTS Mode)
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;color:#f3f4f6;">
+            <input id="sfxChk" type="checkbox" />
+            BMO Chime SFX (Optional)
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;color:#f3f4f6;">
+            <input id="bargeInChk" type="checkbox" />
+            Voice Barge-In (Headphones Only)
+          </label>
+        </div>
+      </div>
+      <div class="emo-bar">
+        <span>Preview BMO Mood:</span>
+        <button type="button" class="emo-chip" data-emo="neutral">Neutral</button>
+        <button type="button" class="emo-chip" data-emo="happy">Happy</button>
+        <button type="button" class="emo-chip" data-emo="excited">Excited (Amaze!)</button>
+        <button type="button" class="emo-chip" data-emo="curious">Curious (Question?)</button>
+        <button type="button" class="emo-chip" data-emo="focused">Focused (Science)</button>
+        <button type="button" class="emo-chip" data-emo="alarmed">Alarmed (Danger!)</button>
+        <button type="button" class="emo-chip" data-emo="sad">Sad</button>
+        <button type="button" class="emo-chip" data-emo="bored">Bored (Marvin)</button>
+        <button type="button" class="emo-chip" data-emo="pained">Pained (Diodes)</button>
+        <button type="button" class="emo-chip" data-emo="thinking">Thinking</button>
+        <button type="button" class="emo-chip" data-emo="sleepy">Sleepy</button>
+        <button type="button" id="testTalkBtn" class="emo-chip" style="border-color:var(--accent);color:var(--accent);">🗣 Test Mouth</button>
+      </div>
+      <div class="cli-hint" title="Add unlimited voices from RVC .zip/.pth/.onnx or Piper models with 1 command">
+        ➕ Add new voice: <strong>./.venv/bin/python add_voice.py --id tars --name "TARS" --emoji "🛰️" --model ~/voice.zip</strong> (or omit <strong>--model</strong> for 0 MB Piper voice)
+      </div>
+    </details>
+  </div>
+
+  <div id="addVoiceModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="addVoiceModalTitle">
+    <form id="addVoiceForm" class="modal-card">
+      <div class="modal-header">
+        <h2 id="addVoiceModalTitle">➕ Add Character Voice Pack</h2>
+        <button type="button" id="closeAddVoiceBtn" class="modal-close">✕ Close</button>
+      </div>
+
+      <div class="preset-bar">
+        <span>1-Click Presets:</span>
+        <button type="button" class="preset-chip" data-preset="tars">🛰️ TARS</button>
+        <button type="button" class="preset-chip" data-preset="glados">🥔 GLaDOS</button>
+        <button type="button" class="preset-chip" data-preset="hal">🔴 HAL 9000</button>
+        <button type="button" class="preset-chip" data-preset="jarvis">🎩 J.A.R.V.I.S.</button>
+        <button type="button" class="preset-chip" data-preset="custom">✨ Custom</button>
+      </div>
+
+      <div class="form-grid">
+        <label class="field">
+          <span>Display Name *</span>
+          <input id="avName" name="name" type="text" placeholder="e.g. TARS" required />
+        </label>
+        <label class="field">
+          <span>Character ID * (lowercase)</span>
+          <input id="avId" name="char_id" type="text" placeholder="e.g. tars" required />
+        </label>
+        <label class="field">
+          <span>Emoji Icon</span>
+          <input id="avEmoji" name="emoji" type="text" value="🛰️" maxlength="6" />
+        </label>
+        <label class="field">
+          <span>Card Title</span>
+          <input id="avTitle" name="title" type="text" placeholder="e.g. TARS (Interstellar)" />
+        </label>
+        <label class="field">
+          <span>Wake Words (comma-separated)</span>
+          <input id="avWake" name="wake" type="text" placeholder="e.g. tars, tarz, t.a.r.s" />
+        </label>
+        <label class="field">
+          <span>Subtitle</span>
+          <input id="avSubtitle" name="subtitle" type="text" placeholder="e.g. USMC tactical robot • Humor 75%" />
+        </label>
+
+        <label class="field">
+          <span>Base TTS Voice (Piper or macOS Native)</span>
+          <select id="avPiper" name="piper_voice">
+            <option value="en_US-ryan-medium">US Male — Ryan (Installed • 0 MB)</option>
+            <option value="en_GB-alan-medium">UK Male — Alan (Installed • 0 MB)</option>
+            <option value="en_US-amy-medium">US Female — Amy (Installed • 0 MB)</option>
+            <option value="macos:System">macOS System / Siri (rogeriochaves NativeTTS • 0 MB)</option>
+            <option value="macos:Samantha">macOS Samantha (0 MB)</option>
+            <option value="macos:Junior">macOS Junior (Childlike • 0 MB)</option>
+            <option value="en_US-lessac-medium">US Female — Lessac (Download ~60 MB)</option>
+            <option value="en_US-joe-medium">US Deep Male — Joe (Download ~60 MB)</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Pitch Shift (semitones, blank = auto)</span>
+          <input id="avTranspose" name="transpose" type="number" min="-12" max="12" step="1" value="-2" />
+        </label>
+        <label class="field">
+          <span>Speech Speed (x)</span>
+          <input id="avSpeed" name="speed" type="number" min="0.70" max="1.55" step="0.02" value="1.08" />
+        </label>
+        <label class="field">
+          <span>Speech Filter Style</span>
+          <select id="avStyle" name="style">
+            <option value="clean" selected>Clean Spoken English</option>
+            <option value="british_deadpan">British Deadpan</option>
+            <option value="eridian">Eridian Telegraphic</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Idle BMO Expression</span>
+          <select id="avMood" name="mood">
+            <option value="focused" selected>Focused</option>
+            <option value="neutral">Neutral</option>
+            <option value="happy">Happy</option>
+            <option value="excited">Excited</option>
+            <option value="curious">Curious</option>
+            <option value="bored">Bored / Deadpan</option>
+            <option value="sad">Sad</option>
+            <option value="alarmed">Alarmed</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>UI Accent Color</span>
+          <input id="avAccent" name="accent" type="color" value="#38bdf8" />
+        </label>
+
+        <label class="field full">
+          <span>Optional RVC v2 Voice Clone URL (.zip, .pth, or .onnx on HuggingFace) — leave blank for instant 0 MB Piper voice</span>
+          <input id="avModelUrl" name="model_url" type="text" placeholder="https://huggingface.co/.../voice.zip (optional)" />
+        </label>
+        <label class="field">
+          <span>Or Upload Local RVC (.zip / .pth / .onnx)</span>
+          <input id="avModelFile" name="model_file" type="file" accept=".zip,.pth,.onnx" />
+        </label>
+        <label class="field">
+          <span>Optional Reference Audio (.wav/.flac for auto-pitch)</span>
+          <input id="avRefFile" name="reference_file" type="file" accept=".wav,.flac,.mp3,.ogg" />
+        </label>
+
+        <label class="field full">
+          <span>Character Personality &amp; Speaking Prompt</span>
+          <textarea id="avPrompt" name="prompt" placeholder="Describe how this character speaks..."></textarea>
+        </label>
+      </div>
+
+      <div class="modal-footer">
+        <div id="avStatus" class="modal-status"></div>
+        <button type="button" id="cancelAddVoiceBtn" class="btn secondary" style="padding:10px 16px;">Cancel</button>
+        <button type="submit" id="submitAddVoiceBtn" class="btn" style="padding:10px 20px;">➕ Install Voice</button>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    /* =====================================================================
+     * Zero-Weight 60 FPS Procedural BMO Face Engine (Adventure Time Style)
+     * 0 MB model weights • <0.25ms/frame • Real-time emotion + lip-sync
+     * ===================================================================== */
+    const EMOTION_PRESETS = {
+      sleepy:    { openL: 0.06, openR: 0.06, scaleL: 1.0,  scaleR: 1.0,  happyArc: 0,    flatLid: 0,    winceL: 0, browAlpha: 0,    browLiftL: 0,   browLiftR: 0,   browTiltL: 0,     browTiltR: 0,     tilt: 0.02,  blush: 0,    sparkle: 0, sweat: 0, smile: 0.15, mouthW: 0.72, gazeX: 0,     gazeY: 3 },
+      neutral:   { openL: 1.0,  openR: 1.0,  scaleL: 1.0,  scaleR: 1.0,  happyArc: 0,    flatLid: 0,    winceL: 0, browAlpha: 0,    browLiftL: 0,   browLiftR: 0,   browTiltL: 0,     browTiltR: 0,     tilt: 0,     blush: 0.12, sparkle: 0, sweat: 0, smile: 0.65, mouthW: 0.95, gazeX: 0,     gazeY: 0 },
+      listening: { openL: 1.0,  openR: 1.0,  scaleL: 1.15, scaleR: 1.15, happyArc: 0,    flatLid: 0,    winceL: 0, browAlpha: 0.7,  browLiftL: -5,  browLiftR: -5,  browTiltL: -0.08, browTiltR: 0.08,  tilt: -0.02, blush: 0.22, sparkle: 0, sweat: 0, smile: 0.45, mouthW: 0.80, gazeX: 0,     gazeY: -1 },
+      thinking:  { openL: 0.88, openR: 0.96, scaleL: 0.96, scaleR: 1.06, happyArc: 0,    flatLid: 0.22, winceL: 0, browAlpha: 0.95, browLiftL: 1,   browLiftR: -6,  browTiltL: 0.05,  browTiltR: 0.18,  tilt: -0.04, blush: 0,    sparkle: 0, sweat: 0, smile: 0.0,  mouthW: 0.65, gazeX: -8,    gazeY: -7 },
+      happy:     { openL: 1.0,  openR: 1.0,  scaleL: 1.06, scaleR: 1.06, happyArc: 0.25, flatLid: 0,    winceL: 0, browAlpha: 0,    browLiftL: -3,  browLiftR: -3,  browTiltL: 0,     browTiltR: 0,     tilt: 0.02,  blush: 0.65, sparkle: 0, sweat: 0, smile: 0.95, mouthW: 1.15, gazeX: 0,     gazeY: 0 },
+      excited:   { openL: 1.0,  openR: 1.0,  scaleL: 1.12, scaleR: 1.12, happyArc: 1.0,  flatLid: 0,    winceL: 0, browAlpha: 0,    browLiftL: -5,  browLiftR: -5,  browTiltL: 0,     browTiltR: 0,     tilt: 0.035, blush: 0.95, sparkle: 1, sweat: 0, smile: 1.0,  mouthW: 1.32, gazeX: 0,     gazeY: -1 },
+      curious:   { openL: 1.0,  openR: 1.0,  scaleL: 0.90, scaleR: 1.24, happyArc: 0,    flatLid: 0,    winceL: 0, browAlpha: 1.0,  browLiftL: 2,   browLiftR: -8,  browTiltL: 0.12,  browTiltR: 0.22,  tilt: -0.075,blush: 0.15, sparkle: 0, sweat: 0, smile: 0.20, mouthW: 0.62, gazeX: 3,     gazeY: -2 },
+      focused:   { openL: 0.86, openR: 0.86, scaleL: 1.02, scaleR: 1.02, happyArc: 0,    flatLid: 0.26, winceL: 0, browAlpha: 1.0,  browLiftL: 3,   browLiftR: 3,   browTiltL: 0.26,  browTiltR: -0.26, tilt: 0,     blush: 0,    sparkle: 0, sweat: 0, smile: 0.45, mouthW: 0.92, gazeX: 0,     gazeY: 0 },
+      alarmed:   { openL: 1.0,  openR: 1.0,  scaleL: 1.38, scaleR: 1.38, happyArc: 0,    flatLid: 0,    winceL: 0, browAlpha: 1.0,  browLiftL: -7,  browLiftR: -7,  browTiltL: -0.28, browTiltR: 0.28,  tilt: 0,     blush: 0,    sparkle: 0, sweat: 1, smile: -0.55,mouthW: 0.78, gazeX: 0,     gazeY: 0 },
+      sad:       { openL: 0.82, openR: 0.82, scaleL: 0.96, scaleR: 0.96, happyArc: 0,    flatLid: 0.18, winceL: 0, browAlpha: 1.0,  browLiftL: -2,  browLiftR: -2,  browTiltL: -0.32, browTiltR: 0.32,  tilt: 0.03,  blush: 0,    sparkle: 0, sweat: 0, smile: -0.80,mouthW: 0.88, gazeX: 0,     gazeY: 5 },
+      bored:     { openL: 0.68, openR: 0.68, scaleL: 1.0,  scaleR: 1.0,  happyArc: 0,    flatLid: 0.88, winceL: 0, browAlpha: 0.65, browLiftL: 2,   browLiftR: 2,   browTiltL: 0.02,  browTiltR: -0.02, tilt: 0.01,  blush: 0,    sparkle: 0, sweat: 0, smile: -0.18,mouthW: 0.88, gazeX: 2,     gazeY: 2 },
+      pained:    { openL: 0.75, openR: 0.78, scaleL: 1.0,  scaleR: 0.95, happyArc: 0,    flatLid: 0.55, winceL: 1, browAlpha: 1.0,  browLiftL: 3,   browLiftR: -2,  browTiltL: 0.28,  browTiltR: 0.20,  tilt: -0.04, blush: 0,    sparkle: 0, sweat: 1, smile: -0.70,mouthW: 0.95, gazeX: -2,    gazeY: 3 },
+    };
+
+    class BMOFaceEngine {
+      constructor(canvas, moodPill) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext("2d");
+        this.moodPill = moodPill;
+        this.character = "rocky";
+        this.badgePrefix = "BMO";
+        this.defaultMood = "neutral";
+        this.targetScreenRgb = [205, 238, 224];
+        this.curScreenRgb = [205, 238, 224];
+        this.mood = "sleepy";
+        this.speaking = false;
+        this.speechLevel = 0;
+        this.speechWidth = 1.0;
+        this.micLevel = 0;
+
+        this.cur = { ...EMOTION_PRESETS.sleepy, mouthOpen: 0, visemeW: 1.0 };
+        this.pointerX = 0;
+        this.pointerY = 0;
+        this.idleGazeX = 0;
+        this.idleGazeY = 0;
+        this.nextIdleShift = performance.now() + 2200;
+
+        this.blinkFactor = 1.0;
+        this.blinkPhase = 0;
+        this.nextBlinkAt = performance.now() + 2800;
+
+        window.addEventListener("mousemove", (e) => {
+          const rect = this.canvas.getBoundingClientRect();
+          if (!rect.width) return;
+          const cx = rect.left + rect.width / 2;
+          const cy = rect.top + rect.height / 2;
+          this.pointerX = Math.max(-1, Math.min(1, (e.clientX - cx) / 260));
+          this.pointerY = Math.max(-1, Math.min(1, (e.clientY - cy) / 200));
+        });
+
+        this._resize();
+        window.addEventListener("resize", () => this._resize());
+        requestAnimationFrame((t) => this._tick(t));
+      }
+
+      _resize() {
+        const rect = this.canvas.parentElement.getBoundingClientRect();
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const w = Math.max(260, Math.round(rect.width));
+        const h = Math.max(160, Math.round(rect.height));
+        this.canvas.width = w * dpr;
+        this.canvas.height = h * dpr;
+        this.w = w;
+        this.h = h;
+        this.dpr = dpr;
+      }
+
+      setCharacter(charId, uiTheme = null) {
+        this.character = charId;
+        if (uiTheme) {
+          if (Array.isArray(uiTheme.bmo_screen_rgb) && uiTheme.bmo_screen_rgb.length === 3) {
+            this.targetScreenRgb = uiTheme.bmo_screen_rgb;
+          }
+          if (uiTheme.bmo_badge_prefix) {
+            this.badgePrefix = uiTheme.bmo_badge_prefix;
+          }
+          if (uiTheme.idle_mood) {
+            this.defaultMood = uiTheme.idle_mood;
+          }
+        }
+      }
+
+      setEmotion(mood) {
+        const key = EMOTION_PRESETS[mood] ? mood : this.defaultMood;
+        this.mood = key;
+        this.moodPill.textContent = `${this.badgePrefix} • ${key.toUpperCase()}`;
+      }
+
+      setSpeechLevel(level, isSpeaking = true, visemeWidth = 1.0) {
+        this.speaking = isSpeaking;
+        if (!isSpeaking) {
+          this.speechLevel = 0;
+          this.speechWidth = 1.0;
+          return;
+        }
+        const rate = level > this.speechLevel ? 0.82 : 0.72;
+        this.speechLevel += (level - this.speechLevel) * rate;
+        this.speechWidth += (visemeWidth - this.speechWidth) * 0.45;
+      }
+
+      setMicLevel(level) {
+        this.micLevel += (level - this.micLevel) * 0.35;
+      }
+
+      _tick(now) {
+        // Auto-blink state machine
+        if (this.mood !== "sleepy" && now >= this.nextBlinkAt) {
+          this.blinkPhase = 1;
+          const doubleBlink = Math.random() < 0.18;
+          this.nextBlinkAt = now + (doubleBlink ? 260 : 2400 + Math.random() * 2900);
+        }
+        if (this.blinkPhase === 1) {
+          this.blinkFactor -= 0.34;
+          if (this.blinkFactor <= 0.05) {
+            this.blinkFactor = 0.05;
+            this.blinkPhase = 2;
+          }
+        } else if (this.blinkPhase === 2) {
+          this.blinkFactor += 0.28;
+          if (this.blinkFactor >= 1.0) {
+            this.blinkFactor = 1.0;
+            this.blinkPhase = 0;
+          }
+        }
+
+        // Autonomous subtle idle saccades
+        if (now >= this.nextIdleShift) {
+          this.idleGazeX = (Math.random() - 0.5) * 7;
+          this.idleGazeY = (Math.random() - 0.5) * 4;
+          this.nextIdleShift = now + 1800 + Math.random() * 2600;
+        }
+
+        const tgt = EMOTION_PRESETS[this.mood] || EMOTION_PRESETS.neutral;
+        const k = 0.19;
+        for (const prop of Object.keys(tgt)) {
+          this.cur[prop] += (tgt[prop] - this.cur[prop]) * k;
+        }
+
+        for (let i = 0; i < 3; i++) {
+          this.curScreenRgb[i] += (this.targetScreenRgb[i] - this.curScreenRgb[i]) * 0.12;
+        }
+
+        const targetMouthOpen = this.speaking ? Math.min(1.0, this.speechLevel) : 0.0;
+        const mouthRate = this.speaking ? (targetMouthOpen > this.cur.mouthOpen ? 0.78 : 0.70) : 0.35;
+        this.cur.mouthOpen += (targetMouthOpen - this.cur.mouthOpen) * mouthRate;
+        this.cur.visemeW += ((this.speaking ? this.speechWidth : 1.0) - this.cur.visemeW) * 0.4;
+
+        this._draw(now);
+        requestAnimationFrame((t) => this._tick(t));
+      }
+
+      _draw(now) {
+        const ctx = this.ctx;
+        const w = this.w;
+        const h = this.h;
+        const scale = Math.min(w / 320, h / 196);
+
+        ctx.save();
+        ctx.scale(this.dpr, this.dpr);
+
+        // 1. BMO Mint CRT Screen Background (smoothly interpolates per character pack)
+        const r = Math.round(this.curScreenRgb[0]);
+        const g = Math.round(this.curScreenRgb[1]);
+        const b = Math.round(this.curScreenRgb[2]);
+        ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+        ctx.fillRect(0, 0, w, h);
+
+        // Soft CRT inner highlight & scanline texture
+        const grad = ctx.createRadialGradient(w * 0.5, h * 0.42, 10 * scale, w * 0.5, h * 0.5, w * 0.65);
+        grad.addColorStop(0, "rgba(255, 255, 255, 0.24)");
+        grad.addColorStop(1, "rgba(18, 52, 44, 0.08)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, w, h);
+
+        const ink = "#142826";
+        const cx = w * 0.5;
+        const cy = h * 0.48;
+
+        // Subtle emotion motion (excited bounce, alarmed tremble)
+        let bobY = Math.sin(now * 0.0028) * 1.4 * scale;
+        let jitterX = 0;
+        if (this.mood === "excited") {
+          bobY += Math.abs(Math.sin(now * 0.011)) * -4.5 * scale;
+        } else if (this.mood === "alarmed") {
+          jitterX = Math.sin(now * 0.055) * 1.6 * scale;
+        }
+
+        // Gaze offset (combines emotion preset + cursor + idle drift)
+        const trackWeight = (this.mood === "thinking" || this.mood === "sleepy") ? 0.15 : 1.0;
+        const gx = (this.cur.gazeX + (this.pointerX * 5.5 + this.idleGazeX * 0.4) * trackWeight) * scale;
+        const gy = (this.cur.gazeY + (this.pointerY * 3.8 + this.idleGazeY * 0.4) * trackWeight) * scale;
+
+        ctx.translate(cx + jitterX, cy + bobY);
+        ctx.rotate(this.cur.tilt);
+
+        const eyeSep = 62 * scale;
+        const eyeY = -10 * scale;
+
+        // 2. Listening Mic Ripple Rings
+        if (this.mood === "listening" && this.micLevel > 0.004) {
+          const pulse = Math.min(1, this.micLevel * 18);
+          ctx.strokeStyle = `rgba(20, 40, 38, ${(0.14 + pulse * 0.25).toFixed(3)})`;
+          ctx.lineWidth = 2 * scale;
+          const rad = (108 + pulse * 24) * scale;
+          ctx.beginPath();
+          ctx.arc(0, 0, rad, -0.45, 0.45);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(0, 0, rad, Math.PI - 0.45, Math.PI + 0.45);
+          ctx.stroke();
+        }
+
+        // 3. Cute Rosy Cheek Blushes
+        if (this.cur.blush > 0.02) {
+          ctx.fillStyle = `rgba(244, 142, 162, ${(this.cur.blush * 0.55).toFixed(3)})`;
+          for (const dir of [-1, 1]) {
+            ctx.beginPath();
+            ctx.ellipse(dir * (eyeSep + 14 * scale) + gx * 0.4, eyeY + 18 * scale + gy * 0.4, 13 * scale, 6.5 * scale, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // 4. Draw Left & Right BMO Eyes
+        this._drawEye(ctx, -eyeSep + gx, eyeY + gy, scale, this.cur.openL, this.cur.scaleL, true, ink);
+        this._drawEye(ctx,  eyeSep + gx, eyeY + gy, scale, this.cur.openR, this.cur.scaleR, false, ink);
+
+        // 5. Expressive Eyebrows (when active)
+        if (this.cur.browAlpha > 0.04) {
+          ctx.save();
+          ctx.globalAlpha = Math.min(1, this.cur.browAlpha);
+          ctx.strokeStyle = ink;
+          ctx.lineWidth = 3.2 * scale;
+          ctx.lineCap = "round";
+
+          for (const [dir, lift, tilt] of [
+            [-1, this.cur.browLiftL, this.cur.browTiltL],
+            [ 1, this.cur.browLiftR, this.cur.browTiltR],
+          ]) {
+            ctx.save();
+            ctx.translate(dir * eyeSep + gx * 0.85, eyeY - (18 - lift) * scale + gy * 0.85);
+            ctx.rotate(tilt);
+            ctx.beginPath();
+            ctx.moveTo(-10 * scale, 0);
+            ctx.quadraticCurveTo(0, -2.5 * scale, 10 * scale, 0);
+            ctx.stroke();
+            ctx.restore();
+          }
+          ctx.restore();
+        }
+
+        // 6. BMO Mouth (Centered between/just below the eyes, lip-synced!)
+        this._drawMouth(ctx, gx * 0.55, (eyeY + 21 * scale) + gy * 0.55, scale, ink);
+
+        // 7. Extra Adventure Time Props: Sparkles / Sweat Drop / Thinking Dots / Sleepy Zzz
+        if (this.cur.sparkle > 0.08) {
+          const spA = this.cur.sparkle * (0.65 + 0.35 * Math.sin(now * 0.012));
+          this._drawSparkle(ctx, (-eyeSep - 26 * scale), (eyeY - 18 * scale), 7.5 * scale, spA, ink);
+          this._drawSparkle(ctx, ( eyeSep + 25 * scale), (eyeY - 12 * scale), 6.0 * scale, spA, ink);
+        }
+
+        if (this.cur.sweat > 0.08) {
+          const dropSlide = ((now * 0.03) % 14) * scale;
+          this._drawSweatDrop(ctx, eyeSep + 24 * scale, eyeY - 16 * scale + dropSlide, scale, this.cur.sweat);
+        }
+
+        if (this.mood === "thinking") {
+          for (let i = 0; i < 3; i++) {
+            const bounce = Math.sin(now * 0.008 - i * 0.9) * 3 * scale;
+            ctx.fillStyle = ink;
+            ctx.beginPath();
+            ctx.arc((78 + i * 11) * scale, (-54 + bounce) * scale, 2.8 * scale, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else if (this.mood === "sleepy") {
+          ctx.fillStyle = "rgba(20, 40, 38, 0.55)";
+          ctx.font = `700 ${Math.round(13 * scale)}px -apple-system, sans-serif`;
+          const drift = ((now * 0.02) % 18) * scale;
+          ctx.fillText("z", 78 * scale + drift * 0.4, -34 * scale - drift);
+          ctx.font = `700 ${Math.round(10 * scale)}px -apple-system, sans-serif`;
+          ctx.fillText("z", 66 * scale + drift * 0.2, -22 * scale - drift * 0.7);
+        }
+
+        ctx.restore();
+      }
+
+      _drawEye(ctx, x, y, scale, openParam, scaleParam, isLeft, ink) {
+        ctx.save();
+        ctx.translate(x, y);
+
+        // Marvin left-diode wince (`>`)
+        if (isLeft && this.cur.winceL > 0.45) {
+          ctx.strokeStyle = ink;
+          ctx.lineWidth = 3.8 * scale;
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+          ctx.beginPath();
+          ctx.moveTo(-8 * scale, -7 * scale);
+          ctx.lineTo(6 * scale, 0);
+          ctx.lineTo(-8 * scale, 7 * scale);
+          ctx.stroke();
+          ctx.restore();
+          return;
+        }
+
+        // Happy BMO `^ ^` curved crescent eye arcs
+        if (this.cur.happyArc > 0.55 && this.blinkFactor > 0.4) {
+          ctx.strokeStyle = ink;
+          ctx.lineWidth = 4.0 * scale;
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.arc(0, 4 * scale, 10 * scale, Math.PI * 1.12, Math.PI * 1.88);
+          ctx.stroke();
+          ctx.restore();
+          return;
+        }
+
+        const effOpen = openParam * this.blinkFactor;
+        // Closed blink or sleepy curve
+        if (effOpen < 0.16) {
+          ctx.strokeStyle = ink;
+          ctx.lineWidth = 3.6 * scale;
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          if (this.mood === "sleepy") {
+            ctx.arc(0, -3 * scale, 8.5 * scale, Math.PI * 0.15, Math.PI * 0.85);
+          } else {
+            ctx.moveTo(-8.5 * scale, 0);
+            ctx.lineTo(8.5 * scale, 0);
+          }
+          ctx.stroke();
+          ctx.restore();
+          return;
+        }
+
+        // Standard crisp BMO ink-oval eye
+        const rx = 7.4 * scale * scaleParam;
+        const ry = 9.4 * scale * scaleParam * Math.max(0.22, effOpen);
+
+        ctx.save();
+        ctx.beginPath();
+        // Flat unamused top eyelid cut for Marvin / focused states
+        const lidCut = this.cur.flatLid * ry * 0.85;
+        ctx.rect(-rx * 1.6, -ry + lidCut, rx * 3.2, ry * 2.6);
+        ctx.clip();
+
+        ctx.fillStyle = ink;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Tiny eye shine on sad or curious or alarmed
+        if (this.mood === "sad" || this.mood === "curious") {
+          ctx.fillStyle = "#e6fff5";
+          ctx.beginPath();
+          ctx.arc(-rx * 0.3, -ry * 0.3, 2.1 * scale, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+
+        // Draw crisp top eyelid bar when flatLid is prominent (BMO deadpan look)
+        if (this.cur.flatLid > 0.35) {
+          ctx.strokeStyle = ink;
+          ctx.lineWidth = 3.2 * scale;
+          ctx.lineCap = "round";
+          const lidY = -ry + lidCut;
+          ctx.beginPath();
+          ctx.moveTo(-rx * 1.18, lidY);
+          ctx.lineTo(rx * 1.18, lidY);
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      }
+
+      _drawMouth(ctx, x, y, scale, ink) {
+        const open = this.cur.mouthOpen;
+        const smile = this.cur.mouthSmile ?? this.cur.smile;
+        const halfW = 16.5 * scale * this.cur.mouthW * this.cur.visemeW;
+        const jawBob = open * 2.4 * scale;
+
+        ctx.save();
+        ctx.translate(x, y + jawBob);
+
+        if (open >= 0.30) {
+          // Stage 2: Full Adventure Time 2-tone open BMO "D" / bean mouth
+          const openH = (7 + open * 21) * scale;
+          const drawShape = () => {
+            ctx.beginPath();
+            if (smile >= -0.05) {
+              ctx.moveTo(-halfW, -openH * 0.24);
+              ctx.quadraticCurveTo(0, -openH * (0.24 - smile * 0.14), halfW, -openH * 0.24);
+              ctx.bezierCurveTo(halfW * 1.04, openH * 0.90, -halfW * 1.04, openH * 0.90, -halfW, -openH * 0.24);
+            } else {
+              ctx.ellipse(0, openH * 0.22, halfW * 0.74, openH * 0.58, 0, 0, Math.PI * 2);
+            }
+            ctx.closePath();
+          };
+
+          ctx.save();
+          drawShape();
+          ctx.fillStyle = "#1b4d3e";
+          ctx.fill();
+          ctx.clip();
+
+          // Bouncing coral-pink BMO tongue arc
+          ctx.fillStyle = "#f08c9e";
+          ctx.beginPath();
+          ctx.ellipse(0, openH * (0.76 - open * 0.08), halfW * 0.70, openH * 0.44, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // White top teeth strip on cheerful vowels
+          if (smile > 0.30 && open > 0.44) {
+            ctx.fillStyle = "#f5fff9";
+            ctx.fillRect(-halfW * 1.1, -openH * 0.36, halfW * 2.2, openH * 0.27);
+          }
+          ctx.restore();
+
+          ctx.strokeStyle = ink;
+          ctx.lineWidth = 3.1 * scale;
+          ctx.lineJoin = "round";
+          drawShape();
+          ctx.stroke();
+        } else if (open >= 0.09) {
+          // Stage 1: Intermediate cartoon syllable "o" / pill mouth
+          const rx = halfW * 0.56;
+          const ry = (3.2 + open * 17) * scale;
+          ctx.save();
+          ctx.beginPath();
+          ctx.ellipse(0, ry * 0.25, rx, ry, 0, 0, Math.PI * 2);
+          ctx.fillStyle = "#1b4d3e";
+          ctx.fill();
+          ctx.clip();
+          ctx.fillStyle = "#f08c9e";
+          ctx.beginPath();
+          ctx.ellipse(0, ry * 1.0, rx * 0.75, ry * 0.55, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+
+          ctx.strokeStyle = ink;
+          ctx.lineWidth = 3.0 * scale;
+          ctx.beginPath();
+          ctx.ellipse(0, ry * 0.25, rx, ry, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        } else {
+          // Stage 0: Closed BMO line / smile / frown (snaps shut on consonants & pauses!)
+          ctx.strokeStyle = ink;
+          ctx.lineWidth = 3.3 * scale;
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          const curve = smile * 10.5 * scale;
+          ctx.moveTo(-halfW * 0.82, -curve * 0.18);
+          ctx.quadraticCurveTo(0, curve, halfW * 0.82, -curve * 0.18);
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      }
+
+      _drawSparkle(ctx, x, y, r, alpha, ink) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+        ctx.fillStyle = "#fffbeb";
+        ctx.strokeStyle = ink;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        for (let i = 0; i < 8; i++) {
+          const ang = (i * Math.PI) / 4;
+          const rad = i % 2 === 0 ? r : r * 0.32;
+          const px = Math.cos(ang) * rad;
+          const py = Math.sin(ang) * rad;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      _drawSweatDrop(ctx, x, y, scale, alpha) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+        ctx.fillStyle = "#7dd3fc";
+        ctx.strokeStyle = "#142826";
+        ctx.lineWidth = 2.0 * scale;
+        ctx.beginPath();
+        ctx.moveTo(0, -7 * scale);
+        ctx.bezierCurveTo(6 * scale, 1 * scale, 5 * scale, 7 * scale, 0, 7 * scale);
+        ctx.bezierCurveTo(-5 * scale, 7 * scale, -6 * scale, 1 * scale, 0, -7 * scale);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    /* =====================================================================
+     * Dynamic Character Registry + Voice Comms + Streaming Audio Queue
+     * ===================================================================== */
+    let CHAR_MAP = {
+      rocky: {
+        id: "rocky",
+        order: 1,
+        name: "Rocky",
+        title: "Rocky (Project Hail Mary)",
+        emoji: "🪨",
+        subtitle: "Eridian engineer • James Ortiz voice • Cheerful BMO expressions",
+        wake_phrase: "Hey Rocky",
+        default_transpose: -5,
+        default_speed: 1.18,
+        ui: {
+          accent: "#f5a623",
+          bmo_shell: "#53b09c",
+          bmo_shell_dark: "#3b8978",
+          bmo_screen_rgb: [205, 238, 224],
+          bmo_badge_prefix: "BMO",
+          idle_mood: "neutral",
+        },
+      },
+      marvin: {
+        id: "marvin",
+        order: 2,
+        name: "Marvin",
+        title: "Marvin (Hitchhiker's Guide)",
+        emoji: "🤖",
+        subtitle: "Paranoid Android • Alan Rickman baritone • Deadpan Gloom-MO expressions",
+        wake_phrase: "Hey Marvin",
+        default_transpose: 0,
+        default_speed: 0.92,
+        ui: {
+          accent: "#34d399",
+          bmo_shell: "#469087",
+          bmo_shell_dark: "#2f6c65",
+          bmo_screen_rgb: [183, 220, 212],
+          bmo_badge_prefix: "GLOOM-MO",
+          idle_mood: "bored",
+        },
+      },
+      bmo: {
+        id: "bmo",
+        order: 3,
+        name: "BMO",
+        title: "BMO (Adventure Time)",
+        emoji: "🎮",
+        subtitle: "Living MO-series console • Niki Yang voice • Sweet playful BMO expressions",
+        wake_phrase: "Hey BMO",
+        default_transpose: 2,
+        default_speed: 1.06,
+        ui: {
+          accent: "#2dd4bf",
+          bmo_shell: "#53b09c",
+          bmo_shell_dark: "#3b8978",
+          bmo_screen_rgb: [205, 238, 224],
+          bmo_badge_prefix: "BMO",
+          idle_mood: "happy",
+        },
+      },
+    };
+
+    function hexToRgba(hex, alpha) {
+      const h = (hex || "#f5a623").replace("#", "");
+      if (h.length !== 6) return `rgba(245, 166, 35, ${alpha})`;
+      const r = parseInt(h.slice(0, 2), 16);
+      const g = parseInt(h.slice(2, 4), 16);
+      const b = parseInt(h.slice(4, 6), 16);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    function orderedChars() {
+      return Object.values(CHAR_MAP).sort((a, b) => (a.order ?? 50) - (b.order ?? 50));
+    }
+
+    function getCharSpec(charId) {
+      return CHAR_MAP[charId] || CHAR_MAP[activeChar] || orderedChars()[0];
+    }
+
+    function wakeSummaryText(maxShown = 3, sep = " / ") {
+      const list = orderedChars();
+      const shown = list.slice(0, maxShown).map((c) => `"${c.wake_phrase || "Hey " + c.name}"`);
+      if (list.length > maxShown) shown.push(`+${list.length - maxShown} more`);
+      return shown.join(sep);
+    }
+
+    const charGrid = document.getElementById("charGrid");
+    const wakeModeBtn = document.getElementById("wakeModeBtn");
+    const reloadVoicesBtn = document.getElementById("reloadVoicesBtn");
+    const stage = document.getElementById("stage");
+    const orbWrap = document.getElementById("orbWrap");
+    const statusLine = document.getElementById("statusLine");
+    const subStatus = document.getElementById("subStatus");
+    const followupBadge = document.getElementById("followupBadge");
+    const chatBox = document.getElementById("chatBox");
+    const emptyChat = document.getElementById("emptyChat");
+    const healthPill = document.getElementById("healthPill");
+    const textInput = document.getElementById("textInput");
+    const askBtn = document.getElementById("askBtn");
+    const fullscreenBtn = document.getElementById("fullscreenBtn");
+
+    const transposeSlider = document.getElementById("transposeSlider");
+    const speedSlider = document.getElementById("speedSlider");
+    const filterSelect = document.getElementById("filterSelect");
+    const vadSlider = document.getElementById("vadSlider");
+    const sayExactChk = document.getElementById("sayExactChk");
+    const sfxChk = document.getElementById("sfxChk");
+    const bargeInChk = document.getElementById("bargeInChk");
+
+    const bmoFace = new BMOFaceEngine(
+      document.getElementById("bmoCanvas"),
+      document.getElementById("bmoMoodPill")
+    );
+
+    let activeChar = "rocky";
+    let currentMode = "wake";
+    let micActive = false;
+    let audioCtx = null;
+    let mediaStream = null;
+    let processor = null;
+
+    const SAMPLE_RATE = 16000;
+    const PRE_ROLL_CHUNKS = 7;
+    let preRoll = [];
+    let speechChunks = [];
+    let isCapturingUtterance = false;
+    let silenceMs = 0;
+    let utteranceMs = 0;
+    let isBusy = false;
+    let cooldownUntil = 0;
+    let followupUntil = 0;
+    let hadFollowupActive = false;
+
+    // Live interruption (barge-in) + audio stream cancellation state
+    let activeAbort = null;
+    let activeAudioSrc = null;
+    let activeQueueCancel = null;
+    let wasInterrupted = false;
+    let turnSeq = 0;
+    let activeTurnId = 0;
+    let echoSamples = [];
+    let echoBaseline = 0.08;
+    let bargeFrames = 0;
+
+    function playSfx(filename, vol = 0.55, guardMs = 1250) {
+      if (!sfxChk || !sfxChk.checked) return false;
+      try {
+        cooldownUntil = Math.max(cooldownUntil, Date.now() + guardMs);
+        preRoll = [];
+        const a = new Audio(`/static/sfx/${filename}`);
+        a.volume = vol;
+        a.play().catch(() => {});
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function interruptActiveSpeech() {
+      wasInterrupted = true;
+      if (activeAbort) {
+        try { activeAbort.abort(); } catch (_) {}
+        activeAbort = null;
+      }
+      if (activeQueueCancel) {
+        try { activeQueueCancel(); } catch (_) {}
+        activeQueueCancel = null;
+      }
+      if (activeAudioSrc) {
+        try { activeAudioSrc.stop(); } catch (_) {}
+        activeAudioSrc = null;
+      }
+      bmoFace.setSpeechLevel(0, false, 1.0);
+      echoSamples = [];
+      bargeFrames = 0;
+    }
+
+    fullscreenBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      document.body.classList.toggle("fullscreen-bmo");
+      fullscreenBtn.textContent = document.body.classList.contains("fullscreen-bmo")
+        ? "✕ Exit Full Face"
+        : "⛶ Full Face";
+      setTimeout(() => bmoFace._resize(), 40);
+    });
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && document.body.classList.contains("fullscreen-bmo")) {
+        document.body.classList.remove("fullscreen-bmo");
+        fullscreenBtn.textContent = "⛶ Full Face";
+        setTimeout(() => bmoFace._resize(), 40);
+      }
+    });
+
+    document.querySelectorAll(".emo-chip[data-emo]").forEach((chip) => {
+      chip.addEventListener("click", () => bmoFace.setEmotion(chip.dataset.emo));
+    });
+    document.getElementById("testTalkBtn").addEventListener("click", () => {
+      const start = performance.now();
+      const step = (t) => {
+        const dt = t - start;
+        if (dt > 2100) {
+          bmoFace.setSpeechLevel(0, false, 1.0);
+          return;
+        }
+        const wordPause = Math.sin(dt * 0.011) > -0.35 ? 1 : 0;
+        const syll = Math.max(0, Math.sin(dt * 0.041)) * wordPause;
+        const vw = 0.72 + 0.45 * (0.5 + 0.5 * Math.cos(dt * 0.027));
+        bmoFace.setSpeechLevel(syll, true, vw);
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
+
+    transposeSlider.oninput = () => {
+      const v = parseInt(transposeSlider.value, 10);
+      document.getElementById("trVal").textContent = (v >= 0 ? "+" : "") + v;
+    };
+    speedSlider.oninput = () => {
+      document.getElementById("spVal").textContent = parseFloat(speedSlider.value).toFixed(2) + "x";
+    };
+    vadSlider.oninput = () => {
+      document.getElementById("vadVal").textContent = parseFloat(vadSlider.value).toFixed(3);
+    };
+
+    function applyCharacterTheme(spec) {
+      const ui = spec.ui || {};
+      const accent = ui.accent || "#f5a623";
+      const root = document.documentElement.style;
+      root.setProperty("--accent", accent);
+      root.setProperty("--accent-soft", hexToRgba(accent, 0.13));
+      root.setProperty("--accent-glow", hexToRgba(accent, 0.40));
+      root.setProperty("--border", hexToRgba(accent, 0.26));
+      root.setProperty("--bmo-shell", ui.bmo_shell || "#53b09c");
+      root.setProperty("--bmo-shell-dark", ui.bmo_shell_dark || "#3b8978");
+      bmoFace.setCharacter(spec.id, ui);
+    }
+
+    const BUILTIN_CHARS = new Set(["rocky", "marvin", "bmo"]);
+
+    function renderCharacterCards() {
+      charGrid.innerHTML = "";
+      for (const spec of orderedChars()) {
+        const card = document.createElement("button");
+        card.type = "button";
+        card.className = "char-card" + (spec.id === activeChar ? " active" : "");
+        card.dataset.char = spec.id;
+
+        const titleRow = document.createElement("div");
+        titleRow.className = "char-title";
+        const leftSpan = document.createElement("span");
+        leftSpan.textContent = `${spec.emoji || "🎙️"} ${spec.title || spec.name}`;
+
+        const badges = document.createElement("span");
+        badges.className = "char-badges";
+        const wakeSpan = document.createElement("span");
+        wakeSpan.className = "char-wake";
+        wakeSpan.textContent = `"${spec.wake_phrase || "Hey " + spec.name}"`;
+        badges.appendChild(wakeSpan);
+
+        if (!BUILTIN_CHARS.has(spec.id)) {
+          const delSpan = document.createElement("span");
+          delSpan.className = "char-del";
+          delSpan.title = `Remove ${spec.name}`;
+          delSpan.textContent = "✕";
+          delSpan.addEventListener("click", async (ev) => {
+            ev.stopPropagation();
+            if (!confirm(`Remove voice pack "${spec.title || spec.name}"?`)) return;
+            try {
+              const res = await fetch(`/api/characters/${encodeURIComponent(spec.id)}`, { method: "DELETE" });
+              const data = await res.json();
+              if (!res.ok) throw new Error(data.detail || "Delete failed");
+              CHAR_MAP = data.characters;
+              if (!CHAR_MAP[activeChar]) activeChar = data.default_character || orderedChars()[0].id;
+              renderCharacterCards();
+              selectCharacter(activeChar, true);
+              const n = Object.keys(CHAR_MAP).length;
+              healthPill.textContent = `BMO Ready • ${n} Voices`;
+              subStatus.textContent = `Removed ${spec.name}.`;
+            } catch (err) {
+              subStatus.textContent = "Remove failed: " + err.message;
+            }
+          });
+          badges.appendChild(delSpan);
+        }
+
+        titleRow.appendChild(leftSpan);
+        titleRow.appendChild(badges);
+
+        const subRow = document.createElement("div");
+        subRow.className = "char-sub";
+        subRow.textContent = spec.subtitle || `${spec.name} voice assistant`;
+
+        card.appendChild(titleRow);
+        card.appendChild(subRow);
+        card.addEventListener("click", () => selectCharacter(spec.id, true));
+        charGrid.appendChild(card);
+      }
+      wakeModeBtn.textContent = `Wake Word (${wakeSummaryText(3)})`;
+    }
+
+    function selectCharacter(charId, resetFollowup = true) {
+      const spec = CHAR_MAP[charId];
+      if (!spec) return;
+      activeChar = charId;
+      document.body.dataset.character = charId;
+      applyCharacterTheme(spec);
+      document.querySelectorAll(".char-card").forEach((c) => {
+        c.classList.toggle("active", c.dataset.char === charId);
+      });
+      transposeSlider.value = spec.default_transpose ?? 0;
+      transposeSlider.oninput();
+      speedSlider.value = spec.default_speed ?? 1.0;
+      speedSlider.oninput();
+      askBtn.textContent = `Ask ${spec.name}`;
+      textInput.placeholder = `Type a question for ${spec.name} (or say "${spec.wake_phrase || "Hey " + spec.name}")...`;
+      if (resetFollowup) followupUntil = 0;
+      refreshIdlePrompt();
+    }
+
+    async function reloadCharacters(notifyStatus = true) {
+      try {
+        const res = await fetch("/api/characters/reload", { method: "POST" });
+        const data = await res.json();
+        if (data.characters && Object.keys(data.characters).length > 0) {
+          CHAR_MAP = data.characters;
+          if (!CHAR_MAP[activeChar]) {
+            activeChar = orderedChars()[0].id;
+          }
+          renderCharacterCards();
+          selectCharacter(activeChar, false);
+          if (notifyStatus) {
+            const count = Object.keys(CHAR_MAP).length;
+            subStatus.textContent = `Loaded ${count} voice pack${count === 1 ? "" : "s"}: ${wakeSummaryText(5)}`;
+          }
+        }
+      } catch (err) {
+        if (notifyStatus) subStatus.textContent = "Reload failed: " + err.message;
+      }
+    }
+
+    reloadVoicesBtn.addEventListener("click", () => reloadCharacters(true));
+
+    /* =====================================================================
+     * In-Browser "➕ Add Voice" Modal Controller + 1-Click Sci-Fi Presets
+     * ===================================================================== */
+    const addVoiceModal = document.getElementById("addVoiceModal");
+    const addVoiceForm = document.getElementById("addVoiceForm");
+    const openAddVoiceBtn = document.getElementById("openAddVoiceBtn");
+    const closeAddVoiceBtn = document.getElementById("closeAddVoiceBtn");
+    const cancelAddVoiceBtn = document.getElementById("cancelAddVoiceBtn");
+    const submitAddVoiceBtn = document.getElementById("submitAddVoiceBtn");
+    const avStatus = document.getElementById("avStatus");
+
+    const avName = document.getElementById("avName");
+    const avId = document.getElementById("avId");
+    const avEmoji = document.getElementById("avEmoji");
+    const avTitle = document.getElementById("avTitle");
+    const avWake = document.getElementById("avWake");
+    const avSubtitle = document.getElementById("avSubtitle");
+    const avPiper = document.getElementById("avPiper");
+    const avTranspose = document.getElementById("avTranspose");
+    const avSpeed = document.getElementById("avSpeed");
+    const avStyle = document.getElementById("avStyle");
+    const avMood = document.getElementById("avMood");
+    const avAccent = document.getElementById("avAccent");
+    const avModelUrl = document.getElementById("avModelUrl");
+    const avModelFile = document.getElementById("avModelFile");
+    const avRefFile = document.getElementById("avRefFile");
+    const avPrompt = document.getElementById("avPrompt");
+
+    const VOICE_PRESETS = {
+      tars: {
+        name: "TARS",
+        id: "tars",
+        emoji: "🛰️",
+        title: "TARS (Interstellar)",
+        wake: "tars, tarz, t.a.r.s",
+        subtitle: "USMC tactical robot • Humor 75% • Crisp baritone",
+        piper: "en_US-ryan-medium",
+        transpose: "-2",
+        speed: "1.08",
+        style: "clean",
+        mood: "focused",
+        accent: "#38bdf8",
+        prompt: "You are TARS, the witty former U.S. Marine Corps tactical robot from Interstellar (humor setting 75%, honesty 90%). Always write TWO short spoken sentences under 30 words total with no markdown or asterisks. Sentence 1 MUST be a crisp deadpan military remark calling the user Cooper or Slick (for example: 'Confirmed, Cooper.' or 'Humor setting at seventy-five percent.'). Sentence 2 MUST directly and accurately answer the question with dry wit.",
+      },
+      glados: {
+        name: "GLaDOS",
+        id: "glados",
+        emoji: "🥔",
+        title: "GLaDOS (Portal)",
+        wake: "glados, gladys, glad os",
+        subtitle: "Aperture Science AI • Cool passive-aggressive wit",
+        piper: "en_US-amy-medium",
+        transpose: "-1",
+        speed: "0.98",
+        style: "clean",
+        mood: "bored",
+        accent: "#facc15",
+        prompt: "You are GLaDOS from Portal. Always write TWO short spoken sentences under 30 words total with no markdown or asterisks. Sentence 1 MUST be a cool, dryly sarcastic Aperture Science remark about testing or cake. Sentence 2 MUST directly and accurately answer the user's question.",
+      },
+      hal: {
+        name: "HAL",
+        id: "hal",
+        emoji: "🔴",
+        title: "HAL 9000 (2001)",
+        wake: "hal, hal 9000",
+        subtitle: "Discovery One computer • Calm, unnervingly polite",
+        piper: "en_US-ryan-medium",
+        transpose: "-3",
+        speed: "0.90",
+        style: "clean",
+        mood: "focused",
+        accent: "#fb7185",
+        prompt: "You are HAL 9000 from 2001: A Space Odyssey. Always write TWO short, calm, polite spoken sentences under 30 words total with no markdown or asterisks, addressing the user as Dave. Sentence 1 MUST be a serene acknowledgment (such as 'Good afternoon, Dave.' or 'Affirmative, Dave.'). Sentence 2 MUST directly and accurately answer the user's question.",
+      },
+      jarvis: {
+        name: "JARVIS",
+        id: "jarvis",
+        emoji: "🎩",
+        title: "J.A.R.V.I.S.",
+        wake: "jarvis, j.a.r.v.i.s",
+        subtitle: "Refined British AI butler • Dry composure",
+        piper: "en_GB-alan-medium",
+        transpose: "0",
+        speed: "1.05",
+        style: "british_deadpan",
+        mood: "neutral",
+        accent: "#60a5fa",
+        prompt: "You are J.A.R.V.I.S., Tony Stark's refined British AI assistant. Always write TWO short spoken British sentences under 30 words total with no markdown or asterisks, addressing the user politely as Sir or Ma'am. Sentence 1 MUST be a crisp butler acknowledgment ('Right away, Sir.' or 'Telemetry online, Sir.'). Sentence 2 MUST directly and accurately answer the question.",
+      },
+      custom: {
+        name: "",
+        id: "",
+        emoji: "🎙️",
+        title: "",
+        wake: "",
+        subtitle: "",
+        piper: "en_US-ryan-medium",
+        transpose: "0",
+        speed: "1.02",
+        style: "clean",
+        mood: "neutral",
+        accent: "#a78bfa",
+        prompt: "",
+      },
+    };
+
+    let autoSlugId = false;
+    function applyVoicePreset(key) {
+      const p = VOICE_PRESETS[key] || VOICE_PRESETS.custom;
+      avName.value = p.name;
+      avId.value = p.id;
+      avEmoji.value = p.emoji;
+      avTitle.value = p.title;
+      avWake.value = p.wake;
+      avSubtitle.value = p.subtitle;
+      avPiper.value = p.piper;
+      avTranspose.value = p.transpose;
+      avSpeed.value = p.speed;
+      avStyle.value = p.style;
+      avMood.value = p.mood;
+      avAccent.value = p.accent;
+      avModelUrl.value = "";
+      avModelFile.value = "";
+      avRefFile.value = "";
+      avPrompt.value = p.prompt;
+      avStatus.textContent = "";
+      avStatus.classList.remove("err");
+      autoSlugId = (key === "custom");
+    }
+
+    avName.addEventListener("input", () => {
+      if (!autoSlugId) return;
+      const slug = avName.value.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+      avId.value = slug;
+      avWake.value = slug;
+    });
+    avId.addEventListener("input", () => { autoSlugId = false; });
+
+    document.querySelectorAll(".preset-chip[data-preset]").forEach((btn) => {
+      btn.addEventListener("click", () => applyVoicePreset(btn.dataset.preset));
+    });
+
+    function openAddVoiceModal() {
+      if (!avName.value) applyVoicePreset("tars");
+      avStatus.textContent = "";
+      avStatus.classList.remove("err");
+      addVoiceModal.classList.add("open");
+    }
+    function closeAddVoiceModal() {
+      addVoiceModal.classList.remove("open");
+    }
+
+    openAddVoiceBtn.addEventListener("click", openAddVoiceModal);
+    closeAddVoiceBtn.addEventListener("click", closeAddVoiceModal);
+    cancelAddVoiceBtn.addEventListener("click", closeAddVoiceModal);
+    addVoiceModal.addEventListener("click", (e) => {
+      if (e.target === addVoiceModal) closeAddVoiceModal();
+    });
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && addVoiceModal.classList.contains("open")) {
+        closeAddVoiceModal();
+      }
+    });
+
+    addVoiceForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const hasRvc = !!(avModelUrl.value.trim() || (avModelFile.files && avModelFile.files.length));
+      submitAddVoiceBtn.disabled = true;
+      avStatus.classList.remove("err");
+      avStatus.textContent = hasRvc
+        ? "⏳ Downloading & quantizing RVC model to INT8 (~30–60s)…"
+        : "⏳ Installing character voice pack…";
+
+      try {
+        const fd = new FormData(addVoiceForm);
+        const res = await fetch("/api/characters/add", { method: "POST", body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Failed to add voice");
+
+        CHAR_MAP = data.characters;
+        renderCharacterCards();
+        selectCharacter(data.character_id, true);
+        const n = Object.keys(CHAR_MAP).length;
+        healthPill.textContent = `BMO Ready • ${n} Voices`;
+        closeAddVoiceModal();
+        const addedSpec = getCharSpec(data.character_id);
+        subStatus.textContent = `Added ${addedSpec.emoji} ${addedSpec.name}! Say "${addedSpec.wake_phrase}, ..." or type below.`;
+      } catch (err) {
+        avStatus.classList.add("err");
+        avStatus.textContent = "Error: " + err.message;
+      } finally {
+        submitAddVoiceBtn.disabled = false;
+      }
+    });
+
+    renderCharacterCards();
+    selectCharacter(activeChar, false);
+
+    // Audio Output Mode Selector (PC Speakers afplay vs. Browser Web Audio)
+    let audioOutputMode = localStorage.getItem("rocky_audio_output") || "pc";
+    const outputModeBtn = document.getElementById("outputModeBtn");
+
+    function updateOutputModeUI() {
+      if (!outputModeBtn) return;
+      if (audioOutputMode === "pc") {
+        outputModeBtn.textContent = "🔊 Output: PC Speakers";
+        outputModeBtn.style.borderColor = "#c084fc";
+        outputModeBtn.style.color = "#c084fc";
+        outputModeBtn.title = "Audio plays cleanly out of host PC/Mac speakers (afplay). Click to switch to Browser tab audio.";
+      } else {
+        outputModeBtn.textContent = "🎧 Output: Browser";
+        outputModeBtn.style.borderColor = "#38bdf8";
+        outputModeBtn.style.color = "#38bdf8";
+        outputModeBtn.title = "Audio plays inside browser tab. Click to switch to PC speakers.";
+      }
+    }
+    updateOutputModeUI();
+
+    outputModeBtn?.addEventListener("click", () => {
+      audioOutputMode = (audioOutputMode === "pc") ? "browser" : "pc";
+      localStorage.setItem("rocky_audio_output", audioOutputMode);
+      updateOutputModeUI();
+    });
+
+    async function checkHealth() {
+      try {
+        const res = await fetch("/api/health");
+        const data = await res.json();
+        if (data.characters && Object.keys(data.characters).length > 0) {
+          const prevKeys = Object.keys(CHAR_MAP).join(",");
+          const nextKeys = Object.keys(data.characters).join(",");
+          CHAR_MAP = data.characters;
+          if (prevKeys !== nextKeys || !charGrid.children.length) {
+            if (!CHAR_MAP[activeChar]) activeChar = data.default_character || orderedChars()[0].id;
+            renderCharacterCards();
+            selectCharacter(activeChar, false);
+          }
+        }
+        if (data.ready) {
+          const n = Object.keys(CHAR_MAP).length;
+          healthPill.textContent = `BMO Ready • ${n} Voices • ${data.llm_model}`;
+          healthPill.classList.remove("loading");
+          return;
+        }
+      } catch (_) {}
+      setTimeout(checkHealth, 1200);
+    }
+    checkHealth();
+
+    setInterval(() => {
+      const left = Math.ceil((followupUntil - Date.now()) / 1000);
+      const spec = getCharSpec(activeChar);
+      if (currentMode === "wake" && left > 0 && !isBusy) {
+        hadFollowupActive = true;
+        const others = orderedChars().filter((c) => c.id !== activeChar);
+        const switchHint = others.length ? ` (or say "${others[0].wake_phrase}" to switch)` : "";
+        followupBadge.textContent = `${spec.name} follow-up (${left}s) — speak directly${switchHint}`;
+        followupBadge.classList.add("visible");
+      } else {
+        if (hadFollowupActive && left <= 0 && !isBusy) {
+          hadFollowupActive = false;
+          playSfx("beep_standby.mp3");
+        }
+        followupBadge.classList.remove("visible");
+      }
+    }, 300);
+
+    document.querySelectorAll(".mode-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".mode-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        currentMode = btn.dataset.mode;
+        followupUntil = 0;
+        hadFollowupActive = false;
+        refreshIdlePrompt();
+      });
+    });
+
+    function refreshIdlePrompt() {
+      const spec = getCharSpec(activeChar);
+      const idleMood = spec?.ui?.idle_mood || "neutral";
+      if (!micActive) {
+        stage.dataset.state = "idle";
+        bmoFace.setEmotion("sleepy");
+        statusLine.textContent = "Click BMO once to enable hands-free microphone";
+        return;
+      }
+      if (isBusy) return;
+      stage.dataset.state = "standby";
+      bmoFace.setEmotion(idleMood);
+      if (currentMode === "wake") {
+        statusLine.textContent = `Listening for ${wakeSummaryText(4, " or ")}…`;
+        subStatus.textContent = `Call any character in one breath — e.g. "${spec.wake_phrase}, how hot is Venus?"`;
+      } else if (currentMode === "continuous") {
+        statusLine.textContent = `1-on-1 Continuous Conversation with ${spec.name}`;
+        subStatus.textContent = `Speak naturally — ${spec.name} answers as soon as you pause (speak anytime to interrupt)`;
+      } else {
+        statusLine.textContent = `Tap BMO (or hold Spacebar) to talk to ${spec.name}`;
+        subStatus.textContent = "Manual Push-to-Talk mode";
+      }
+    }
+
+    async function initMic() {
+      if (micActive) return;
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SAMPLE_RATE });
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+        },
+      });
+      const source = audioCtx.createMediaStreamSource(mediaStream);
+      processor = audioCtx.createScriptProcessor(1024, 1, 1);
+
+      processor.onaudioprocess = (ev) => {
+        const input = ev.inputBuffer.getChannelData(0);
+        const copy = new Float32Array(input.length);
+        copy.set(input);
+
+        let sum = 0;
+        for (let i = 0; i < copy.length; i++) sum += copy[i] * copy[i];
+        const rms = Math.sqrt(sum / copy.length);
+        bmoFace.setMicLevel(isBusy ? 0 : rms);
+
+        const threshold = parseFloat(vadSlider.value);
+        const chunkMs = (copy.length / audioCtx.sampleRate) * 1000;
+
+        // In PC Speaker mode, afplay plays via OS audio outside browser echo cancellation;
+        // suppress mic acoustic barge-in so Rocky never interrupts or echoes himself!
+        const allowBargeIn = (audioOutputMode !== "pc") && bargeInChk && bargeInChk.checked && currentMode !== "ptt" && Date.now() >= cooldownUntil;
+
+        if (isBusy) {
+          if (stage.dataset.state === "speaking" && allowBargeIn) {
+            preRoll.push(copy);
+            if (preRoll.length > 3) preRoll.shift();
+
+            if (echoSamples.length < 18) {
+              echoSamples.push(rms);
+              const maxInit = Math.max(...echoSamples, 0);
+              echoBaseline = Math.max(threshold * 4.0, maxInit * 2.5, 0.08);
+            } else if (rms >= echoBaseline) {
+              bargeFrames += 1;
+              if (bargeFrames >= 5) {
+                interruptActiveSpeech();
+                activeTurnId = ++turnSeq;
+                isBusy = false;
+                if (currentMode === "wake") {
+                  followupUntil = Date.now() + 30000;
+                  hadFollowupActive = true;
+                }
+                isCapturingUtterance = true;
+                stage.dataset.state = "recording";
+                bmoFace.setEmotion("listening");
+                statusLine.textContent = "Interrupted — hearing you…";
+                speechChunks = [...preRoll];
+                preRoll = [];
+                silenceMs = 0;
+                utteranceMs = chunkMs;
+                return;
+              }
+            } else {
+              bargeFrames = Math.max(0, bargeFrames - 1);
+            }
+          } else {
+            preRoll = [];
+            speechChunks = [];
+            isCapturingUtterance = false;
+          }
+          return;
+        }
+
+        if (Date.now() < cooldownUntil) {
+          preRoll = [];
+          speechChunks = [];
+          isCapturingUtterance = false;
+          silenceMs = 0;
+          utteranceMs = 0;
+          return;
+        }
+
+        if (currentMode === "ptt") {
+          if (isCapturingUtterance) speechChunks.push(copy);
+          return;
+        }
+
+        if (!isCapturingUtterance) {
+          preRoll.push(copy);
+          if (preRoll.length > PRE_ROLL_CHUNKS) preRoll.shift();
+
+          if (rms >= threshold) {
+            isCapturingUtterance = true;
+            stage.dataset.state = "recording";
+            bmoFace.setEmotion("listening");
+            statusLine.textContent = "Hearing you…";
+            speechChunks = [...preRoll];
+            preRoll = [];
+            silenceMs = 0;
+            utteranceMs = chunkMs;
+          }
+        } else {
+          speechChunks.push(copy);
+          utteranceMs += chunkMs;
+          if (rms < threshold * 0.72) {
+            silenceMs += chunkMs;
+          } else {
+            silenceMs = 0;
+          }
+
+          if (silenceMs >= 480 || utteranceMs >= 13000) {
+            const captured = speechChunks;
+            isCapturingUtterance = false;
+            speechChunks = [];
+            if (utteranceMs >= 360) {
+              sendStreamingVoiceTurn(captured, audioCtx.sampleRate);
+            } else {
+              refreshIdlePrompt();
+            }
+          }
+        }
+      };
+
+      source.connect(processor);
+      processor.connect(audioCtx.destination);
+      micActive = true;
+      if (!playSfx("beep_wakeup.mp3")) playTone(520, 680, 0.08);
+      refreshIdlePrompt();
+    }
+
+    orbWrap.addEventListener("click", async () => {
+      if (!micActive) {
+        try {
+          await initMic();
+        } catch (err) {
+          statusLine.textContent = "Microphone permission denied: " + err.message;
+        }
+        return;
+      }
+      if (isBusy) {
+        interruptActiveSpeech();
+        activeTurnId = ++turnSeq;
+        isBusy = false;
+        cooldownUntil = Date.now() + 240;
+        if (!playSfx("beep2.mp3")) playTone(440, 330, 0.06);
+        if (currentMode === "wake") {
+          followupUntil = Date.now() + 30000;
+          hadFollowupActive = true;
+        }
+        bmoFace.setEmotion("curious");
+        statusLine.textContent = `${getCharSpec(activeChar).name} interrupted — ask anything!`;
+        return;
+      }
+
+      if (currentMode === "ptt") {
+        if (!isCapturingUtterance) {
+          speechChunks = [];
+          isCapturingUtterance = true;
+          stage.dataset.state = "recording";
+          bmoFace.setEmotion("listening");
+          statusLine.textContent = "Recording… tap BMO again when finished";
+        } else {
+          isCapturingUtterance = false;
+          sendStreamingVoiceTurn(speechChunks, audioCtx.sampleRate);
+          speechChunks = [];
+        }
+      } else {
+        followupUntil = Date.now() + 30000;
+        hadFollowupActive = true;
+        if (!playSfx("beep_wakeup.mp3")) playTone(580, 780, 0.08);
+        bmoFace.setEmotion("curious");
+        statusLine.textContent = `${getCharSpec(activeChar).name} is listening — ask anything!`;
+      }
+    });
+
+    function isTypingInField() {
+      const tag = document.activeElement?.tagName;
+      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || addVoiceModal.classList.contains("open");
+    }
+
+    window.addEventListener("keydown", async (e) => {
+      if (e.code === "Space" && !isTypingInField() && currentMode === "ptt") {
+        e.preventDefault();
+        if (!micActive) await initMic();
+        if (!isCapturingUtterance && !isBusy) {
+          speechChunks = [];
+          isCapturingUtterance = true;
+          stage.dataset.state = "recording";
+          bmoFace.setEmotion("listening");
+          statusLine.textContent = "Release Spacebar when done speaking";
+        }
+      }
+    });
+    window.addEventListener("keyup", (e) => {
+      if (e.code === "Space" && !isTypingInField() && currentMode === "ptt") {
+        if (isCapturingUtterance) {
+          isCapturingUtterance = false;
+          sendStreamingVoiceTurn(speechChunks, audioCtx.sampleRate);
+          speechChunks = [];
+        }
+      }
+    });
+
+    function encodeWav(chunks, sampleRate) {
+      let totalLen = 0;
+      for (const c of chunks) totalLen += c.length;
+      const pcm = new Int16Array(totalLen);
+      let offset = 0;
+      for (const c of chunks) {
+        for (let i = 0; i < c.length; i++) {
+          const s = Math.max(-1, Math.min(1, c[i]));
+          pcm[offset++] = s < 0 ? s * 0x8000 : s * 0x7fff;
+        }
+      }
+      const buffer = new ArrayBuffer(44 + pcm.length * 2);
+      const view = new DataView(buffer);
+      const writeStr = (pos, str) => {
+        for (let i = 0; i < str.length; i++) view.setUint8(pos + i, str.charCodeAt(i));
+      };
+      writeStr(0, "RIFF");
+      view.setUint32(4, 36 + pcm.length * 2, true);
+      writeStr(8, "WAVE");
+      writeStr(12, "fmt ");
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, 1, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * 2, true);
+      view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true);
+      writeStr(36, "data");
+      view.setUint32(40, pcm.length * 2, true);
+      new Uint8Array(buffer, 44).set(new Uint8Array(pcm.buffer));
+      return new Blob([buffer], { type: "audio/wav" });
+    }
+
+    // Gapless streaming audio + emotion sync queue (with barge-in cancel hook)
+    function createAudioQueuePlayer() {
+      const queue = [];
+      let running = false;
+      let streamFinished = false;
+      let cancelled = false;
+      let resolveAll = null;
+      const donePromise = new Promise((r) => { resolveAll = r; });
+
+      activeQueueCancel = () => {
+        cancelled = true;
+        queue.length = 0;
+        resolveAll();
+      };
+
+      async function pump() {
+        if (running) return;
+        running = true;
+        while (!cancelled && queue.length > 0) {
+          const item = queue.shift();
+          await playSingleBase64(item.b64, item.charId, item.emotion);
+        }
+        running = false;
+        if ((streamFinished || cancelled) && queue.length === 0) {
+          resolveAll();
+        }
+      }
+
+      return {
+        enqueue(b64, charId, emotion) {
+          if (cancelled) return;
+          queue.push({ b64, charId, emotion });
+          pump();
+        },
+        finishStream() {
+          streamFinished = true;
+          if (!running && queue.length === 0) resolveAll();
+          return donePromise;
+        },
+      };
+    }
+
+    async function consumeNdjsonTurn(response) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      const player = createAudioQueuePlayer();
+
+      let turnDom = null;
+      let allChunks = [];
+      let respChar = activeChar;
+      let sttMs = 0;
+      let firstAudioMs = null;
+      const tStart = performance.now();
+      let finalAction = "reply";
+      let enterFollowup = false;
+
+      while (!wasInterrupted) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+
+        let nl;
+        while ((nl = buf.indexOf("\n")) !== -1) {
+          const line = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          if (!line) continue;
+          const ev = JSON.parse(line);
+
+          if (ev.type === "ignored") {
+            if (ev.reason === "no_wake_word" && ev.transcript) {
+              subStatus.textContent = `Ignored (say ${wakeSummaryText(3, " or ")}): "${ev.transcript}"`;
+            }
+            player.finishStream();
+            return;
+          }
+
+          if (ev.type === "transcript") {
+            respChar = ev.character || activeChar;
+            if (!CHAR_MAP[respChar]) await reloadCharacters(false);
+            sttMs = ev.stt_ms || 0;
+            if (respChar !== activeChar) selectCharacter(respChar, false);
+            bmoFace.setEmotion("thinking");
+            turnDom = createStreamingTurnDom(ev.transcript, respChar);
+            statusLine.textContent = `${getCharSpec(respChar).name} is thinking…`;
+          } else if (ev.type === "audio_chunk") {
+            if (firstAudioMs === null) {
+              firstAudioMs = Math.round(performance.now() - tStart);
+            }
+            respChar = ev.character || respChar;
+            if (!CHAR_MAP[respChar]) await reloadCharacters(false);
+            const spec = getCharSpec(respChar);
+            const emo = ev.emotion || spec?.ui?.idle_mood || "neutral";
+            allChunks.push({ b64: ev.audio_b64, emotion: emo });
+            if (!turnDom) turnDom = createStreamingTurnDom("", respChar);
+            turnDom.appendSentence(ev.sentence);
+            const emoTrail = allChunks.map((c) => c.emotion).join(" → ");
+            turnDom.setMeta(
+              `First audio ${(firstAudioMs / 1000).toFixed(2)}s • Mood: ${emoTrail} (STT ${sttMs}ms • Voice ${ev.voice_ms}ms)`,
+              allChunks,
+              respChar
+            );
+            if (audioOutputMode !== "pc") {
+              player.enqueue(ev.audio_b64, respChar, emo);
+            } else {
+              // PC Speakers afplay handles audio; hold speaking state and sync timing
+              stage.dataset.state = "speaking";
+              bmoFace.setEmotion(emo);
+              bmoFace.setSpeechLevel(0.4, true, 1.0);
+              statusLine.textContent = `${spec.name} is speaking…`;
+              const chunkBytes = (ev.audio_b64.length * 3) / 4;
+              const chunkMs = Math.max(1100, Math.round(((chunkBytes - 44) / (48000 * 2)) * 1000));
+              await new Promise((r) => setTimeout(r, chunkMs));
+              bmoFace.setSpeechLevel(0, false, 1.0);
+            }
+          } else if (ev.type === "done") {
+            finalAction = ev.action || "reply";
+            enterFollowup = !!ev.enter_followup;
+          }
+        }
+      }
+
+      await player.finishStream();
+      if (wasInterrupted) return;
+
+      // Echo reverb cooldown buffer prevents mic from hearing the PC speaker tail
+      cooldownUntil = Math.max(cooldownUntil, Date.now() + 1000);
+      isCapturingUtterance = false;
+      speechChunks = [];
+      preRoll = [];
+      silenceMs = 0;
+      utteranceMs = 0;
+
+      if (enterFollowup && currentMode === "wake") {
+        followupUntil = Date.now() + 30000;
+        hadFollowupActive = true;
+      } else if (finalAction === "sleep") {
+        followupUntil = 0;
+        hadFollowupActive = false;
+        playSfx("byebye.mp3");
+        const spec = getCharSpec(respChar);
+        subStatus.textContent = `${spec.name} went to standby — say "${spec.wake_phrase}" to wake.`;
+      }
+    }
+
+    async function sendStreamingVoiceTurn(chunks, sr) {
+      if (!chunks.length || isBusy) return;
+      const turnId = ++turnSeq;
+      activeTurnId = turnId;
+      wasInterrupted = false;
+      echoSamples = [];
+      bargeFrames = 0;
+      const ctrl = new AbortController();
+      activeAbort = ctrl;
+
+      isBusy = true;
+      stage.dataset.state = "thinking";
+      bmoFace.setEmotion("thinking");
+      statusLine.textContent = "Transcribing…";
+
+      const wavBlob = encodeWav(chunks, sr);
+      const fd = new FormData();
+      fd.append("audio", wavBlob, "utterance.wav");
+      fd.append("character", activeChar);
+      fd.append("mode", currentMode);
+      fd.append("in_followup", Date.now() < followupUntil ? "true" : "false");
+      fd.append("filter_intensity", filterSelect.value);
+      fd.append("transpose", transposeSlider.value);
+      fd.append("speed", speedSlider.value);
+
+      try {
+        const res = await fetch("/api/voice-turn-stream", {
+          method: "POST",
+          headers: {
+            "X-Host-Speaker": (audioOutputMode === "pc" ? "true" : "false"),
+          },
+          body: fd,
+          signal: ctrl.signal,
+        });
+        await consumeNdjsonTurn(res);
+      } catch (err) {
+        if (err.name !== "AbortError" && !wasInterrupted) {
+          playSfx("error.mp3");
+          subStatus.textContent = "Error: " + err.message;
+        }
+      } finally {
+        if (activeAbort === ctrl) activeAbort = null;
+        if (activeTurnId === turnId && !isCapturingUtterance) {
+          cooldownUntil = Math.max(cooldownUntil, Date.now() + 1000);
+          isBusy = false;
+          refreshIdlePrompt();
+        }
+      }
+    }
+
+    document.getElementById("textForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const text = textInput.value.trim();
+      if (!text) return;
+      if (isBusy) interruptActiveSpeech();
+      textInput.value = "";
+
+      const turnId = ++turnSeq;
+      activeTurnId = turnId;
+      wasInterrupted = false;
+      echoSamples = [];
+      bargeFrames = 0;
+      const ctrl = new AbortController();
+      activeAbort = ctrl;
+
+      isBusy = true;
+      stage.dataset.state = "thinking";
+      bmoFace.setEmotion("thinking");
+      statusLine.textContent = `${getCharSpec(activeChar).name} is responding…`;
+
+      try {
+        const res = await fetch("/api/text-turn-stream", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: ctrl.signal,
+          body: JSON.stringify({
+            text,
+            character: activeChar,
+            filter_intensity: filterSelect.value,
+            transpose: parseInt(transposeSlider.value, 10),
+            speed: parseFloat(speedSlider.value),
+            say_exact: sayExactChk.checked,
+            play_host_speaker: (audioOutputMode === "pc"),
+          }),
+        });
+        await consumeNdjsonTurn(res);
+      } catch (err) {
+        if (err.name !== "AbortError" && !wasInterrupted) {
+          playSfx("error.mp3");
+          subStatus.textContent = "Error: " + err.message;
+        }
+      } finally {
+        if (activeAbort === ctrl) activeAbort = null;
+        if (activeTurnId === turnId && !isCapturingUtterance) {
+          cooldownUntil = Date.now() + 380;
+          isBusy = false;
+          refreshIdlePrompt();
+        }
+      }
+    });
+
+    document.getElementById("resetBtn").addEventListener("click", async () => {
+      if (isBusy) {
+        interruptActiveSpeech();
+        activeTurnId = ++turnSeq;
+        isBusy = false;
+      }
+      await fetch("/api/reset", { method: "POST" });
+      chatBox.innerHTML = `<div class="empty-chat">Memory cleared! Say ${wakeSummaryText(3, " or ")} to start fresh.</div>`;
+      bmoFace.setEmotion("excited");
+      setTimeout(() => refreshIdlePrompt(), 1400);
+      followupUntil = 0;
+      hadFollowupActive = false;
+    });
+
+    function createStreamingTurnDom(userText, charId) {
+      if (emptyChat && emptyChat.parentNode) emptyChat.remove();
+      const spec = getCharSpec(charId);
+      const accent = spec?.ui?.accent || "#f5a623";
+      const div = document.createElement("div");
+      div.className = "turn";
+
+      const u = document.createElement("div");
+      u.className = "msg-user";
+      u.textContent = userText;
+
+      const r = document.createElement("div");
+      r.className = "msg-ai";
+      r.style.setProperty("--bubble-bg", hexToRgba(accent, 0.13));
+      r.style.setProperty("--bubble-border", hexToRgba(accent, 0.36));
+      const tag = document.createElement("span");
+      tag.className = "speaker-tag";
+      tag.textContent = `${spec.emoji || "🎙️"} ${spec.name}`;
+      const bodySpan = document.createElement("span");
+      bodySpan.textContent = "…";
+      r.appendChild(tag);
+      r.appendChild(bodySpan);
+
+      const meta = document.createElement("div");
+      meta.className = "meta-row";
+
+      div.appendChild(u);
+      div.appendChild(r);
+      div.appendChild(meta);
+      chatBox.appendChild(div);
+      chatBox.scrollTop = chatBox.scrollHeight;
+
+      const sentences = [];
+      return {
+        appendSentence(s) {
+          sentences.push(s);
+          bodySpan.textContent = sentences.join(" ");
+          chatBox.scrollTop = chatBox.scrollHeight;
+        },
+        setMeta(label, chunkList, cid) {
+          meta.innerHTML = `<span>${label}</span>`;
+          const replay = document.createElement("button");
+          replay.className = "replay-btn";
+          replay.textContent = "▶ Replay";
+          replay.onclick = async () => {
+            for (const c of chunkList) await playSingleBase64(c.b64, cid, c.emotion);
+            refreshIdlePrompt();
+          };
+          meta.appendChild(replay);
+        },
+      };
+    }
+
+    async function playSingleBase64(b64, charId, emotion = "neutral") {
+      if (!b64) return;
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === "suspended") await audioCtx.resume();
+
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+
+      const audioBuf = await audioCtx.decodeAudioData(bytes.buffer.slice(0));
+      const src = audioCtx.createBufferSource();
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 1024;
+      analyser.smoothingTimeConstant = 0.2;
+      src.buffer = audioBuf;
+      src.connect(analyser);
+      analyser.connect(audioCtx.destination);
+
+      const spec = getCharSpec(charId);
+      stage.dataset.state = "speaking";
+      bmoFace.setCharacter(spec.id, spec.ui);
+      bmoFace.setEmotion(emotion);
+      statusLine.textContent = `${spec.name} is speaking…`;
+
+      const timeArr = new Float32Array(analyser.fftSize);
+      const freqArr = new Uint8Array(analyser.frequencyBinCount);
+      let peakEnv = 0.12;
+      let playing = true;
+
+      const animateSpeech = (tNow) => {
+        if (!playing) {
+          bmoFace.setSpeechLevel(0, false, 1.0);
+          return;
+        }
+        // 1. Real time-domain waveform RMS (drops to ~0 on pauses & consonants!)
+        analyser.getFloatTimeDomainData(timeArr);
+        let sumSq = 0;
+        for (let i = 0; i < timeArr.length; i++) sumSq += timeArr[i] * timeArr[i];
+        const rms = Math.sqrt(sumSq / timeArr.length);
+        peakEnv = Math.max(0.08, peakEnv * 0.992, rms);
+
+        // 2. Spectral brightness -> viseme mouth width ("oo" narrow vs "ee/ah" wide)
+        analyser.getByteFrequencyData(freqArr);
+        let lowE = 1, highE = 1;
+        for (let i = 2; i < 14; i++) lowE += freqArr[i];
+        for (let i = 14; i < 56; i++) highE += freqArr[i];
+        const bright = Math.min(1.5, (highE / 42) / (lowE / 12));
+        const visemeW = 0.68 + Math.min(0.52, bright * 0.42);
+
+        // 3. Syllable gate + cartoon lip-flap cadence so sustained vowels never freeze open
+        const gate = Math.max(0.018, peakEnv * 0.22);
+        let mouthLvl = 0;
+        if (rms > gate) {
+          const env = Math.min(1.0, (rms - gate) / Math.max(0.04, peakEnv * 0.54));
+          const flap = Math.max(0, -0.08 + 1.14 * (0.5 + 0.5 * Math.sin(tNow * 0.041)));
+          mouthLvl = env * flap;
+        }
+        bmoFace.setSpeechLevel(mouthLvl, true, visemeW);
+        requestAnimationFrame(animateSpeech);
+      };
+      requestAnimationFrame(animateSpeech);
+
+      await new Promise((resolve) => {
+        activeAudioSrc = src;
+        src.onended = () => {
+          playing = false;
+          if (activeAudioSrc === src) activeAudioSrc = null;
+          bmoFace.setSpeechLevel(0, false, 1.0);
+          resolve();
+        };
+        src.start(0);
+      });
+    }
+
+    function playTone(f1, f2, dur) {
+      try {
+        cooldownUntil = Math.max(cooldownUntil, Date.now() + Math.round(dur * 1000) + 140);
+        preRoll = [];
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.frequency.setValueAtTime(f1, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(f2, audioCtx.currentTime + dur);
+        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + dur);
+      } catch (_) {}
+    }
+
+    /* =====================================================================
+     * ESP32-CAM Robot Live Stream & Multimodal Vision HUD Controller
+     * ===================================================================== */
+    (function initRobotCam() {
+      const camSection = document.getElementById("espCamSection");
+      const toggleCamBtn = document.getElementById("toggleCamBtn");
+      const camStreamImg = document.getElementById("camStreamImg");
+      const camStatusBadge = document.getElementById("camStatusBadge");
+      const camStatusText = document.getElementById("camStatusText");
+      const camIpInput = document.getElementById("camIpInput");
+      const camRefreshBtn = document.getElementById("camRefreshBtn");
+      const camPauseBtn = document.getElementById("camPauseBtn");
+      const camInspectBtn = document.getElementById("camInspectBtn");
+      const camSnapSdBtn = document.getElementById("camSnapSdBtn");
+      const camPopoutBtn = document.getElementById("camPopoutBtn");
+      const camDirectToggleBtn = document.getElementById("camDirectToggleBtn");
+      const camRouteMode = document.getElementById("camRouteMode");
+      const camTelemetryTop = document.getElementById("camTelemetryTop");
+      const camTelemetryBottom = document.getElementById("camTelemetryBottom");
+      const camCharName = document.getElementById("camCharName");
+
+      let robotIp = localStorage.getItem("rocky_robot_ip") || "192.168.4.136";
+      let isVisible = localStorage.getItem("rocky_cam_visible") !== "false";
+      let isPaused = false;
+      let useDirect = localStorage.getItem("rocky_cam_direct") === "true";
+      let pollTimer = null;
+
+      if (camIpInput) camIpInput.value = robotIp;
+      if (camSection && !isVisible) camSection.classList.add("collapsed");
+      updateRouteLabel();
+      updateStreamSource();
+
+      function updateInspectButtonChar() {
+        const spec = getCharSpec(activeChar);
+        if (camCharName && spec) {
+          camCharName.textContent = spec.name || activeChar;
+        }
+      }
+      setInterval(updateInspectButtonChar, 1000);
+
+      toggleCamBtn?.addEventListener("click", () => {
+        isVisible = !isVisible;
+        localStorage.setItem("rocky_cam_visible", isVisible ? "true" : "false");
+        camSection?.classList.toggle("collapsed", !isVisible);
+        if (isVisible) {
+          refreshTelemetry();
+          if (!isPaused) updateStreamSource();
+        }
+      });
+
+      camIpInput?.addEventListener("change", () => {
+        const val = camIpInput.value.trim();
+        if (val) {
+          robotIp = val;
+          localStorage.setItem("rocky_robot_ip", robotIp);
+          updateStreamSource();
+          refreshTelemetry();
+        }
+      });
+
+      function updateRouteLabel() {
+        if (camRouteMode) camRouteMode.textContent = useDirect ? "Direct" : "Proxy";
+      }
+
+      function updateStreamSource() {
+        if (!camStreamImg) return;
+        if (isPaused) {
+          camStreamImg.src = "";
+          return;
+        }
+        if (useDirect) {
+          camStreamImg.src = `http://${robotIp}:81/stream`;
+        } else {
+          camStreamImg.src = `/api/robot/stream?robot_ip=${encodeURIComponent(robotIp)}&t=${Date.now()}`;
+        }
+      }
+
+      camStreamImg?.addEventListener("error", () => {
+        if (!isPaused && isVisible) {
+          setTimeout(updateStreamSource, 2500);
+        }
+      });
+
+      camDirectToggleBtn?.addEventListener("click", () => {
+        useDirect = !useDirect;
+        localStorage.setItem("rocky_cam_direct", useDirect ? "true" : "false");
+        updateRouteLabel();
+        updateStreamSource();
+      });
+
+      camPauseBtn?.addEventListener("click", () => {
+        isPaused = !isPaused;
+        if (camPauseBtn) camPauseBtn.textContent = isPaused ? "▶ Resume" : "⏸ Pause";
+        updateStreamSource();
+      });
+
+      camPopoutBtn?.addEventListener("click", () => {
+        const url = useDirect ? `http://${robotIp}:81/stream` : `/api/robot/stream?robot_ip=${encodeURIComponent(robotIp)}`;
+        window.open(url, "_blank");
+      });
+
+      async function refreshTelemetry() {
+        try {
+          const res = await fetch(`/api/robot/status?robot_ip=${encodeURIComponent(robotIp)}`);
+          const data = await res.json();
+          if (data.online && data.data) {
+            if (camStatusBadge) camStatusBadge.className = "cam-badge online";
+            if (camStatusText) camStatusText.textContent = `ONLINE • ${robotIp}`;
+            const tel = data.data;
+            const psramMb = (tel.free_psram / (1024 * 1024)).toFixed(1);
+            const heapKb = Math.round(tel.free_heap / 1024);
+            if (camTelemetryTop) camTelemetryTop.textContent = `PSRAM: ${psramMb} MB | HEAP: ${heapKb} KB`;
+            const sdText = tel.sd_mounted ? `SD: ${tel.sd_total_mb} MB` : `SD: None`;
+            if (camTelemetryBottom) camTelemetryBottom.textContent = `${sdText} | RSSI: ${tel.wifi_rssi} dBm`;
+          } else {
+            if (camStatusBadge) camStatusBadge.className = "cam-badge offline";
+            if (camStatusText) camStatusText.textContent = `OFFLINE (${data.error || "unreachable"})`;
+          }
+        } catch (err) {
+          if (camStatusBadge) camStatusBadge.className = "cam-badge offline";
+          if (camStatusText) camStatusText.textContent = `OFFLINE: ${err.message}`;
+        }
+      }
+
+      camRefreshBtn?.addEventListener("click", () => {
+        refreshTelemetry();
+        updateStreamSource();
+      });
+
+      refreshTelemetry();
+      pollTimer = setInterval(() => {
+        if (isVisible && !document.hidden) refreshTelemetry();
+      }, 5000);
+
+      camSnapSdBtn?.addEventListener("click", async () => {
+        const orig = camSnapSdBtn.textContent;
+        camSnapSdBtn.textContent = "📸 Saving…";
+        camSnapSdBtn.disabled = true;
+        try {
+          const res = await fetch("/api/robot/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ robot_ip: robotIp }),
+          });
+          const result = await res.json();
+          if (result.status === "ok") {
+            alert(`✅ Snapshot saved to SD Card!\nFile: ${result.file}\nSize: ${(result.bytes / 1024).toFixed(1)} KB`);
+          } else {
+            alert(`⚠️ SD Save returned: ${JSON.stringify(result)}`);
+          }
+        } catch (err) {
+          alert(`❌ Failed to save snapshot: ${err.message}`);
+        } finally {
+          camSnapSdBtn.textContent = orig;
+          camSnapSdBtn.disabled = false;
+          refreshTelemetry();
+        }
+      });
+
+      camInspectBtn?.addEventListener("click", async () => {
+        // Unlock Web Audio API inside user gesture
+        try {
+          if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          if (audioCtx.state === "suspended") await audioCtx.resume();
+        } catch (_) {}
+
+        if (isBusy) {
+          interruptActiveSpeech();
+        }
+        const spec = getCharSpec(activeChar);
+        const orig = camInspectBtn.innerHTML;
+        camInspectBtn.innerHTML = `⏳ ${spec.name} is inspecting…`;
+        camInspectBtn.disabled = true;
+
+        const turnId = ++turnSeq;
+        activeTurnId = turnId;
+        wasInterrupted = false;
+        isBusy = true;
+        stage.dataset.state = "thinking";
+        bmoFace.setEmotion("thinking");
+        statusLine.textContent = `${spec.name} is analyzing optical sensor feed…`;
+
+        try {
+          const res = await fetch("/api/robot/inspect", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              character: activeChar,
+              prompt: "Describe what you see right now in front of you.",
+              robot_ip: robotIp,
+              filter_intensity: filterSelect.value,
+              play_host_speaker: (audioOutputMode === "pc"),
+            }),
+          });
+          await consumeNdjsonTurn(res);
+        } catch (err) {
+          if (!wasInterrupted) {
+            playSfx("error.mp3");
+            subStatus.textContent = "Vision Error: " + err.message;
+          }
+        } finally {
+          camInspectBtn.innerHTML = orig;
+          camInspectBtn.disabled = false;
+          if (activeTurnId === turnId) {
+            cooldownUntil = Date.now() + 380;
+            isBusy = false;
+            refreshIdlePrompt();
+          }
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

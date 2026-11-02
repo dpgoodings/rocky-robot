@@ -20,3 +20,11 @@ Thumbs.db
 secrets.h
 credentials.json
 *.env
+
+# Voice Assistant binaries, cache, logs & large neural weights
+voice/bin/
+voice/cache/
+voice/models/
+*.onnx
+*.log
+

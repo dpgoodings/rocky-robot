@@ -89,10 +89,16 @@ python3 scripts/robot_bridge.py --robot 192.168.1.xxx --status
 │   ├── camera_pins.h           # OV2640 & SDMMC GPIO definitions
 │   └── robot_config.h          # Wi-Fi credentials & robot identity
 ├── src/
-│   └── main.cpp                # Core firmware: PSRAM, SD_MMC, Camera & Web Server
+│   └── main.cpp                # Core firmware: Dual HTTP servers (port 80 command, port 81 stream)
 ├── scripts/
 │   ├── setup_pio.sh            # PlatformIO CLI setup script
-│   └── robot_bridge.py         # Mac bridge to Ollama & rocky-voice
+│   └── robot_bridge.py         # Mac bridge to Ollama & voice assistant
+├── voice/                      # AI Brain, Voice Assistant & Web UI
+│   ├── server.py               # FastAPI / Uvicorn backend (port 7860)
+│   ├── brain.py                # Conversational LLM & Moondream VLM vision
+│   ├── voice_engine.py         # Faster-Whisper, ONNX voice synthesis & Piper
+│   ├── static/index.html       # Web UI Cyber-HUD with live robot stream
+│   └── characters/             # Character persona definitions (Rocky, TARS, Marvin, BMO)
 ├── micropython/
 │   └── README.md               # MicroPython setup guide & flash instructions
 └── README.md                   # This documentation
