@@ -27,4 +27,8 @@ voice/cache/
 voice/models/
 *.onnx
 *.log
+*.db
+*.sqlite
+*.sqlite3
+voice/storage/
 

@@ -20,6 +20,7 @@ from typing import Any
 
 import httpx
 
+import memory
 from character_registry import REGISTRY
 from rocky_filter import apply_character_filter
 
@@ -101,6 +102,11 @@ class RockyBrain:
         self.model = model
         self.max_turns = max_turns
         self.histories: dict[str, list[dict[str, str]]] = {}
+        # Pre-seed working memory from persistent SQLite store
+        for cid in ["rocky", "tars", "marvin", "bmo"]:
+            prior = memory.load_recent_dialogue(cid, limit=max_turns * 2)
+            if prior:
+                self.histories[cid] = prior
         self._client = httpx.Client(timeout=35.0)
         self._ollama_proc: subprocess.Popen[Any] | None = None
 
@@ -164,7 +170,16 @@ class RockyBrain:
     def _build_messages(self, user_text: str, char_id: str) -> list[dict[str, str]]:
         spec = REGISTRY.get(char_id)
         hist = self.histories.setdefault(spec.id, [])
-        messages = [{"role": "system", "content": spec.system_prompt}]
+
+        # Auto-extract facts and retrieve relevant episodic/semantic memories
+        memory.extract_and_learn(user_text)
+        mem_block = memory.build_memory_prompt_block(user_text)
+
+        sys_content = spec.system_prompt
+        if mem_block:
+            sys_content += f"\n\n{mem_block}"
+
+        messages = [{"role": "system", "content": sys_content}]
         messages.extend(hist[-(self.max_turns * 2) :])
 
         if TIME_QUERY_RE.search(user_text):
@@ -178,6 +193,7 @@ class RockyBrain:
         elif VISION_QUERY_RE.search(user_text):
             v_desc = fetch_robot_vision()
             if v_desc:
+                memory.remember_vision(v_desc, character=char_id)
                 user_payload = (
                     f"(Real-time robot camera optical feed currently sees: \"{v_desc}\". "
                     f"Directly voice what you see in your authentic 2-sentence character persona. Do NOT ask questions back or claim you cannot see.)\n{user_text}"
@@ -301,6 +317,8 @@ class RockyBrain:
         hist = self.histories.setdefault(char_id, [])
         hist.append({"role": "user", "content": user_text})
         hist.append({"role": "assistant", "content": full_reply})
+        memory.log_dialogue(char_id, "user", user_text)
+        memory.log_dialogue(char_id, "assistant", full_reply)
 
     def ask(
         self,

@@ -29,6 +29,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+import memory
 from add_voice import install_character_pack, remove_character_pack
 from brain import RockyBrain
 from character_registry import REGISTRY
@@ -336,6 +337,26 @@ def reset_memory(character: str | None = None) -> dict[str, str]:
     return {"status": "cleared"}
 
 
+@app.get("/api/memories")
+def get_memories() -> dict[str, Any]:
+    return {
+        "facts": memory.get_facts(),
+        "recent_observations": memory.get_recent_visual_memories(limit=10),
+    }
+
+
+@app.post("/api/memories/fact")
+def save_memory_fact(payload: dict[str, Any]) -> dict[str, Any]:
+    key = str(payload.get("key", "")).strip()
+    value = str(payload.get("value", "")).strip()
+    category = str(payload.get("category", "user_defined")).strip()
+    if key and value:
+        memory.set_fact(key, value, category=category)
+        return {"status": "saved", "key": key, "value": value}
+    return {"status": "error", "message": "key and value required"}
+
+
+
 @app.post("/api/voice-turn-stream")
 async def voice_turn_stream(
     request: Request,
@@ -640,6 +661,8 @@ def _ask_ollama_vision(image_bytes: bytes, prompt: str, char_id: str) -> str:
 
     if not raw_vision:
         raw_vision = "Camera feed operational. Live frame acquired at 640x480."
+    else:
+        memory.remember_vision(raw_vision, character=char_id)
 
     # Step 2: Use persona-specific robotic vision instructions
     try:
