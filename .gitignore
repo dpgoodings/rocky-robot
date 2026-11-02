@@ -1,0 +1,22 @@
+# PlatformIO build artifacts and cache
+.pio/
+.pioenvs/
+.piolibdeps/
+*.bin
+*.elf
+
+# Python virtual environment and bytecode
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Secrets / credentials (if any)
+secrets.h
+credentials.json
+*.env
