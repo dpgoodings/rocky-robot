@@ -22,6 +22,7 @@ import httpx
 
 import memory
 from character_registry import REGISTRY
+from mcp_homeassistant import detect_and_execute_hass_intent
 from mcp_mac import detect_and_execute_mac_control
 from rocky_filter import apply_character_filter
 
@@ -206,8 +207,15 @@ class RockyBrain:
         messages = [{"role": "system", "content": sys_content}]
         messages.extend(hist[-(self.max_turns * 2) :])
 
-        mac_action = detect_and_execute_mac_control(user_text)
-        if mac_action:
+        hass_action = detect_and_execute_hass_intent(user_text)
+        mac_action = detect_and_execute_mac_control(user_text) if not hass_action else None
+
+        if hass_action:
+            user_payload = (
+                f"(Smart Home Action Executed in Home Assistant: \"{hass_action}\". "
+                f"Directly confirm this action to friend in your authentic 1-2 sentence character persona.)\n{user_text}"
+            )
+        elif mac_action:
             user_payload = (
                 f"(System Action Executed via macOS MCP server: \"{mac_action}\". "
                 f"Directly confirm this action to friend in your authentic 1-2 sentence character persona.)\n{user_text}"

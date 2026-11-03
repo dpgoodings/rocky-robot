@@ -29,6 +29,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+import mcp_homeassistant
 import memory
 from add_voice import install_character_pack, remove_character_pack
 from brain import RockyBrain, resolve_robot_ip
@@ -354,6 +355,27 @@ def save_memory_fact(payload: dict[str, Any]) -> dict[str, Any]:
         memory.set_fact(key, value, category=category)
         return {"status": "saved", "key": key, "value": value}
     return {"status": "error", "message": "key and value required"}
+
+
+@app.get("/api/hass/status")
+def hass_status() -> dict[str, Any]:
+    return mcp_homeassistant.test_connection()
+
+
+@app.post("/api/hass/config")
+def hass_config(payload: dict[str, Any]) -> dict[str, Any]:
+    token = str(payload.get("token", "")).strip()
+    url = str(payload.get("url", mcp_homeassistant.DEFAULT_HASS_URL)).strip()
+    if token:
+        mcp_homeassistant.save_config(token=token, url=url)
+        return mcp_homeassistant.test_connection()
+    return {"connected": False, "error": "Token is required"}
+
+
+@app.get("/api/hass/entities")
+def hass_entities() -> list[dict[str, Any]]:
+    return mcp_homeassistant.fetch_entities()
+
 
 
 
