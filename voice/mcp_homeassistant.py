@@ -105,7 +105,7 @@ def fetch_entities(force_refresh: bool = False) -> list[dict[str, Any]]:
 
 
 def find_entity_by_name(target_name: str, domain: str | None = None) -> dict[str, Any] | None:
-    """Finds an entity matching the spoken target name (e.g., 'living room light')."""
+    """Finds an entity matching the spoken target name (e.g., 'porch light', 'roborock vacuum')."""
     clean_target = target_name.strip().lower()
     entities = fetch_entities()
     if not entities:
@@ -117,22 +117,57 @@ def find_entity_by_name(target_name: str, domain: str | None = None) -> dict[str
         if eid == clean_target:
             return e
 
-    # Filter by domain if specified
-    candidates = entities
-    if domain:
-        candidates = [e for e in entities if e.get("entity_id", "").startswith(f"{domain}.")]
+    # Prioritize actionable interactive domains over passive diagnostic entities
+    ACTION_DOMAINS = ("light.", "switch.", "vacuum.", "media_player.", "climate.", "lock.", "cover.")
+    sorted_entities = sorted(entities, key=lambda x: 0 if x.get("entity_id", "").startswith(ACTION_DOMAINS) else 1)
 
-    # Match friendly_name
-    for e in candidates:
-        friendly = e.get("attributes", {}).get("friendly_name", "").lower()
-        if friendly and (clean_target == friendly or clean_target in friendly or friendly in clean_target):
+    # 1. Exact match on friendly name
+    for e in sorted_entities:
+        friendly = e.get("attributes", {}).get("friendly_name", "").lower().strip()
+        if friendly == clean_target:
             return e
 
-    # Fallback substring on entity_id
-    for e in candidates:
-        eid = e.get("entity_id", "").lower()
-        slug = clean_target.replace(" ", "_")
-        if slug in eid:
+    # 2. Substring match on friendly name
+    for e in sorted_entities:
+        friendly = e.get("attributes", {}).get("friendly_name", "").lower().strip()
+        if friendly and (clean_target in friendly or friendly in clean_target):
+            return e
+
+    # 3. Token-based smart match
+    tokens = set(re.findall(r"\w+", clean_target))
+    meaningful = tokens - {"the", "a", "an", "my", "our", "all", "please"}
+    domain_hints = {
+        "light": "light", "lights": "light", "lamp": "light",
+        "switch": "switch", "plug": "switch",
+        "vacuum": "vacuum", "robot": "vacuum",
+        "player": "media_player", "speaker": "media_player", "tv": "media_player",
+    }
+    target_domains = [domain_hints[t] for t in meaningful if t in domain_hints]
+    core_tokens = meaningful - set(domain_hints.keys()) or meaningful
+
+    if core_tokens:
+        best_match = None
+        best_score = 0
+        for e in sorted_entities:
+            eid = e.get("entity_id", "").lower()
+            friendly = e.get("attributes", {}).get("friendly_name", "").lower()
+            text_to_search = f"{eid} {friendly}"
+
+            score = sum(1 for t in core_tokens if t in text_to_search)
+            if score > 0 and target_domains:
+                if any(eid.startswith(f"{td}.") for td in target_domains):
+                    score += 2
+            if score > best_score:
+                best_score = score
+                best_match = e
+
+        if best_match:
+            return best_match
+
+    # 4. Fallback slug match on entity_id
+    slug = clean_target.replace(" ", "_")
+    for e in sorted_entities:
+        if slug in e.get("entity_id", "").lower():
             return e
 
     return None
