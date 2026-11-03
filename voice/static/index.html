@@ -889,8 +889,8 @@
           </select>
         </div>
         <div class="control-group">
-          <label>Mic VAD Sensitivity: <strong id="vadVal">0.016</strong></label>
-          <input id="vadSlider" type="range" min="0.006" max="0.05" step="0.002" value="0.016" />
+          <label>Mic VAD Sensitivity: <strong id="vadVal">0.022</strong></label>
+          <input id="vadSlider" type="range" min="0.008" max="0.06" step="0.002" value="0.022" />
         </div>
         <div class="control-group" style="justify-content:center;gap:6px;">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;color:#f3f4f6;">
@@ -2199,7 +2199,7 @@
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true,
+          autoGainControl: false,
           channelCount: 1,
         },
       });
@@ -2498,6 +2498,8 @@
           if (ev.type === "ignored") {
             if (ev.reason === "no_wake_word" && ev.transcript) {
               subStatus.textContent = `Ignored (say ${wakeSummaryText(3, " or ")}): "${ev.transcript}"`;
+            } else if (ev.reason === "self_acoustic_echo") {
+              subStatus.textContent = `Speaker echo suppressed: "${ev.transcript}"`;
             }
             player.finishStream();
             return;
@@ -2560,8 +2562,8 @@
       await player.finishStream();
       if (wasInterrupted) return;
 
-      // Echo reverb cooldown buffer prevents mic from hearing the PC speaker tail
-      cooldownUntil = Math.max(cooldownUntil, Date.now() + 1000);
+      // Echo reverb cooldown buffer prevents mic from hearing speaker tail or reflections
+      cooldownUntil = Math.max(cooldownUntil, Date.now() + 2000);
       isCapturingUtterance = false;
       speechChunks = [];
       preRoll = [];
@@ -2623,7 +2625,7 @@
       } finally {
         if (activeAbort === ctrl) activeAbort = null;
         if (activeTurnId === turnId && !isCapturingUtterance) {
-          cooldownUntil = Math.max(cooldownUntil, Date.now() + 1000);
+          cooldownUntil = Math.max(cooldownUntil, Date.now() + 2000);
           isBusy = false;
           refreshIdlePrompt();
         }

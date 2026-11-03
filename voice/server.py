@@ -21,6 +21,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from typing import Any
 
 import httpx
@@ -76,6 +77,61 @@ threading.Thread(target=_pc_speaker_loop, daemon=True, name="pc_speaker_worker")
 def queue_pc_speaker(wav_data: bytes) -> None:
     """Queues synthesized speech to play directly out of the host PC/Mac speakers."""
     _speaker_queue.put(wav_data)
+
+
+# -----------------------------------------------------------------------------
+# Acoustic Feedback Echo Guard (Prevents mic from transcribing robot's own speaker audio)
+# -----------------------------------------------------------------------------
+
+_RECENT_SPOKEN_LOCK = threading.Lock()
+_RECENT_SPOKEN_SENTENCES: list[tuple[float, str]] = []  # (timestamp, sentence)
+
+
+def record_spoken_sentence(sentence: str) -> None:
+    """Records speech outputted by Rocky/BMO so microphone feedback can be recognized and dropped."""
+    clean = sentence.strip()
+    if not clean:
+        return
+    now = time.time()
+    with _RECENT_SPOKEN_LOCK:
+        _RECENT_SPOKEN_SENTENCES.append((now, clean))
+        # Keep only the last 15 seconds of assistant speech
+        cutoff = now - 15.0
+        while _RECENT_SPOKEN_SENTENCES and _RECENT_SPOKEN_SENTENCES[0][0] < cutoff:
+            _RECENT_SPOKEN_SENTENCES.pop(0)
+
+
+def is_self_acoustic_echo(transcript: str, window_seconds: float = 12.0) -> bool:
+    """Detects if microphone transcript is an acoustic echo of words recently spoken by the speakers."""
+    now = time.time()
+    with _RECENT_SPOKEN_LOCK:
+        cutoff = now - window_seconds
+        while _RECENT_SPOKEN_SENTENCES and _RECENT_SPOKEN_SENTENCES[0][0] < cutoff:
+            _RECENT_SPOKEN_SENTENCES.pop(0)
+        if not _RECENT_SPOKEN_SENTENCES:
+            return False
+
+        t_words = [
+            w for w in re.findall(r"[a-z0-9]+", transcript.lower())
+            if len(w) > 1 and w not in ("the", "a", "an", "is", "it", "to", "in", "of")
+        ]
+        if not t_words:
+            return True
+
+        spoken_text = " ".join(s for _, s in _RECENT_SPOKEN_SENTENCES).lower()
+        spoken_words = set(re.findall(r"[a-z0-9]+", spoken_text))
+
+        matched_words = [w for w in t_words if w in spoken_words]
+        match_ratio = len(matched_words) / len(t_words)
+
+        # Short echo fragment (1-5 words) with majority overlap
+        if len(t_words) <= 5 and match_ratio >= 0.50:
+            return True
+        # Any utterance with high overlap of the robot's recent speech
+        if match_ratio >= 0.75:
+            return True
+        return False
+
 
 
 def _prewarm_character_phrases(char_ids: list[str] | None = None) -> None:
@@ -180,6 +236,7 @@ def _stream_llm_and_voice(
         wav_bytes, voice_ms = engine.synthesize_character_wav(
             item["sentence"], character=resp_char, transpose=tr_val, speed=sp_val
         )
+        record_spoken_sentence(item["sentence"])
         if play_host_speaker:
             queue_pc_speaker(wav_bytes)
         yield _ndjson(
@@ -194,6 +251,9 @@ def _stream_llm_and_voice(
                 "voice_ms": voice_ms,
             }
         )
+
+    if play_host_speaker:
+        _speaker_queue.join()
 
 
 @app.get("/")
@@ -403,6 +463,18 @@ async def voice_turn_stream(
             yield _ndjson({"type": "ignored", "reason": "silence", "stt_ms": stt["latency_ms"]})
             return
 
+        if is_self_acoustic_echo(transcript):
+            print(f"[Echo Guard] Suppressed microphone acoustic feedback: '{transcript}'", flush=True)
+            yield _ndjson(
+                {
+                    "type": "ignored",
+                    "reason": "self_acoustic_echo",
+                    "transcript": transcript,
+                    "stt_ms": stt["latency_ms"],
+                }
+            )
+            return
+
         active_spec = REGISTRY.get(character)
         parsed = parse_wake_utterance(
             transcript,
@@ -443,8 +515,10 @@ async def voice_turn_stream(
             wav_bytes, tts_ms = engine.synthesize_character_wav(
                 reply, character=resp_char, transpose=tr_val, speed=sp_val
             )
+            record_spoken_sentence(reply)
             if play_host_speaker:
                 queue_pc_speaker(wav_bytes)
+                _speaker_queue.join()
             yield _ndjson(
                 {
                     "type": "audio_chunk",
@@ -465,8 +539,10 @@ async def voice_turn_stream(
             wav_bytes, tts_ms = engine.synthesize_character_wav(
                 reply, character=resp_char, transpose=tr_val, speed=sp_val
             )
+            record_spoken_sentence(reply)
             if play_host_speaker:
                 queue_pc_speaker(wav_bytes)
+                _speaker_queue.join()
             yield _ndjson(
                 {
                     "type": "audio_chunk",
@@ -488,8 +564,10 @@ async def voice_turn_stream(
             wav_bytes, tts_ms = engine.synthesize_character_wav(
                 reply, character=resp_char, transpose=tr_val, speed=sp_val
             )
+            record_spoken_sentence(reply)
             if play_host_speaker:
                 queue_pc_speaker(wav_bytes)
+                _speaker_queue.join()
             yield _ndjson(
                 {
                     "type": "audio_chunk",
