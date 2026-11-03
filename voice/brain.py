@@ -127,9 +127,20 @@ class RockyBrain:
         self.model = model
         self.max_turns = max_turns
         self.histories: dict[str, list[dict[str, str]]] = {}
-        # Pre-seed working memory from persistent SQLite store
+        # Pre-seed working memory from persistent SQLite store (ignoring duplicate loops)
         for cid in ["rocky", "tars", "marvin", "bmo"]:
-            prior = memory.load_recent_dialogue(cid, limit=max_turns * 2)
+            raw_prior = memory.load_recent_dialogue(cid, limit=max_turns * 2)
+            # Filter consecutive duplicate assistant messages
+            prior: list[dict[str, str]] = []
+            for item in raw_prior:
+                if (
+                    prior
+                    and item.get("role") == "assistant"
+                    and prior[-1].get("role") == "assistant"
+                    and item.get("content") == prior[-1].get("content")
+                ):
+                    continue
+                prior.append(item)
             if prior:
                 self.histories[cid] = prior
         self._client = httpx.Client(timeout=35.0)
@@ -188,9 +199,11 @@ class RockyBrain:
     def reset_history(self, character: str | None = None) -> None:
         if character and character.lower() in self.histories:
             self.histories[character.lower()].clear()
+            memory.clear_dialogue(character.lower())
         else:
             for h in self.histories.values():
                 h.clear()
+            memory.clear_dialogue()
 
     def _build_messages(self, user_text: str, char_id: str) -> list[dict[str, str]]:
         spec = REGISTRY.get(char_id)
@@ -272,6 +285,8 @@ class RockyBrain:
                 "options": {
                     "temperature": 0.6,
                     "top_p": 0.9,
+                    "repeat_penalty": 1.18,
+                    "presence_penalty": 0.2,
                     "num_ctx": 512,
                     "num_predict": 70,
                     "num_thread": 4,

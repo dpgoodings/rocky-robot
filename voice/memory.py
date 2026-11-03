@@ -208,6 +208,21 @@ def load_recent_dialogue(character: str, limit: int = 10) -> list[dict[str, str]
             conn.close()
 
 
+def clear_dialogue(character: str | None = None) -> None:
+    """Clears recent dialogue history from the database."""
+    with _LOCK:
+        conn = get_connection()
+        try:
+            cur = conn.cursor()
+            if character:
+                cur.execute("DELETE FROM dialogue_history WHERE character = ?", (character.lower(),))
+            else:
+                cur.execute("DELETE FROM dialogue_history")
+            conn.commit()
+        finally:
+            conn.close()
+
+
 # -----------------------------------------------------------------------------
 # Automatic Fact Extraction from Speech
 # -----------------------------------------------------------------------------

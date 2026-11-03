@@ -2503,6 +2503,15 @@
             return;
           }
 
+          if (ev.type === "error") {
+            subStatus.textContent = `Notice: ${ev.detail || "Server error"}`;
+            statusLine.textContent = "Ready";
+            bmoFace.setEmotion("neutral");
+            stage.dataset.state = "idle";
+            await player.finishStream();
+            return;
+          }
+
           if (ev.type === "transcript") {
             respChar = ev.character || activeChar;
             if (!CHAR_MAP[respChar]) await reloadCharacters(false);

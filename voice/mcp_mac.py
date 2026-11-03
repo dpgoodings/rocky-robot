@@ -2,7 +2,8 @@
 macOS MCP Control Bridge for Rocky-Robot.
 
 Connects to the @peakmojo/applescript-mcp server over stdio to control
-macOS applications, system volume, media playback, windows, and notifications.
+macOS applications, system volume, media playback, windows, notifications,
+and website navigation.
 """
 
 from __future__ import annotations
@@ -65,7 +66,7 @@ def _get_mcp_process() -> subprocess.Popen[str]:
 
 
 def execute_applescript(code_snippet: str, timeout: int = 20) -> str:
-    """Executes AppleScript code via the MCP Server."""
+    """Executes AppleScript code via the MCP Server, falling back to osascript if needed."""
     global _REQ_ID
     with _LOCK:
         try:
@@ -88,7 +89,7 @@ def execute_applescript(code_snippet: str, timeout: int = 20) -> str:
 
             raw_res = proc.stdout.readline()
             if not raw_res:
-                return "Error: Empty response from macOS MCP server."
+                return _fallback_osascript(code_snippet, timeout)
 
             data = json.loads(raw_res)
             content_list = data.get("result", {}).get("content", [])
@@ -97,8 +98,23 @@ def execute_applescript(code_snippet: str, timeout: int = 20) -> str:
             if "error" in data:
                 return f"MCP Error: {data['error'].get('message', 'Unknown error')}"
             return "Command executed successfully."
-        except Exception as exc:
-            return f"Error executing AppleScript via MCP: {exc}"
+        except Exception:
+            return _fallback_osascript(code_snippet, timeout)
+
+
+def _fallback_osascript(code_snippet: str, timeout: int = 10) -> str:
+    try:
+        res = subprocess.run(
+            ["osascript", "-e", code_snippet],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        if res.returncode == 0:
+            return res.stdout.strip()
+        return f"AppleScript Error: {res.stderr.strip()}"
+    except Exception as exc:
+        return f"Error executing AppleScript: {exc}"
 
 
 # -----------------------------------------------------------------------------
@@ -106,23 +122,72 @@ def execute_applescript(code_snippet: str, timeout: int = 20) -> str:
 # -----------------------------------------------------------------------------
 
 def open_app(app_name: str) -> str:
-    """Launches or focuses a macOS application."""
-    clean_name = app_name.strip().title()
+    """Launches or focuses a macOS application with AppleScript + open -a fallback."""
+    clean_name = app_name.strip()
+    if clean_name.lower() in ("browser", "web browser", "internet"):
+        clean_name = "Safari"
+    elif clean_name.lower() in ("so far", "so far app"):
+        clean_name = "Safari"
+    elif clean_name.lower() == "chrome":
+        clean_name = "Google Chrome"
+    elif clean_name.lower() in ("code", "vscode"):
+        clean_name = "Visual Studio Code"
+
+    clean_name = clean_name.title()
+    if clean_name.lower() == "google chrome":
+        clean_name = "Google Chrome"
+
     script = f'tell application "{clean_name}" to activate'
     res = execute_applescript(script)
     if "error" in res.lower():
+        try:
+            r = subprocess.run(["open", "-a", clean_name], capture_output=True, text=True, timeout=5)
+            if r.returncode == 0:
+                return f"Opened {clean_name}"
+        except Exception:
+            pass
         return f"Could not open {clean_name}: {res}"
     return f"Opened {clean_name}"
 
 
 def quit_app(app_name: str) -> str:
     """Quits a macOS application."""
-    clean_name = app_name.strip().title()
+    clean_name = app_name.strip()
+    if clean_name.lower() in ("browser", "web browser", "safari", "so far"):
+        clean_name = "Safari"
+    elif clean_name.lower() == "chrome":
+        clean_name = "Google Chrome"
+
+    clean_name = clean_name.title()
+    if clean_name.lower() == "google chrome":
+        clean_name = "Google Chrome"
+
     script = f'tell application "{clean_name}" to quit'
     res = execute_applescript(script)
     if "error" in res.lower():
+        try:
+            r = subprocess.run(["osascript", "-e", f'tell application "{clean_name}" to quit'], capture_output=True, text=True, timeout=5)
+            if r.returncode == 0:
+                return f"Quit {clean_name}"
+        except Exception:
+            pass
         return f"Could not quit {clean_name}: {res}"
     return f"Quit {clean_name}"
+
+
+def list_open_apps() -> str:
+    """Lists currently open GUI applications on the Mac."""
+    script = 'tell application "System Events" to get name of every process whose visible is true'
+    res = execute_applescript(script)
+    if not res or "error" in res.lower():
+        try:
+            res = subprocess.check_output(["osascript", "-e", script], text=True, timeout=5).strip()
+        except Exception:
+            res = ""
+    if res:
+        apps = [a.strip() for a in res.split(",") if a.strip()]
+        return f"Active open applications: {', '.join(apps)}"
+    return "Could not retrieve list of open applications."
 
 
 def set_system_volume(level: int) -> str:
@@ -193,13 +258,20 @@ def send_notification(message: str, title: str = "Rocky-S3") -> str:
 
 def open_url(url: str) -> str:
     """Opens a website URL in the default browser."""
-    if not url.startswith("http://") and not url.startswith("https://"):
-        target_url = "https://" + url
-    else:
-        target_url = url
+    target_url = url.strip()
+    if not target_url.startswith("http://") and not target_url.startswith("https://"):
+        target_url = "https://" + target_url
     script = f'open location "{target_url}"'
-    execute_applescript(script)
+    res = execute_applescript(script)
+    if "error" in res.lower():
+        subprocess.run(["open", target_url])
     return f"Opened {target_url}"
+
+
+def open_new_tab(url: str = "") -> str:
+    """Opens a new browser tab or website."""
+    target = url.strip() if url else "https://www.google.com"
+    return open_url(target)
 
 
 # -----------------------------------------------------------------------------
@@ -212,7 +284,11 @@ APP_MAP = {
     "google chrome": "Google Chrome",
     "browser": "Safari",
     "web browser": "Safari",
+    "the browser": "Safari",
+    "a browser": "Safari",
+    "a web browser": "Safari",
     "internet": "Safari",
+    "so far": "Safari",
     "firefox": "Firefox",
     "brave": "Brave Browser",
     "edge": "Microsoft Edge",
@@ -220,6 +296,7 @@ APP_MAP = {
     "music": "Music",
     "apple music": "Music",
     "notes": "Notes",
+    "mac notes": "Notes",
     "calendar": "Calendar",
     "reminders": "Reminders",
     "finder": "Finder",
@@ -233,14 +310,16 @@ APP_MAP = {
     "vscode": "Visual Studio Code",
 }
 
-OPEN_APP_RE = re.compile(
-    r"\b(?:open|launch|start|bring up)\s+([a-zA-Z0-9_ -]+?)(?:\s+app|\s+application)?\b",
-    re.IGNORECASE,
-)
-QUIT_APP_RE = re.compile(
-    r"\b(?:close|quit|exit|kill|shut down)\s+([a-zA-Z0-9_ -]+?)(?:\s+app|\s+application)?\b",
-    re.IGNORECASE,
-)
+WEB_SERVICES = {
+    "youtube": "https://youtube.com",
+    "google": "https://google.com",
+    "github": "https://github.com",
+    "reddit": "https://reddit.com",
+    "chatgpt": "https://chatgpt.com",
+    "netflix": "https://netflix.com",
+    "gmail": "https://mail.google.com",
+}
+
 VOLUME_RE = re.compile(
     r"\b(?:set\s+volume\s+to\s+(\d+)|volume\s+(\d+)|turn\s+volume\s+(up|down)|mute)\b",
     re.IGNORECASE,
@@ -249,7 +328,7 @@ MEDIA_RE = re.compile(
     r"\b(?:pause\s+(?:the\s+)?music|stop\s+(?:the\s+)?music|play\s+(?:the\s+)?music|resume\s+music|next\s+track|next\s+song|skip\s+song|previous\s+song)\b",
     re.IGNORECASE,
 )
-URL_RE = re.compile(
+URL_EXPLICIT_RE = re.compile(
     r"\b(?:go\s+to|open\s+url|open\s+website|open\s+site)\s+(https?://\S+|\S+\.(?:com|org|io|net|edu|dev|ai))\b",
     re.IGNORECASE,
 )
@@ -260,21 +339,41 @@ def detect_and_execute_mac_control(user_text: str) -> str | None:
     Checks if user text is asking to control macOS apps, media, or volume.
     Executes the command via MCP and returns the execution confirmation string.
     """
-    text = user_text.strip()
+    text = re.sub(r"[?!.,]+$", "", user_text.strip()).strip()
+    lower = text.lower()
 
-    # Skip vision queries (e.g. "open your eyes", "open camera")
-    if any(k in text.lower() for k in ["eyes", "camera", "stream", "feed", "optical"]):
+    # Skip camera/vision queries (e.g. "open your eyes", "open camera")
+    if any(k in lower for k in ["eyes", "camera", "stream", "feed", "optical"]):
         return None
 
-    # 1. URL / Website
-    m_url = URL_RE.search(text)
+    # 1. MCP connectivity / status query
+    if any(p in lower for p in ["connected to mac", "access the mac", "access mac os mcp", "mac os mcp", "mac mcp"]):
+        return "Connected to macOS MCP automation. I can launch applications, list open apps, control volume, play media, and open web pages."
+
+    # 2. List open applications
+    if re.search(r"\b(?:what|which)\s+(?:apps?|applications?)\s+(?:do\s+i\s+have\s+open|are\s+(?:currently\s+)?open)\b", lower, re.I) or \
+       re.search(r"\blist\s+(?:open\s+)?(?:apps?|applications?)\b", lower, re.I):
+        return list_open_apps()
+
+    # 3. Explicit URL
+    m_url = URL_EXPLICIT_RE.search(text)
     if m_url:
         return open_url(m_url.group(1))
 
-    # 2. Volume control
+    # 4. Web service shortcuts (e.g. "open up youtube", "go to youtube", "open chrome and go to youtube")
+    for svc_name, svc_url in WEB_SERVICES.items():
+        if re.search(rf"\b(?:open|launch|bring\s+up|go\s+to)\s+(?:up\s+)?(?:the\s+)?{svc_name}\b", lower) or \
+           re.search(rf"\b(?:open|launch)\s+.*?\s+and\s+go\s+to\s+{svc_name}\b", lower):
+            return open_url(svc_url)
+
+    # 5. New browser tab
+    if re.search(r"\b(?:open|launch)\s+(?:up\s+)?(?:a\s+)?new\s+tab\b", lower) or lower == "new tab":
+        return open_new_tab()
+
+    # 6. Volume control
     m_vol = VOLUME_RE.search(text)
     if m_vol:
-        if "mute" in text.lower():
+        if "mute" in lower:
             return set_system_volume(0)
         num = m_vol.group(1) or m_vol.group(2)
         if num:
@@ -290,7 +389,7 @@ def detect_and_execute_mac_control(user_text: str) -> str | None:
             new_vol = min(100, cur_vol + 15) if direction.lower() == "up" else max(0, cur_vol - 15)
             return set_system_volume(new_vol)
 
-    # 3. Media control
+    # 7. Media control
     m_media = MEDIA_RE.search(text)
     if m_media:
         matched = m_media.group(0).lower()
@@ -303,21 +402,45 @@ def detect_and_execute_mac_control(user_text: str) -> str | None:
         elif "previous" in matched:
             return control_media("previous")
 
-    # 4. Open App
-    if re.search(r"\b(?:open|launch|start|bring up)\s+(?:the\s+)?(?:web\s+)?browser\b", text, re.I):
+    # 8. Browser general open phrases:
+    # "open browser", "open up browser", "can you open up a web browser", "bring up the browser"
+    if re.search(r"\b(?:open|launch|start|bring\s+up)\s+(?:up\s+)?(?:a\s+|an\s+|the\s+)?(?:web\s+)?browser\b", lower):
         return open_app("Safari")
 
-    m_open = OPEN_APP_RE.search(text)
-    if m_open:
-        target = m_open.group(1).strip().lower()
-        canonical = APP_MAP.get(target, target.title())
-        return open_app(canonical)
+    # 9. Clean polite prefixes for app matching
+    clean_prompt = re.sub(
+        r"^(?:hey\s+rocky|rocky|can\s+you|could\s+you|please|would\s+you|go\s+ahead\s+and)\s+",
+        "",
+        lower,
+    ).strip()
 
-    # 5. Quit App
-    m_quit = QUIT_APP_RE.search(text)
+    # Open App regex
+    # Matches: "open up safari", "open notes", "launch google chrome", "bring up terminal"
+    m_open = re.search(
+        r"^(?:open|launch|start|bring\s+up|run)\s+(?:up\s+)?(?:a\s+|an\s+|the\s+|my\s+)?([a-zA-Z0-9_ -]+?)(?:\s+app|\s+application)?$",
+        clean_prompt,
+    )
+    if m_open:
+        raw_target = m_open.group(1).strip()
+        # Remove any lingering "up " at the start
+        if raw_target.startswith("up "):
+            raw_target = raw_target[3:].strip()
+        if raw_target and raw_target not in ("up", "app", "application"):
+            canonical = APP_MAP.get(raw_target, raw_target.title())
+            return open_app(canonical)
+
+    # Quit App regex
+    # Matches: "close safari", "close so far", "quit notes", "shut down chrome"
+    m_quit = re.search(
+        r"^(?:close|quit|exit|kill|shut\s+down)\s+(?:down\s+)?(?:a\s+|an\s+|the\s+|my\s+)?([a-zA-Z0-9_ -]+?)(?:\s+app|\s+application)?$",
+        clean_prompt,
+    )
     if m_quit:
-        target = m_quit.group(1).strip().lower()
-        canonical = APP_MAP.get(target, target.title())
-        return quit_app(canonical)
+        raw_target = m_quit.group(1).strip()
+        if raw_target.startswith("down "):
+            raw_target = raw_target[5:].strip()
+        if raw_target and raw_target not in ("down", "app", "application"):
+            canonical = APP_MAP.get(raw_target, raw_target.title())
+            return quit_app(canonical)
 
     return None
