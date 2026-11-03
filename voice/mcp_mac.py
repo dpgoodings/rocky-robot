@@ -209,6 +209,13 @@ def open_url(url: str) -> str:
 APP_MAP = {
     "safari": "Safari",
     "chrome": "Google Chrome",
+    "google chrome": "Google Chrome",
+    "browser": "Safari",
+    "web browser": "Safari",
+    "internet": "Safari",
+    "firefox": "Firefox",
+    "brave": "Brave Browser",
+    "edge": "Microsoft Edge",
     "spotify": "Spotify",
     "music": "Music",
     "apple music": "Music",
@@ -297,10 +304,12 @@ def detect_and_execute_mac_control(user_text: str) -> str | None:
             return control_media("previous")
 
     # 4. Open App
+    if re.search(r"\b(?:open|launch|start|bring up)\s+(?:the\s+)?(?:web\s+)?browser\b", text, re.I):
+        return open_app("Safari")
+
     m_open = OPEN_APP_RE.search(text)
     if m_open:
         target = m_open.group(1).strip().lower()
-        # Resolve common names
         canonical = APP_MAP.get(target, target.title())
         return open_app(canonical)
 
