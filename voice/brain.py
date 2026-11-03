@@ -22,6 +22,7 @@ import httpx
 
 import memory
 from character_registry import REGISTRY
+from mcp_mac import detect_and_execute_mac_control
 from rocky_filter import apply_character_filter
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -205,7 +206,13 @@ class RockyBrain:
         messages = [{"role": "system", "content": sys_content}]
         messages.extend(hist[-(self.max_turns * 2) :])
 
-        if TIME_QUERY_RE.search(user_text):
+        mac_action = detect_and_execute_mac_control(user_text)
+        if mac_action:
+            user_payload = (
+                f"(System Action Executed via macOS MCP server: \"{mac_action}\". "
+                f"Directly confirm this action to friend in your authentic 1-2 sentence character persona.)\n{user_text}"
+            )
+        elif TIME_QUERY_RE.search(user_text):
             now = datetime.now()
             short_time = now.strftime("%I:%M %p").lstrip("0")
             date_str = now.strftime("%A, %B %d, %Y")
