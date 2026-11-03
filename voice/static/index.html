@@ -2239,7 +2239,7 @@
                 activeTurnId = ++turnSeq;
                 isBusy = false;
                 if (currentMode === "wake") {
-                  followupUntil = Date.now() + 30000;
+                  followupUntil = Date.now() + 7000;
                   hadFollowupActive = true;
                 }
                 isCapturingUtterance = true;
@@ -2336,7 +2336,7 @@
         cooldownUntil = Date.now() + 240;
         if (!playSfx("beep2.mp3")) playTone(440, 330, 0.06);
         if (currentMode === "wake") {
-          followupUntil = Date.now() + 30000;
+          followupUntil = Date.now() + 7000;
           hadFollowupActive = true;
         }
         bmoFace.setEmotion("curious");
@@ -2357,7 +2357,7 @@
           speechChunks = [];
         }
       } else {
-        followupUntil = Date.now() + 30000;
+        followupUntil = Date.now() + 7000;
         hadFollowupActive = true;
         if (!playSfx("beep_wakeup.mp3")) playTone(580, 780, 0.08);
         bmoFace.setEmotion("curious");
@@ -2569,7 +2569,7 @@
       utteranceMs = 0;
 
       if (enterFollowup && currentMode === "wake") {
-        followupUntil = Date.now() + 30000;
+        followupUntil = Date.now() + 7000;
         hadFollowupActive = true;
       } else if (finalAction === "sleep") {
         followupUntil = 0;

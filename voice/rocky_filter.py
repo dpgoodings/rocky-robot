@@ -199,6 +199,20 @@ def parse_wake_utterance(
 
     clean_rem = re.sub(r"[.!?]+$", "", remainder.strip()).lower()
 
+    # In follow-up window without explicit wake word, ignore low-confidence noise fragments
+    if require_wake_word and in_followup_window and not matched_wake:
+        tokens = [t for t in re.findall(r"[a-z0-9]+", clean_rem) if t not in ("the", "a", "an", "is", "in", "to", "of", "and")]
+        valid_singletons = {"yes", "no", "yeah", "nope", "sure", "ok", "okay", "stop", "reset", "help", "more", "why", "who", "what", "where", "when", "how"}
+        if len(tokens) == 0 or (len(tokens) == 1 and tokens[0] not in valid_singletons):
+            return {
+                "triggered": False,
+                "character": fallback_char,
+                "wake_only": False,
+                "sleep": False,
+                "reset": False,
+                "query": "",
+            }
+
     if matched_wake and not clean_rem:
         return {
             "triggered": True,

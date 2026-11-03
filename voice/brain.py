@@ -288,8 +288,24 @@ class RockyBrain:
                     "repeat_penalty": 1.18,
                     "presence_penalty": 0.2,
                     "num_ctx": 512,
-                    "num_predict": 70,
+                    "num_predict": 50,
                     "num_thread": 4,
+                    "stop": [
+                        "\nUser:",
+                        "User:",
+                        "\nQuestion:",
+                        "Question:",
+                        "\nAnswer:",
+                        "Answer:",
+                        "\nRocky:",
+                        "Rocky:",
+                        "\nGrace:",
+                        "Grace:",
+                        "\nHuman:",
+                        "Human:",
+                        "\nAssistant:",
+                        "Assistant:",
+                    ],
                 },
             },
         ) as resp:
@@ -304,7 +320,17 @@ class RockyBrain:
                         first_token_ms = int((time.perf_counter() - t0) * 1000)
                     buffer += tok
 
+                    # Cut hallucinated multi-turn dialog tokens immediately
+                    cut = False
+                    for marker in ["Question:", "Answer:", "User:", "Rocky:", "Grace:", "Human:"]:
+                        if marker in buffer:
+                            buffer = buffer.split(marker)[0].strip()
+                            cut = True
+                            break
+
                     while True:
+                        if len(emitted_sentences) >= 2:
+                            break
                         popped = _pop_next_chunk(buffer, idx)
                         if not popped:
                             break
@@ -325,25 +351,32 @@ class RockyBrain:
                             }
                             idx += 1
 
-        rem = buffer.strip()
+                    if cut or len(emitted_sentences) >= 2:
+                        break
+
         saw_end_marker = False
-        if rem:
-            ended = "🔚" in rem
-            if ended:
-                saw_end_marker = True
-            rem = rem.replace("🔚", "")
-            filtered = apply_character_filter(
-                rem, character=char_id, intensity=filter_intensity
-            )
-            if filtered:
-                emitted_sentences.append(filtered)
-                yield {
-                    "sentence": filtered,
-                    "index": idx,
-                    "first_token_ms": first_token_ms or int((time.perf_counter() - t0) * 1000),
-                    "clause_ms": int((time.perf_counter() - t0) * 1000),
-                    "end_conversation": ended,
-                }
+        if len(emitted_sentences) < 2:
+            rem = buffer.strip()
+            for marker in ["Question:", "Answer:", "User:", "Rocky:", "Grace:", "Human:"]:
+                if marker in rem:
+                    rem = rem.split(marker)[0].strip()
+            if rem:
+                ended = "🔚" in rem
+                if ended:
+                    saw_end_marker = True
+                rem = rem.replace("🔚", "")
+                filtered = apply_character_filter(
+                    rem, character=char_id, intensity=filter_intensity
+                )
+                if filtered:
+                    emitted_sentences.append(filtered)
+                    yield {
+                        "sentence": filtered,
+                        "index": idx,
+                        "first_token_ms": first_token_ms or int((time.perf_counter() - t0) * 1000),
+                        "clause_ms": int((time.perf_counter() - t0) * 1000),
+                        "end_conversation": ended,
+                    }
 
         if not emitted_sentences:
             fallback = spec.fallback_reply
