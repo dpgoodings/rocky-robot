@@ -31,7 +31,7 @@ from pydantic import BaseModel
 
 import memory
 from add_voice import install_character_pack, remove_character_pack
-from brain import RockyBrain
+from brain import RockyBrain, resolve_robot_ip
 from character_registry import REGISTRY
 from rocky_filter import (
     apply_character_filter,
@@ -763,7 +763,7 @@ def _stream_speech_chunks(
 
 @app.get("/api/robot/status")
 async def robot_status(robot_ip: str | None = None) -> dict[str, Any]:
-    ip = robot_ip or os.environ.get("ROBOT_HOST", "192.168.4.136")
+    ip = robot_ip or resolve_robot_ip()
     try:
         async with httpx.AsyncClient(timeout=3.0) as client:
             resp = await client.get(f"http://{ip}/status")
@@ -776,7 +776,7 @@ async def robot_status(robot_ip: str | None = None) -> dict[str, Any]:
 
 @app.get("/api/robot/capture")
 async def robot_capture(robot_ip: str | None = None):
-    ip = robot_ip or os.environ.get("ROBOT_HOST", "192.168.4.136")
+    ip = robot_ip or resolve_robot_ip()
     try:
         async with httpx.AsyncClient(timeout=6.0) as client:
             resp = await client.get(f"http://{ip}/capture")
@@ -793,7 +793,7 @@ async def robot_capture(robot_ip: str | None = None):
 
 @app.get("/api/robot/stream")
 async def robot_stream(robot_ip: str | None = None):
-    ip = robot_ip or os.environ.get("ROBOT_HOST", "192.168.4.136")
+    ip = robot_ip or resolve_robot_ip()
     url = f"http://{ip}:81/stream"
 
     async def _stream_generator():
@@ -816,7 +816,7 @@ async def robot_stream(robot_ip: str | None = None):
 
 @app.post("/api/robot/save")
 async def robot_save(req: RobotSaveRequest) -> dict[str, Any]:
-    ip = req.robot_ip or os.environ.get("ROBOT_HOST", "192.168.4.136")
+    ip = req.robot_ip or resolve_robot_ip()
     try:
         async with httpx.AsyncClient(timeout=6.0) as client:
             resp = await client.post(f"http://{ip}/save")
@@ -827,7 +827,7 @@ async def robot_save(req: RobotSaveRequest) -> dict[str, Any]:
 
 @app.post("/api/robot/inspect")
 async def robot_inspect(req: RobotInspectRequest):
-    ip = req.robot_ip or os.environ.get("ROBOT_HOST", "192.168.4.136")
+    ip = req.robot_ip or resolve_robot_ip()
     char_id = req.character.lower()
     def_tr, def_sp = engine.get_defaults(char_id)
 

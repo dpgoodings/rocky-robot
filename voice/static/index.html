@@ -785,7 +785,7 @@
         <div class="cam-header-actions">
           <div class="cam-ip-box" title="ESP32-S3 Robot IP Address">
             <label for="camIpInput">Robot IP:</label>
-            <input type="text" id="camIpInput" class="cam-ip-input" value="192.168.4.136" spellcheck="false" />
+            <input type="text" id="camIpInput" class="cam-ip-input" value="192.168.4.147" spellcheck="false" />
           </div>
           <button type="button" id="camRefreshBtn" class="cam-btn" title="Refresh Telemetry & Feed">↻</button>
           <button type="button" id="camPauseBtn" class="cam-btn" title="Pause or Resume Video Stream">⏸ Pause</button>
@@ -2854,7 +2854,7 @@
       const camTelemetryBottom = document.getElementById("camTelemetryBottom");
       const camCharName = document.getElementById("camCharName");
 
-      let robotIp = localStorage.getItem("rocky_robot_ip") || "192.168.4.136";
+      let robotIp = localStorage.getItem("rocky_robot_ip") || "192.168.4.147";
       let isVisible = localStorage.getItem("rocky_cam_visible") !== "false";
       let isPaused = false;
       let useDirect = localStorage.getItem("rocky_cam_direct") === "true";

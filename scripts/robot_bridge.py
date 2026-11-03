@@ -23,7 +23,7 @@ import time
 import urllib.request
 import urllib.error
 
-ROBOT_DEFAULT_IP = "192.168.4.136"
+ROBOT_DEFAULT_IP = "192.168.4.147"
 BRAIN_DEFAULT_URL = "http://127.0.0.1:7860"
 OLLAMA_DEFAULT_URL = "http://127.0.0.1:11434"
 

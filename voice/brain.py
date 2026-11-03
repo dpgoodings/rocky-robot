@@ -38,9 +38,32 @@ VISION_QUERY_RE = re.compile(
     re.IGNORECASE,
 )
 
+def resolve_robot_ip() -> str:
+    env_ip = os.environ.get("ROBOT_HOST")
+    if env_ip:
+        return env_ip
+    for candidate in ["192.168.4.147", "192.168.4.136"]:
+        try:
+            with httpx.Client(timeout=0.5) as c:
+                if c.get(f"http://{candidate}:80/status").status_code == 200:
+                    return candidate
+        except Exception:
+            pass
+    try:
+        out = subprocess.check_output(["arp", "-a"], text=True)
+        for line in out.splitlines():
+            if any(oui in line.lower() for oui in ["84:c7:bb", "34:85:18", "24:4c:ab", "ec:da:3b", "40:22:d8"]):
+                m = re.search(r"\((192\.168\.\d+\.\d+)\)", line)
+                if m:
+                    return m.group(1)
+    except Exception:
+        pass
+    return "192.168.4.147"
+
+
 def fetch_robot_vision(timeout: float = 25.0) -> str | None:
     """Grabs a live frame from ESP32-CAM and queries Moondream vision model."""
-    robot_ip = os.environ.get("ROBOT_HOST", "192.168.4.136")
+    robot_ip = resolve_robot_ip()
     try:
         with httpx.Client(timeout=4.0) as client:
             resp = client.get(f"http://{robot_ip}/capture")
