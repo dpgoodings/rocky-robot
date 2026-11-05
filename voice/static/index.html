@@ -2893,7 +2893,7 @@
       const camMotionBadge = document.getElementById("camMotionBadge");
       const camFaceBadge = document.getElementById("camFaceBadge");
 
-      let robotIp = localStorage.getItem("rocky_robot_ip") || "192.168.4.147";
+      let robotIp = localStorage.getItem("rocky_robot_ip") || "192.168.4.173";
       let isVisible = localStorage.getItem("rocky_cam_visible") !== "false";
       let isPaused = false;
       let useDirect = localStorage.getItem("rocky_cam_direct") === "true";
@@ -2978,6 +2978,12 @@
           const res = await fetch(`/api/robot/status?robot_ip=${encodeURIComponent(robotIp)}`);
           const data = await res.json();
           if (data.online && data.data) {
+            if (data.robot_ip && data.robot_ip !== robotIp) {
+              robotIp = data.robot_ip;
+              localStorage.setItem("rocky_robot_ip", robotIp);
+              if (camIpInput) camIpInput.value = robotIp;
+              updateStreamSource();
+            }
             if (camStatusBadge) camStatusBadge.className = "cam-badge online";
             if (camStatusText) camStatusText.textContent = `ONLINE • ${robotIp}`;
             const tel = data.data;

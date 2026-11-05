@@ -53,27 +53,85 @@ VISION_QUERY_RE = re.compile(
     re.IGNORECASE,
 )
 
+_CACHED_ROBOT_IP: str | None = None
+
+
+def _probe_ip(ip: str) -> bool:
+    try:
+        with httpx.Client(timeout=0.35) as c:
+            r = c.get(f"http://{ip}/status")
+            return r.status_code == 200 and ("robot" in r.text or "Rocky" in r.text)
+    except Exception:
+        return False
+
+
 def resolve_robot_ip() -> str:
+    global _CACHED_ROBOT_IP
+    if _CACHED_ROBOT_IP and _probe_ip(_CACHED_ROBOT_IP):
+        return _CACHED_ROBOT_IP
+
     env_ip = os.environ.get("ROBOT_HOST")
-    if env_ip:
+    if env_ip and _probe_ip(env_ip):
+        _CACHED_ROBOT_IP = env_ip
         return env_ip
-    for candidate in ["192.168.4.147", "192.168.4.136"]:
-        try:
-            with httpx.Client(timeout=0.5) as c:
-                if c.get(f"http://{candidate}:80/status").status_code == 200:
-                    return candidate
-        except Exception:
-            pass
+
+    # Check saved camera config
+    try:
+        cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "camera_config.json")
+        if os.path.exists(cfg_path):
+            with open(cfg_path, "r") as f:
+                cfg = json.load(f)
+                saved_ip = cfg.get("esp32_ip")
+                if saved_ip and _probe_ip(saved_ip):
+                    _CACHED_ROBOT_IP = saved_ip
+                    return saved_ip
+    except Exception:
+        pass
+
+    # High-probability DHCP candidates
+    candidates = ["192.168.4.173", "192.168.4.147", "192.168.4.136", "192.168.4.100", "192.168.4.150"]
+    for c in candidates:
+        if _probe_ip(c):
+            _CACHED_ROBOT_IP = c
+            return c
+
+    # Check ARP table for Espressif MAC OUI
     try:
         out = subprocess.check_output(["arp", "-a"], text=True)
         for line in out.splitlines():
-            if any(oui in line.lower() for oui in ["84:c7:bb", "34:85:18", "24:4c:ab", "ec:da:3b", "40:22:d8"]):
+            if any(oui in line.lower() for oui in ["84:c7:bb", "34:85:18", "24:4c:ab", "ec:da:3b", "40:22:d8", "a0:76:4e", "30:ae:a4"]):
                 m = re.search(r"\((192\.168\.\d+\.\d+)\)", line)
-                if m:
-                    return m.group(1)
+                if m and _probe_ip(m.group(1)):
+                    _CACHED_ROBOT_IP = m.group(1)
+                    return _CACHED_ROBOT_IP
     except Exception:
         pass
-    return "192.168.4.147"
+
+    # Concurrent subnet scan of common DHCP range (100 to 205)
+    import concurrent.futures
+
+    def check_candidate(host: str) -> str | None:
+        return host if _probe_ip(host) else None
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=30) as ex:
+        probe_hosts = [f"192.168.4.{i}" for i in range(100, 205)]
+        for result in ex.map(check_candidate, probe_hosts):
+            if result:
+                _CACHED_ROBOT_IP = result
+                try:
+                    cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "camera_config.json")
+                    cfg = {}
+                    if os.path.exists(cfg_path):
+                        with open(cfg_path, "r") as f:
+                            cfg = json.load(f)
+                    cfg["esp32_ip"] = result
+                    with open(cfg_path, "w") as f:
+                        json.dump(cfg, f, indent=2)
+                except Exception:
+                    pass
+                return result
+
+    return _CACHED_ROBOT_IP or "192.168.4.173"
 
 
 def fetch_robot_vision(timeout: float = 25.0) -> str | None:

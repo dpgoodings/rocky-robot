@@ -34,7 +34,7 @@ import mcp_homeassistant
 import memory
 import robot_vision
 from add_voice import install_character_pack, remove_character_pack
-from brain import RockyBrain, resolve_robot_ip
+from brain import RockyBrain, resolve_robot_ip, _probe_ip
 from character_registry import REGISTRY
 from rocky_filter import (
     apply_character_filter,
@@ -929,9 +929,18 @@ def _stream_speech_chunks(
 
 @app.get("/api/robot/status")
 async def robot_status(robot_ip: str | None = None) -> dict[str, Any]:
-    ip = robot_ip or resolve_robot_ip()
+    if robot_ip:
+        try:
+            async with httpx.AsyncClient(timeout=1.2) as client:
+                resp = await client.get(f"http://{robot_ip}/status")
+                if resp.status_code == 200:
+                    return {"online": True, "robot_ip": robot_ip, "data": resp.json()}
+        except Exception:
+            pass
+
+    ip = resolve_robot_ip()
     try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
+        async with httpx.AsyncClient(timeout=2.0) as client:
             resp = await client.get(f"http://{ip}/status")
             if resp.status_code == 200:
                 return {"online": True, "robot_ip": ip, "data": resp.json()}
@@ -942,9 +951,23 @@ async def robot_status(robot_ip: str | None = None) -> dict[str, Any]:
 
 @app.get("/api/robot/capture")
 async def robot_capture(robot_ip: str | None = None):
-    ip = robot_ip or resolve_robot_ip()
+    ip = robot_ip
+    if ip:
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                resp = await client.get(f"http://{ip}/capture")
+                if resp.status_code == 200:
+                    return Response(
+                        content=resp.content,
+                        media_type="image/jpeg",
+                        headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+                    )
+        except Exception:
+            pass
+
+    ip = resolve_robot_ip()
     try:
-        async with httpx.AsyncClient(timeout=6.0) as client:
+        async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(f"http://{ip}/capture")
             if resp.status_code != 200:
                 raise HTTPException(status_code=502, detail=f"Robot returned HTTP {resp.status_code}")
@@ -959,7 +982,9 @@ async def robot_capture(robot_ip: str | None = None):
 
 @app.get("/api/robot/stream")
 async def robot_stream(robot_ip: str | None = None):
-    ip = robot_ip or resolve_robot_ip()
+    ip = robot_ip
+    if not ip or not _probe_ip(ip):
+        ip = resolve_robot_ip()
     url = f"http://{ip}:81/stream"
 
     async def _stream_generator():
