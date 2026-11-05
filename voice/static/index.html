@@ -2896,7 +2896,7 @@
       let robotIp = localStorage.getItem("rocky_robot_ip") || "192.168.4.173";
       let isVisible = localStorage.getItem("rocky_cam_visible") !== "false";
       let isPaused = false;
-      let useDirect = localStorage.getItem("rocky_cam_direct") === "true";
+      let useDirect = false;
       let pollTimer = null;
 
       if (camIpInput) camIpInput.value = robotIp;

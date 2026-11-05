@@ -1,9 +1,9 @@
 {
   "source_type": "esp32",
-  "esp32_ip": "192.168.4.173",
   "custom_url": "",
   "motion_guard_enabled": true,
   "motion_sensitivity": 0.04,
   "voice_announcements": true,
-  "cooldown_seconds": 25
+  "cooldown_seconds": 25,
+  "esp32_ip": "192.168.4.173"
 }

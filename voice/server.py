@@ -8,6 +8,7 @@ and streams NDJSON audio + emotion chunks in parallel!
 
 from __future__ import annotations
 
+import asyncio
 import base64
 from collections.abc import Iterator
 from contextlib import asynccontextmanager
@@ -980,28 +981,61 @@ async def robot_capture(robot_ip: str | None = None):
         raise HTTPException(status_code=502, detail=f"Robot camera capture failed: {exc}")
 
 
+_LATEST_CAMERA_FRAME: bytes | None = None
+_LAST_FRAME_TIME: float = 0.0
+
+
+async def _fetch_cached_camera_frame(ip: str) -> bytes | None:
+    global _LATEST_CAMERA_FRAME, _LAST_FRAME_TIME
+    now = time.time()
+    # Cache for 70ms (~14 FPS) to prevent DMA/PSRAM starvation on ESP32
+    if _LATEST_CAMERA_FRAME is not None and (now - _LAST_FRAME_TIME) < 0.07:
+        return _LATEST_CAMERA_FRAME
+
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            resp = await client.get(f"http://{ip}/capture")
+            if resp.status_code == 200 and resp.content:
+                _LATEST_CAMERA_FRAME = resp.content
+                _LAST_FRAME_TIME = now
+                return resp.content
+    except Exception:
+        pass
+    return _LATEST_CAMERA_FRAME
+
+
 @app.get("/api/robot/stream")
 async def robot_stream(robot_ip: str | None = None):
     ip = robot_ip
     if not ip or not _probe_ip(ip):
         ip = resolve_robot_ip()
-    url = f"http://{ip}:81/stream"
 
     async def _stream_generator():
-        try:
-            async with httpx.AsyncClient(timeout=None) as client:
-                async with client.stream("GET", url) as resp:
-                    if resp.status_code != 200:
-                        return
-                    async for chunk in resp.aiter_bytes():
-                        yield chunk
-        except Exception as exc:
-            print(f"[Robot Stream Proxy] Disconnected: {exc}", flush=True)
+        boundary = "frame"
+        while True:
+            try:
+                frame_bytes = await _fetch_cached_camera_frame(ip)
+                if frame_bytes:
+                    header = (
+                        f"--{boundary}\r\n"
+                        f"Content-Type: image/jpeg\r\n"
+                        f"Content-Length: {len(frame_bytes)}\r\n\r\n"
+                    ).encode("ascii")
+                    yield header + frame_bytes + b"\r\n"
+                await asyncio.sleep(0.06)
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                await asyncio.sleep(0.2)
 
     return StreamingResponse(
         _stream_generator(),
         media_type="multipart/x-mixed-replace; boundary=frame",
-        headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        }
     )
 
 
