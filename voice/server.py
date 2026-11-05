@@ -32,6 +32,7 @@ from pydantic import BaseModel
 
 import mcp_homeassistant
 import memory
+import robot_vision
 from add_voice import install_character_pack, remove_character_pack
 from brain import RockyBrain, resolve_robot_ip
 from character_registry import REGISTRY
@@ -435,6 +436,71 @@ def hass_config(payload: dict[str, Any]) -> dict[str, Any]:
 @app.get("/api/hass/entities")
 def hass_entities() -> list[dict[str, Any]]:
     return mcp_homeassistant.fetch_entities()
+
+
+# -----------------------------------------------------------------------------
+# Robot Vision & Motion Sentry Endpoints
+# -----------------------------------------------------------------------------
+
+@app.get("/api/vision/status")
+def vision_status() -> dict[str, Any]:
+    return {
+        "status": robot_vision.GUARD_ENGINE.last_status,
+        "config": robot_vision.load_camera_config(),
+        "enrolled_faces": robot_vision.list_enrolled_faces(),
+    }
+
+
+@app.post("/api/vision/config")
+def vision_config(payload: dict[str, Any]) -> dict[str, Any]:
+    robot_vision.save_camera_config(payload)
+    return {
+        "status": "saved",
+        "config": robot_vision.load_camera_config(),
+    }
+
+
+@app.get("/api/vision/faces")
+def vision_faces() -> list[dict[str, Any]]:
+    return robot_vision.list_enrolled_faces()
+
+
+@app.post("/api/vision/enroll")
+async def vision_enroll(
+    name: str = Form(...),
+    image: UploadFile | None = File(None),
+) -> dict[str, Any]:
+    if image is not None and image.filename:
+        raw = await image.read()
+        ok, msg = robot_vision.enroll_face_from_bytes(name, raw)
+    else:
+        frame = robot_vision.fetch_live_camera_frame()
+        if frame is None:
+            return {"success": False, "message": "Camera is offline or unreachable"}
+        ok, msg = robot_vision.enroll_face(name, frame)
+    return {"success": ok, "message": msg, "enrolled_faces": robot_vision.list_enrolled_faces()}
+
+
+@app.delete("/api/vision/faces/{name}")
+def vision_delete_face(name: str) -> dict[str, Any]:
+    ok = robot_vision.delete_enrolled_face(name)
+    return {"success": ok, "enrolled_faces": robot_vision.list_enrolled_faces()}
+
+
+@app.post("/api/vision/recognize")
+async def vision_recognize(image: UploadFile | None = File(None)) -> dict[str, Any]:
+    if image is not None and image.filename:
+        import numpy as np
+        import cv2
+        raw = await image.read()
+        nparr = np.frombuffer(raw, np.uint8)
+        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    else:
+        frame = robot_vision.fetch_live_camera_frame()
+    if frame is None:
+        return {"faces": [], "error": "No frame available from camera"}
+    faces = robot_vision.recognize_faces(frame)
+    return {"faces": faces, "count": len(faces)}
 
 
 

@@ -21,6 +21,7 @@ from typing import Any
 import httpx
 
 import memory
+import robot_vision
 from character_registry import REGISTRY
 from mcp_homeassistant import detect_and_execute_hass_intent
 from mcp_mac import detect_and_execute_mac_control
@@ -33,6 +34,18 @@ DEFAULT_MODEL = os.environ.get("ROCKY_LLM_MODEL", "qwen2.5:1.5b")
 
 TIME_QUERY_RE = re.compile(
     r"\b(?:time|date|day|today|tonight|tomorrow|month|year|clock|hour|morning|afternoon|evening)\b",
+    re.IGNORECASE,
+)
+FACE_RECOG_QUERY_RE = re.compile(
+    r"\b(?:who\s+(?:am\s+i|do\s+you\s+see|is\s+this|is\s+in\s+front)|recognize\s+(?:me|my\s+face)|do\s+you\s+know\s+(?:who\s+i\s+am|me))\b",
+    re.IGNORECASE,
+)
+FACE_ENROLL_QUERY_RE = re.compile(
+    r"\b(?:remember\s+my\s+face|learn\s+my\s+face|register\s+my\s+face|this\s+is\s+my\s+face)\b",
+    re.IGNORECASE,
+)
+MOTION_GUARD_RE = re.compile(
+    r"\b(?:(turn\s+on|enable|start)\s+(?:guard\s+mode|motion\s+(?:detection|guard)|watching)|(turn\s+off|disable|stop)\s+(?:guard\s+mode|motion\s+(?:detection|guard)|watching))\b",
     re.IGNORECASE,
 )
 VISION_QUERY_RE = re.compile(
@@ -240,6 +253,59 @@ class RockyBrain:
             user_payload = (
                 f"(Live clock: {short_time}; date: {date_str}. Keep your 2-sentence character format; "
                 f"only read out the full date if the user asked for the date.)\n{user_text}"
+            )
+        elif MOTION_GUARD_RE.search(user_text):
+            m_guard = MOTION_GUARD_RE.search(user_text)
+            enable = bool(m_guard.group(1)) if m_guard else True
+            robot_vision.save_camera_config({"motion_guard_enabled": enable})
+            action_desc = "Motion Guard sentry mode activated. Watching room for movement." if enable else "Motion Guard sentry mode deactivated."
+            user_payload = (
+                f"(Vision System Action Executed: \"{action_desc}\". "
+                f"Directly confirm this action to friend in your authentic 1-2 sentence character persona.)\n{user_text}"
+            )
+        elif FACE_ENROLL_QUERY_RE.search(user_text):
+            m_name = re.search(r"\b(?:name\s+is|i\s+am|i'm|call\s+me)\s+([A-Za-z]+)\b", user_text, re.I)
+            user_name = m_name.group(1).strip().title() if m_name else ""
+            if not user_name:
+                facts = memory.get_facts()
+                for f in facts:
+                    if f.get("key") == "user_name":
+                        user_name = f.get("value")
+                        break
+            if not user_name:
+                user_name = "David"
+
+            frame = robot_vision.fetch_live_camera_frame()
+            if frame is not None:
+                ok, msg = robot_vision.enroll_face(user_name, frame)
+                if ok:
+                    memory.set_fact("user_name", user_name, category="identity")
+                    action_desc = f"Successfully enrolled and remembered {user_name}'s face in biometric memory."
+                else:
+                    action_desc = f"Could not register face: {msg}"
+            else:
+                action_desc = "Camera feed was unreachable. Ensure robot camera is powered and connected."
+            user_payload = (
+                f"(Vision System Action Executed: \"{action_desc}\". "
+                f"Directly confirm this action to friend in your authentic 1-2 sentence character persona.)\n{user_text}"
+            )
+        elif FACE_RECOG_QUERY_RE.search(user_text):
+            frame = robot_vision.fetch_live_camera_frame()
+            if frame is not None:
+                faces = robot_vision.recognize_faces(frame)
+                if faces:
+                    names = [f["name"] for f in faces if f["name"] != "Unknown"]
+                    if names:
+                        rec_desc = f"Biometric Facial Recognition confirmed match: {', '.join(names)}."
+                    else:
+                        rec_desc = "I see a face in front of the camera, but the identity is not yet recognized or registered."
+                else:
+                    rec_desc = "No face is currently visible in front of the camera."
+            else:
+                rec_desc = "Camera feed is currently unreachable."
+            user_payload = (
+                f"(Vision System Result: \"{rec_desc}\". "
+                f"Directly tell friend who you recognize in your authentic 1-2 sentence character persona.)\n{user_text}"
             )
         elif VISION_QUERY_RE.search(user_text):
             v_desc = fetch_robot_vision()

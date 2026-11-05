@@ -720,6 +720,15 @@
       background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
       box-shadow: 0 0 20px rgba(56, 189, 248, 0.45);
     }
+    .cam-btn.active-guard {
+      background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+      border-color: #f87171;
+      color: #fff;
+      box-shadow: 0 0 14px rgba(239, 68, 68, 0.45);
+    }
+    .cam-btn.active-guard:hover {
+      background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+    }
     .cam-ip-box {
       display: flex;
       align-items: center;
@@ -806,6 +815,10 @@
             <div class="cam-hud-pill">OV2640 • GDMA PSRAM • Heaven</div>
             <div id="camTelemetryBottom" class="cam-hud-pill">SD: Checking… | RSSI: -- dBm</div>
           </div>
+          <div class="cam-overlay-row">
+            <div id="camMotionBadge" class="cam-hud-pill">🛡️ STANDBY • Motion: 0.0%</div>
+            <div id="camFaceBadge" class="cam-hud-pill">👤 Face: None</div>
+          </div>
         </div>
       </div>
 
@@ -813,6 +826,15 @@
         <div class="cam-btn-group">
           <button type="button" id="camInspectBtn" class="cam-btn primary" title="Ask the active character to inspect the camera feed with AI vision">
             👁️ Ask <span id="camCharName">Rocky</span> to Inspect Scene
+          </button>
+          <button type="button" id="motionGuardBtn" class="cam-btn" title="Toggle Guard Mode (Motion & Face Sentry)">
+            🛡️ Guard: Off
+          </button>
+          <button type="button" id="enrollFaceBtn" class="cam-btn" title="Enroll your face into Rocky/BMO biometric memory from live camera">
+            👤 Enroll Face
+          </button>
+          <button type="button" id="facesListBtn" class="cam-btn" title="View or manage enrolled faces">
+            👥 Faces (<span id="facesCount">0</span>)
           </button>
           <button type="button" id="camSnapSdBtn" class="cam-btn" title="Save snapshot directly to robot onboard MicroSD card">
             📸 Snap to SD Card
@@ -2864,6 +2886,12 @@
       const camTelemetryTop = document.getElementById("camTelemetryTop");
       const camTelemetryBottom = document.getElementById("camTelemetryBottom");
       const camCharName = document.getElementById("camCharName");
+      const motionGuardBtn = document.getElementById("motionGuardBtn");
+      const enrollFaceBtn = document.getElementById("enrollFaceBtn");
+      const facesListBtn = document.getElementById("facesListBtn");
+      const facesCount = document.getElementById("facesCount");
+      const camMotionBadge = document.getElementById("camMotionBadge");
+      const camFaceBadge = document.getElementById("camFaceBadge");
 
       let robotIp = localStorage.getItem("rocky_robot_ip") || "192.168.4.147";
       let isVisible = localStorage.getItem("rocky_cam_visible") !== "false";
@@ -2968,15 +2996,128 @@
         }
       }
 
+      async function refreshVisionStatus() {
+        try {
+          const res = await fetch("/api/vision/status");
+          if (!res.ok) return;
+          const data = await res.json();
+          const config = data.config || {};
+          const status = data.status || {};
+          const faces = data.enrolled_faces || [];
+
+          if (facesCount) facesCount.textContent = faces.length;
+
+          const guardOn = !!config.motion_guard_enabled;
+          if (motionGuardBtn) {
+            motionGuardBtn.textContent = guardOn ? "🛡️ Guard: ON" : "🛡️ Guard: Off";
+            motionGuardBtn.classList.toggle("active-guard", guardOn);
+          }
+
+          if (camMotionBadge) {
+            const motionPct = ((status.motion_ratio || 0) * 100).toFixed(1);
+            const isMotion = !!status.motion_detected;
+            const motionColor = isMotion ? "#ef4444" : "#a3e635";
+            camMotionBadge.innerHTML = `🛡️ ${guardOn ? 'GUARD' : 'STANDBY'} • Motion: <span style="color:${motionColor};font-weight:700">${motionPct}%</span>`;
+          }
+
+          if (camFaceBadge) {
+            const faceList = status.faces || [];
+            if (faceList.length > 0) {
+              const topFace = faceList[0];
+              const confPct = Math.round((topFace.confidence || 0) * 100);
+              camFaceBadge.innerHTML = `👤 Face: <span style="color:#38bdf8;font-weight:700">${topFace.name}</span> (${confPct}%)`;
+            } else {
+              camFaceBadge.innerHTML = `👤 Face: None`;
+            }
+          }
+        } catch (_) {}
+      }
+
+      motionGuardBtn?.addEventListener("click", async () => {
+        const currentlyOn = motionGuardBtn.classList.contains("active-guard");
+        const nextState = !currentlyOn;
+        try {
+          const res = await fetch("/api/vision/config", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ motion_guard_enabled: nextState }),
+          });
+          if (res.ok) {
+            await refreshVisionStatus();
+          }
+        } catch (err) {
+          alert("Failed to toggle guard mode: " + err.message);
+        }
+      });
+
+      enrollFaceBtn?.addEventListener("click", async () => {
+        const name = prompt("Enter the name of the person to enroll from live camera frame (e.g. David):");
+        if (!name || !name.trim()) return;
+        const cleanName = name.trim();
+        const orig = enrollFaceBtn.textContent;
+        enrollFaceBtn.textContent = "⏳ Enrolling…";
+        enrollFaceBtn.disabled = true;
+        try {
+          const fd = new FormData();
+          fd.append("name", cleanName);
+          const res = await fetch("/api/vision/enroll", {
+            method: "POST",
+            body: fd,
+          });
+          const result = await res.json();
+          if (result.success) {
+            alert(`✅ Biometric face successfully enrolled for "${cleanName}"!\nTotal enrolled identities: ${(result.enrolled_faces || []).length}`);
+          } else {
+            alert(`⚠️ Enrollment failed: ${result.message || "Unknown error"}`);
+          }
+        } catch (err) {
+          alert(`❌ Failed to enroll face: ${err.message}`);
+        } finally {
+          enrollFaceBtn.textContent = orig;
+          enrollFaceBtn.disabled = false;
+          refreshVisionStatus();
+        }
+      });
+
+      facesListBtn?.addEventListener("click", async () => {
+        try {
+          const res = await fetch("/api/vision/faces");
+          const faces = await res.json();
+          if (!Array.isArray(faces) || faces.length === 0) {
+            alert("No faces currently enrolled.\nClick 'Enroll Face' to register someone from the camera feed.");
+            return;
+          }
+          const listText = faces.map(f => `• ${f.name} (enrolled ${f.created_at})`).join("\n");
+          const toDelete = prompt(`Enrolled Identities (${faces.length}):\n${listText}\n\nTo delete a face profile, enter their exact name (or cancel):`);
+          if (toDelete && toDelete.trim()) {
+            const delRes = await fetch(`/api/vision/faces/${encodeURIComponent(toDelete.trim())}`, { method: "DELETE" });
+            const delData = await delRes.json();
+            if (delData.success) {
+              alert(`🗑️ Deleted profile for "${toDelete.trim()}".`);
+            } else {
+              alert(`Could not find or delete "${toDelete.trim()}".`);
+            }
+            refreshVisionStatus();
+          }
+        } catch (err) {
+          alert("Error fetching enrolled faces: " + err.message);
+        }
+      });
+
       camRefreshBtn?.addEventListener("click", () => {
         refreshTelemetry();
+        refreshVisionStatus();
         updateStreamSource();
       });
 
       refreshTelemetry();
+      refreshVisionStatus();
       pollTimer = setInterval(() => {
-        if (isVisible && !document.hidden) refreshTelemetry();
-      }, 5000);
+        if (isVisible && !document.hidden) {
+          refreshTelemetry();
+          refreshVisionStatus();
+        }
+      }, 3000);
 
       camSnapSdBtn?.addEventListener("click", async () => {
         const orig = camSnapSdBtn.textContent;

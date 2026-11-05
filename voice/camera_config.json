@@ -1,0 +1,8 @@
+{
+  "source_type": "esp32",
+  "custom_url": "",
+  "motion_guard_enabled": true,
+  "motion_sensitivity": 0.04,
+  "voice_announcements": true,
+  "cooldown_seconds": 25
+}
