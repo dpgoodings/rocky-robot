@@ -267,9 +267,66 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "custom_url": "",        # Custom RTSP URL (e.g., rtsp://wyze-cam:8554/live) or snapshot URL
     "motion_guard_enabled": False,
     "motion_sensitivity": 0.04,  # Ratio of pixels changed (0.01 = high, 0.10 = low)
-    "voice_announcements": True,
-    "cooldown_seconds": 25,
+    "voice_announcements": False,  # Default to False: do not interrupt room/conversations with canned speech
+    "cooldown_seconds": 60,
 }
+
+
+_LAST_CONVERSATION_TIME: float = 0.0
+_CACHED_IDENTITY: str | None = None
+_IDENTITY_TIMESTAMP: float = 0.0
+
+
+def mark_conversation_active() -> None:
+    """Marks that the user is actively talking with the robot, suppressing canned alerts."""
+    global _LAST_CONVERSATION_TIME
+    _LAST_CONVERSATION_TIME = time.time()
+
+
+def is_conversation_active(window_sec: float = 90.0) -> bool:
+    """Returns True if the user has spoken with the robot recently."""
+    return (time.time() - _LAST_CONVERSATION_TIME) < window_sec
+
+
+def get_current_visual_identity(max_age: float = 2.0) -> str | None:
+    """
+    Returns the recognized name of whoever is currently in front of the camera (e.g. 'David').
+    Returns 'Unknown' if an unregistered face is visible, or None if no face is in view.
+    Uses cached recognition if within max_age seconds for instant (<2ms) responses.
+    """
+    global _CACHED_IDENTITY, _IDENTITY_TIMESTAMP
+    now = time.time()
+    if _CACHED_IDENTITY is not None and (now - _IDENTITY_TIMESTAMP) < max_age:
+        return _CACHED_IDENTITY
+
+    # 1. Check background sentry's latest result first (zero latency)
+    try:
+        status = GUARD_ENGINE.last_status
+        recent_faces = status.get("recognized_faces", [])
+        if recent_faces and (now - getattr(GUARD_ENGINE, "last_scan_time", 0)) < 4.0:
+            known = [f["name"] for f in recent_faces if f.get("name") and f["name"] != "Unknown"]
+            _CACHED_IDENTITY = known[0] if known else "Unknown"
+            _IDENTITY_TIMESTAMP = now
+            return _CACHED_IDENTITY
+    except Exception:
+        pass
+
+    # 2. Check live camera frame directly
+    try:
+        frame = fetch_live_camera_frame()
+        if frame is not None:
+            faces = recognize_faces(frame)
+            if faces:
+                known = [f["name"] for f in faces if f.get("name") and f["name"] != "Unknown"]
+                _CACHED_IDENTITY = known[0] if known else "Unknown"
+                _IDENTITY_TIMESTAMP = now
+                return _CACHED_IDENTITY
+    except Exception:
+        pass
+
+    _CACHED_IDENTITY = None
+    _IDENTITY_TIMESTAMP = now
+    return None
 
 
 def load_camera_config() -> dict[str, Any]:
@@ -344,6 +401,7 @@ class MotionGuardEngine:
         self._thread: threading.Thread | None = None
         self._bg_avg: np.ndarray | None = None
         self._last_alert_time = 0.0
+        self.last_scan_time = 0.0
         self.last_status: dict[str, Any] = {
             "motion_detected": False,
             "motion_score": 0.0,
@@ -402,10 +460,11 @@ class MotionGuardEngine:
 
                 if is_motion:
                     now = time.time()
-                    cooldown = float(cfg.get("cooldown_seconds", 25))
+                    cooldown = float(cfg.get("cooldown_seconds", 60))
 
                     # Run facial recognition on the high-res frame
                     faces = recognize_faces(frame)
+                    self.last_scan_time = now
                     self.last_status["recognized_faces"] = faces
                     self.last_status["last_event_time"] = time.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -418,8 +477,13 @@ class MotionGuardEngine:
                 time.sleep(1.5)
 
     def _trigger_motion_alert(self, faces: list[dict[str, Any]], score: float, cfg: dict[str, Any]) -> None:
-        """Dispatches proactive speech announcement when someone enters view."""
-        if not cfg.get("voice_announcements", True):
+        """Dispatches proactive speech announcement ONLY when Guard mode is active and user is not conversing."""
+        if not cfg.get("motion_guard_enabled", False):
+            return
+        if not cfg.get("voice_announcements", False):
+            return
+        # Suppress canned alerts if the user was recently in a conversation
+        if is_conversation_active(90.0):
             return
 
         known_names = [f["name"] for f in faces if f["name"] != "Unknown"]
@@ -427,12 +491,11 @@ class MotionGuardEngine:
 
         if known_names:
             primary_name = known_names[0]
-            # Character specific greetings
-            greeting_text = f"Welcome back, {primary_name}! Motion detected."
+            greeting_text = f"Notice: {primary_name} has entered the room."
         elif faces:
-            greeting_text = "Hello friend! Motion detected, seeing a new face."
+            greeting_text = "Notice: Unrecognized person detected."
         else:
-            greeting_text = "Motion detected in room."
+            greeting_text = "Notice: Movement detected in room."
 
         # Trigger speech through local server if available
         try:
@@ -441,7 +504,7 @@ class MotionGuardEngine:
                 client.post(
                     "http://127.0.0.1:7860/api/text-turn-stream",
                     json={
-                        "text": f"(Proactive Motion Alert: {greeting_text} Greet in 1 short spoken sentence.)",
+                        "text": f"(Sentry Alert: {greeting_text} Announce this in your 1-sentence character persona.)",
                         "character": "rocky",
                         "say_exact": False,
                         "play_host_speaker": True,

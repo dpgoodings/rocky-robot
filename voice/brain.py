@@ -284,9 +284,25 @@ class RockyBrain:
         memory.extract_and_learn(user_text)
         mem_block = memory.build_memory_prompt_block(user_text)
 
+        # Notify vision engine that user is actively speaking (suppresses unsolicited sentry alerts)
+        robot_vision.mark_conversation_active()
+
+        # Seamlessly inject real-time visual presence into dialogue context
+        current_identity = robot_vision.get_current_visual_identity(max_age=3.0)
         sys_content = spec.system_prompt
         if mem_block:
             sys_content += f"\n\n{mem_block}"
+
+        if current_identity and current_identity != "Unknown":
+            sys_content += (
+                f"\n\n[Visual Camera Context: Looking through your robot camera, you see your friend {current_identity} "
+                f"standing right in front of you. You are talking face-to-face with {current_identity}. "
+                f"Naturally address them by name when appropriate in your warm character voice. Never use canned alert greetings.]"
+            )
+        elif current_identity == "Unknown":
+            sys_content += (
+                f"\n\n[Visual Camera Context: Looking through your robot camera, you see someone in front of you whose face is not yet enrolled in your memory.]"
+            )
 
         messages = [{"role": "system", "content": sys_content}]
         messages.extend(hist[-(self.max_turns * 2) :])
@@ -348,23 +364,22 @@ class RockyBrain:
                 f"Directly confirm this action to friend in your authentic 1-2 sentence character persona.)\n{user_text}"
             )
         elif FACE_RECOG_QUERY_RE.search(user_text):
-            frame = robot_vision.fetch_live_camera_frame()
-            if frame is not None:
-                faces = robot_vision.recognize_faces(frame)
-                if faces:
-                    names = [f["name"] for f in faces if f["name"] != "Unknown"]
-                    if names:
-                        rec_desc = f"Biometric Facial Recognition confirmed match: {', '.join(names)}."
-                    else:
-                        rec_desc = "I see a face in front of the camera, but the identity is not yet recognized or registered."
-                else:
-                    rec_desc = "No face is currently visible in front of the camera."
+            ident = robot_vision.get_current_visual_identity(max_age=1.5)
+            if ident and ident != "Unknown":
+                user_payload = (
+                    f"(User asks who they are or if you see/recognize them. You are looking right at them through the camera and recognize them as {ident}. "
+                    f"Directly and warmly confirm you recognize them as your friend {ident} in your authentic 1-2 sentence character persona. Do NOT cite biometric scan telemetry.)\n{user_text}"
+                )
+            elif ident == "Unknown":
+                user_payload = (
+                    f"(User asks who they are or if you recognize them. Looking through your camera, you see someone in front of you, but you don't recognize their face yet. "
+                    f"Tell them politely in your authentic character persona, and let them know you can remember them if they say 'Remember my face'.)\n{user_text}"
+                )
             else:
-                rec_desc = "Camera feed is currently unreachable."
-            user_payload = (
-                f"(Vision System Result: \"{rec_desc}\". "
-                f"Directly tell friend who you recognize in your authentic 1-2 sentence character persona.)\n{user_text}"
-            )
+                user_payload = (
+                    f"(User asks who they are or who you see. Looking through your camera, no face is currently in view. "
+                    f"Tell them in your authentic character persona that you can't see a face right now.)\n{user_text}"
+                )
         elif VISION_QUERY_RE.search(user_text):
             v_desc = fetch_robot_vision()
             if v_desc:

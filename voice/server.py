@@ -522,6 +522,7 @@ async def voice_turn_stream(
         raise HTTPException(status_code=400, detail="Empty audio payload")
 
     play_host_speaker = request.headers.get("x-host-speaker", "true").lower() != "false"
+    robot_vision.mark_conversation_active()
 
     def _gen() -> Iterator[str]:
         stt = engine.transcribe_audio_bytes(raw_bytes)
@@ -672,6 +673,7 @@ def text_turn_stream(req: TextTurnRequest):
     if not text:
         raise HTTPException(status_code=400, detail="Text is empty")
 
+    robot_vision.mark_conversation_active()
     active_spec = REGISTRY.get(req.character)
     if req.say_exact:
         spec = active_spec
