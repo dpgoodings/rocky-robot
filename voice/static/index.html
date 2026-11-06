@@ -3027,11 +3027,21 @@
           }
 
           if (camFaceBadge) {
-            const faceList = status.faces || [];
+            const faceList = status.recognized_faces || status.faces || [];
             if (faceList.length > 0) {
               const topFace = faceList[0];
               const confPct = Math.round((topFace.confidence || 0) * 100);
-              camFaceBadge.innerHTML = `👤 Face: <span style="color:#38bdf8;font-weight:700">${topFace.name}</span> (${confPct}%)`;
+              const expr = topFace.expression || "neutral";
+              const exprEmoji = {
+                "happy": "😊 Smiling",
+                "neutral": "😐 Attentive",
+                "surprised": "😲 Surprised",
+                "sad": "🙁 Downcast",
+                "angry": "😠 Stern",
+                "fearful": "😨 Startled",
+                "disgust": "😒 Skeptical"
+              }[expr] || `🙂 ${expr}`;
+              camFaceBadge.innerHTML = `👤 <span style="color:#38bdf8;font-weight:700">${topFace.name}</span> • ${exprEmoji}`;
             } else {
               camFaceBadge.innerHTML = `👤 Face: None`;
             }

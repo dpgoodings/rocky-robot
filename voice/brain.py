@@ -40,6 +40,10 @@ FACE_RECOG_QUERY_RE = re.compile(
     r"\b(?:who\s+(?:am\s+i|do\s+you\s+see|is\s+this|is\s+in\s+front)|recognize\s+(?:me|my\s+face)|do\s+you\s+know\s+(?:who\s+i\s+am|me))\b",
     re.IGNORECASE,
 )
+FACE_EXPR_QUERY_RE = re.compile(
+    r"\b(?:expression|facial\s+expression|smile|smiling|frown|frowning|how\s+do\s+i\s+look|what\s+do\s+i\s+look\s+like|am\s+i\s+smiling|happy|sad|mood|how\s+am\s+i\s+looking)\b",
+    re.IGNORECASE,
+)
 FACE_ENROLL_QUERY_RE = re.compile(
     r"\b(?:remember\s+my\s+face|learn\s+my\s+face|register\s+my\s+face|this\s+is\s+my\s+face)\b",
     re.IGNORECASE,
@@ -287,21 +291,34 @@ class RockyBrain:
         # Notify vision engine that user is actively speaking (suppresses unsolicited sentry alerts)
         robot_vision.mark_conversation_active()
 
-        # Seamlessly inject real-time visual presence into dialogue context
-        current_identity = robot_vision.get_current_visual_identity(max_age=3.0)
+        # Seamlessly inject real-time visual presence & facial expression into dialogue context
+        vis_ctx = robot_vision.get_current_visual_context(max_age=3.0)
         sys_content = spec.system_prompt
         if mem_block:
             sys_content += f"\n\n{mem_block}"
 
-        if current_identity and current_identity != "Unknown":
+        if vis_ctx.get("in_view"):
+            name = vis_ctx.get("name")
+            expr_desc = vis_ctx.get("expression_desc") or "looking attentive"
+            expr_label = vis_ctx.get("expression") or "neutral"
+
+            if name and name != "Unknown":
+                sys_content += (
+                    f"\n\n[Visual Camera Perception: Looking through your active robot camera, you see your friend {name} "
+                    f"standing directly in front of you. Their facial expression is {expr_label} ({expr_desc}). "
+                    f"You have active optical camera eyes. Naturally address {name} and react to their facial expression "
+                    f"when relevant in your conversational persona. Never say you are blind or cannot see.]"
+                )
+            else:
+                sys_content += (
+                    f"\n\n[Visual Camera Perception: Looking through your active robot camera, you see someone in front of you. "
+                    f"Their facial expression is {expr_label} ({expr_desc}). Their face is not yet enrolled in your memory. "
+                    f"Never claim to be blind—your robot camera sensors are your eyes.]"
+                )
+        else:
             sys_content += (
-                f"\n\n[Visual Camera Context: Looking through your robot camera, you see your friend {current_identity} "
-                f"standing right in front of you. You are talking face-to-face with {current_identity}. "
-                f"Naturally address them by name when appropriate in your warm character voice. Never use canned alert greetings.]"
-            )
-        elif current_identity == "Unknown":
-            sys_content += (
-                f"\n\n[Visual Camera Context: Looking through your robot camera, you see someone in front of you whose face is not yet enrolled in your memory.]"
+                f"\n\n[Visual Camera Perception: Your robot camera is active, but no human face is directly in front of the lens right now. "
+                f"Never claim to be blind—your camera sensors are active.]"
             )
 
         messages = [{"role": "system", "content": sys_content}]
@@ -363,22 +380,41 @@ class RockyBrain:
                 f"(Vision System Action Executed: \"{action_desc}\". "
                 f"Directly confirm this action to friend in your authentic 1-2 sentence character persona.)\n{user_text}"
             )
-        elif FACE_RECOG_QUERY_RE.search(user_text):
-            ident = robot_vision.get_current_visual_identity(max_age=1.5)
-            if ident and ident != "Unknown":
+        elif FACE_EXPR_QUERY_RE.search(user_text):
+            vis = robot_vision.get_current_visual_context(max_age=1.5)
+            if vis.get("in_view"):
+                name = vis.get("name") if vis.get("name") != "Unknown" else "friend"
+                expr_desc = vis.get("expression_desc") or "looking attentive"
+                expr_label = vis.get("expression") or "neutral"
                 user_payload = (
-                    f"(User asks who they are or if you see/recognize them. You are looking right at them through the camera and recognize them as {ident}. "
-                    f"Directly and warmly confirm you recognize them as your friend {ident} in your authentic 1-2 sentence character persona. Do NOT cite biometric scan telemetry.)\n{user_text}"
+                    f"(User asks about their facial expression or appearance. Through your active camera eyes, you clearly see {name} "
+                    f"and their facial expression is {expr_label} ({expr_desc}). Directly and warmly tell {name} what facial expression "
+                    f"you see them making in your authentic 1-2 sentence character persona. Never claim to be blind.)\n{user_text}"
                 )
-            elif ident == "Unknown":
+            else:
                 user_payload = (
-                    f"(User asks who they are or if you recognize them. Looking through your camera, you see someone in front of you, but you don't recognize their face yet. "
+                    f"(User asks about their expression or appearance. Through your camera eyes, no human face is centered in view right now. "
+                    f"Politely tell them in your character persona to look into your camera.)\n{user_text}"
+                )
+        elif FACE_RECOG_QUERY_RE.search(user_text):
+            vis = robot_vision.get_current_visual_context(max_age=1.5)
+            if vis.get("in_view") and vis.get("name") and vis.get("name") != "Unknown":
+                name = vis["name"]
+                expr_desc = vis.get("expression_desc") or "looking attentive"
+                user_payload = (
+                    f"(User asks who they are or if you see/recognize them. Looking through your active camera eyes, you clearly recognize them as {name} "
+                    f"and notice they are {expr_desc}. Directly and warmly confirm you recognize them as your friend {name} in your authentic 1-2 sentence character persona. Never claim to be blind.)\n{user_text}"
+                )
+            elif vis.get("in_view") and vis.get("name") == "Unknown":
+                expr_desc = vis.get("expression_desc") or "looking attentive"
+                user_payload = (
+                    f"(User asks who they are or if you recognize them. Looking through your camera eyes, you see someone in front of you ({expr_desc}), but you don't recognize their face yet. "
                     f"Tell them politely in your authentic character persona, and let them know you can remember them if they say 'Remember my face'.)\n{user_text}"
                 )
             else:
                 user_payload = (
-                    f"(User asks who they are or who you see. Looking through your camera, no face is currently in view. "
-                    f"Tell them in your authentic character persona that you can't see a face right now.)\n{user_text}"
+                    f"(User asks who they are or who you see. Looking through your camera eyes, no face is currently in view. "
+                    f"Tell them in your authentic character persona that you don't see a face right now.)\n{user_text}"
                 )
         elif VISION_QUERY_RE.search(user_text):
             v_desc = fetch_robot_vision()

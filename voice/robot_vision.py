@@ -26,12 +26,33 @@ CONFIG_PATH = os.path.join(PROJECT_DIR, "camera_config.json")
 
 YUNET_MODEL = os.path.join(MODELS_DIR, "face_detection_yunet_2023mar.onnx")
 SFACE_MODEL = os.path.join(MODELS_DIR, "face_recognition_sface_2021dec.onnx")
+FER_MODEL = os.path.join(MODELS_DIR, "facial_expression_recognition_mobilefacenet_2022july.onnx")
 
 _LOCK = threading.Lock()
 _DETECTOR: cv2.FaceDetectorYN | None = None
 _RECOGNIZER: cv2.FaceRecognizerSF | None = None
+_FER_NET: cv2.dnn.Net | None = None
 
 COSINE_THRESHOLD = 0.363  # OpenCV SFace official threshold for identity verification
+
+_STD_5_LANDMARKS = np.array([
+    [38.2946, 51.6963],
+    [73.5318, 51.5014],
+    [56.0252, 71.7366],
+    [41.5493, 92.3655],
+    [70.7299, 92.2041]
+], dtype=np.float32)
+
+EXPRESSION_LABELS = ["angry", "disgust", "fearful", "happy", "neutral", "sad", "surprised"]
+EXPRESSION_DESCRIPTIONS = {
+    "happy": "smiling cheerfully",
+    "neutral": "looking calm and attentive",
+    "surprised": "looking surprised with eyes wide",
+    "sad": "frowning or looking downcast",
+    "angry": "looking stern or furrowed",
+    "fearful": "looking startled",
+    "disgust": "grimacing or looking skeptical",
+}
 
 
 # -----------------------------------------------------------------------------
@@ -72,6 +93,7 @@ def _ensure_models() -> None:
     urls = {
         YUNET_MODEL: "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx",
         SFACE_MODEL: "https://github.com/opencv/opencv_zoo/raw/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx",
+        FER_MODEL: "https://github.com/opencv/opencv_zoo/raw/main/models/facial_expression_recognition/facial_expression_recognition_mobilefacenet_2022july.onnx",
     }
     for path, url in urls.items():
         if not os.path.exists(path) or os.path.getsize(path) < 1000:
@@ -80,6 +102,54 @@ def _ensure_models() -> None:
                 urllib.request.urlretrieve(url, path)
             except Exception as e:
                 print(f"[Vision] Error downloading model {path}: {e}")
+
+
+def _get_fer_net() -> cv2.dnn.Net | None:
+    global _FER_NET
+    with _LOCK:
+        _ensure_models()
+        if _FER_NET is None and os.path.exists(FER_MODEL):
+            try:
+                _FER_NET = cv2.dnn.readNet(FER_MODEL)
+            except Exception as e:
+                print(f"[Vision] Could not load FER model: {e}")
+        return _FER_NET
+
+
+def classify_expression(frame: np.ndarray, landmarks: np.ndarray) -> tuple[str, float, str]:
+    """
+    Given an image frame and 5 facial landmarks (5, 2), aligns the face
+    and classifies the facial expression into one of 7 categories.
+    Returns: (label, probability, descriptive_phrase)
+    """
+    net = _get_fer_net()
+    if net is None:
+        return "neutral", 1.0, EXPRESSION_DESCRIPTIONS["neutral"]
+
+    try:
+        tfm, _ = cv2.estimateAffinePartial2D(landmarks.astype(np.float32), _STD_5_LANDMARKS)
+        if tfm is None:
+            return "neutral", 1.0, EXPRESSION_DESCRIPTIONS["neutral"]
+        aligned = cv2.warpAffine(frame, tfm, (112, 112))
+
+        blob = cv2.dnn.blobFromImage(
+            cv2.cvtColor(aligned, cv2.COLOR_BGR2RGB),
+            scalefactor=1.0 / (255.0 * 0.5),
+            size=(112, 112),
+            mean=(0.5 * 255.0, 0.5 * 255.0, 0.5 * 255.0),
+            swapRB=False,
+        )
+        net.setInput(blob, "data")
+        out = net.forward("label")[0]
+        exp_vals = np.exp(out - np.max(out))
+        probs = exp_vals / np.sum(exp_vals)
+        top_idx = int(np.argmax(probs))
+        label = EXPRESSION_LABELS[top_idx]
+        prob = float(probs[top_idx])
+        desc = EXPRESSION_DESCRIPTIONS.get(label, "looking at you")
+        return label, round(prob, 2), desc
+    except Exception:
+        return "neutral", 1.0, EXPRESSION_DESCRIPTIONS["neutral"]
 
 def _get_models(width: int = 320, height: int = 240) -> tuple[cv2.FaceDetectorYN, cv2.FaceRecognizerSF]:
     global _DETECTOR, _RECOGNIZER
@@ -198,6 +268,10 @@ def recognize_faces(frame_bgr: np.ndarray) -> list[dict[str, Any]]:
         aligned = recognizer.alignCrop(frame_bgr, f)
         target_feat = recognizer.feature(aligned)
 
+        # Facial Expression Recognition (MobileFaceNet)
+        landmarks = f[4:14].reshape(5, 2)
+        expr_label, expr_prob, expr_desc = classify_expression(frame_bgr, landmarks)
+
         best_name = "Unknown"
         best_sim = 0.0
 
@@ -213,6 +287,9 @@ def recognize_faces(frame_bgr: np.ndarray) -> list[dict[str, Any]]:
             "confidence": round(best_sim, 3),
             "detection_score": round(score, 3),
             "bbox": bbox,
+            "expression": expr_label,
+            "expression_prob": expr_prob,
+            "expression_desc": expr_desc,
         })
 
         if best_name != "Unknown":
@@ -288,44 +365,83 @@ def is_conversation_active(window_sec: float = 90.0) -> bool:
     return (time.time() - _LAST_CONVERSATION_TIME) < window_sec
 
 
-def get_current_visual_identity(max_age: float = 2.0) -> str | None:
-    """
-    Returns the recognized name of whoever is currently in front of the camera (e.g. 'David').
-    Returns 'Unknown' if an unregistered face is visible, or None if no face is in view.
-    Uses cached recognition if within max_age seconds for instant (<2ms) responses.
-    """
-    global _CACHED_IDENTITY, _IDENTITY_TIMESTAMP
-    now = time.time()
-    if _CACHED_IDENTITY is not None and (now - _IDENTITY_TIMESTAMP) < max_age:
-        return _CACHED_IDENTITY
+_CACHED_VIS_CONTEXT: dict[str, Any] | None = None
+_VIS_CONTEXT_TIMESTAMP: float = 0.0
 
-    # 1. Check background sentry's latest result first (zero latency)
+
+def get_current_visual_context(max_age: float = 2.0) -> dict[str, Any]:
+    """
+    Returns rich optical perception of who and what is visible:
+    {
+        "in_view": bool,
+        "name": str | None,            # e.g. "David", "Unknown", None
+        "expression": str | None,      # e.g. "happy", "neutral", "surprised", "sad", "angry"
+        "expression_desc": str | None, # e.g. "smiling cheerfully", "looking calm and attentive"
+        "confidence": float,
+    }
+    """
+    global _CACHED_VIS_CONTEXT, _VIS_CONTEXT_TIMESTAMP
+    now = time.time()
+    if _CACHED_VIS_CONTEXT is not None and (now - _VIS_CONTEXT_TIMESTAMP) < max_age:
+        return _CACHED_VIS_CONTEXT
+
+    # 1. Check background sentry recent results
     try:
         status = GUARD_ENGINE.last_status
         recent_faces = status.get("recognized_faces", [])
         if recent_faces and (now - getattr(GUARD_ENGINE, "last_scan_time", 0)) < 4.0:
-            known = [f["name"] for f in recent_faces if f.get("name") and f["name"] != "Unknown"]
-            _CACHED_IDENTITY = known[0] if known else "Unknown"
-            _IDENTITY_TIMESTAMP = now
-            return _CACHED_IDENTITY
+            top = recent_faces[0]
+            name = top.get("name")
+            res = {
+                "in_view": True,
+                "name": name if name != "Unknown" else "Unknown",
+                "expression": top.get("expression", "neutral"),
+                "expression_desc": top.get("expression_desc", "looking attentive"),
+                "confidence": top.get("confidence", 0.0),
+            }
+            _CACHED_VIS_CONTEXT = res
+            _VIS_CONTEXT_TIMESTAMP = now
+            return res
     except Exception:
         pass
 
-    # 2. Check live camera frame directly
+    # 2. Check live frame
     try:
         frame = fetch_live_camera_frame()
         if frame is not None:
             faces = recognize_faces(frame)
             if faces:
-                known = [f["name"] for f in faces if f.get("name") and f["name"] != "Unknown"]
-                _CACHED_IDENTITY = known[0] if known else "Unknown"
-                _IDENTITY_TIMESTAMP = now
-                return _CACHED_IDENTITY
+                top = faces[0]
+                name = top.get("name")
+                res = {
+                    "in_view": True,
+                    "name": name if name != "Unknown" else "Unknown",
+                    "expression": top.get("expression", "neutral"),
+                    "expression_desc": top.get("expression_desc", "looking attentive"),
+                    "confidence": top.get("confidence", 0.0),
+                }
+                _CACHED_VIS_CONTEXT = res
+                _VIS_CONTEXT_TIMESTAMP = now
+                return res
     except Exception:
         pass
 
-    _CACHED_IDENTITY = None
-    _IDENTITY_TIMESTAMP = now
+    res = {
+        "in_view": False,
+        "name": None,
+        "expression": None,
+        "expression_desc": None,
+        "confidence": 0.0,
+    }
+    _CACHED_VIS_CONTEXT = res
+    _VIS_CONTEXT_TIMESTAMP = now
+    return res
+
+
+def get_current_visual_identity(max_age: float = 2.0) -> str | None:
+    ctx = get_current_visual_context(max_age=max_age)
+    if ctx.get("in_view"):
+        return ctx.get("name")
     return None
 
 
