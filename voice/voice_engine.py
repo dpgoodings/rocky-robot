@@ -285,6 +285,8 @@ class RockyVoiceEngine:
             out = audio
             if transpose != 0 and len(out) > 256:
                 out = self._pitch_shift_parselmouth(out, orig_sr, transpose)
+            if getattr(spec, "audio_effect", None) == "tactical_radio" or spec.id == "tars":
+                out = self._apply_tactical_chassis_fx(out, orig_sr)
             return self._polish_audio(out, orig_sr), orig_sr
 
         out_sr = int(spec.sample_rate)
@@ -389,6 +391,29 @@ class RockyVoiceEngine:
         if peak > 1e-4:
             y = y / peak * 0.92
         return y
+
+    @staticmethod
+    def _apply_tactical_chassis_fx(audio: np.ndarray, sr: int) -> np.ndarray:
+        """
+        Subtle metallic chassis resonator + crisp communications presence filter
+        matching TARS / GPTARS internal robot speaker acoustics.
+        """
+        if len(audio) < 512:
+            return audio
+        delay = int(sr * 0.0028)
+        delay2 = int(sr * 0.0055)
+        resonated = 0.82 * audio.copy()
+        if len(audio) > delay2:
+            resonated[delay:] += 0.20 * audio[:-delay]
+            resonated[delay2:] -= 0.10 * audio[:-delay2]
+        crisp = np.empty_like(resonated)
+        crisp[0] = resonated[0]
+        crisp[1:] = resonated[1:] - 0.20 * resonated[:-1]
+        blended = 0.70 * crisp + 0.30 * audio
+        peak = float(np.max(np.abs(blended)))
+        if peak > 1e-4:
+            blended = blended / peak * 0.92
+        return blended
 
     # ------------------------------------------------------------------
     # 4. End-to-End Text -> Character WAV Bytes (LRU + Disk Cache)

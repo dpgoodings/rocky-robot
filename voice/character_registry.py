@@ -55,6 +55,7 @@ class CharacterSpec:
     reset_reply: str
     fallback_reply: str
     ui: dict[str, Any]
+    audio_effect: str | None = None
     start_wake_patterns: list[re.Pattern[str]] = field(default_factory=list)
     mid_wake_pattern: re.Pattern[str] | None = None
 
@@ -176,6 +177,7 @@ class CharacterRegistry:
                 reset_reply=str(persona.get("reset_reply", "Memory cleared.")),
                 fallback_reply=str(persona.get("fallback_reply", "Say that again?")),
                 ui=ui,
+                audio_effect=voice.get("audio_effect") or persona.get("audio_effect"),
                 start_wake_patterns=starts,
                 mid_wake_pattern=mid,
             )

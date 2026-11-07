@@ -18,8 +18,13 @@
     "piper_onnx": "piper/en_US-ryan-medium.onnx",
     "rvc_onnx": null,
     "sample_rate": 48000,
-    "default_transpose": -2,
-    "default_speed": 1.08
+    "default_transpose": -3,
+    "default_speed": 1.06,
+    "audio_effect": "tactical_radio",
+    "tts_pronunciations": {
+      "\\bGPTARS\\b": "G P TARS",
+      "\\bUSMC\\b": "U S Marine Corps"
+    }
   },
   "persona": {
     "speech_style": "clean",
