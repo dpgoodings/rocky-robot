@@ -1,5 +1,5 @@
 {
-  "source_type": "esp32",
+  "source_type": "macbook",
   "custom_url": "",
   "motion_guard_enabled": false,
   "motion_sensitivity": 0.04,

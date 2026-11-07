@@ -12,6 +12,7 @@ import asyncio
 import base64
 from collections.abc import Iterator
 from contextlib import asynccontextmanager
+from dataclasses import asdict
 import json
 import os
 import queue
@@ -42,6 +43,7 @@ from rocky_filter import (
     detect_utterance_emotion,
     parse_wake_utterance,
 )
+from tars_gestures import GESTURE_ENGINE, GESTURE_CATALOG
 from voice_engine import RockyVoiceEngine
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -228,6 +230,10 @@ def _stream_llm_and_voice(
         if isinstance(item, Exception):
             yield _ndjson({"type": "error", "detail": str(item)})
             break
+
+        if item.get("type") == "gesture":
+            yield _ndjson(item)
+            continue
 
         if item.get("end_conversation") and state_out is not None:
             state_out["end_conversation"] = True
@@ -437,6 +443,33 @@ def hass_config(payload: dict[str, Any]) -> dict[str, Any]:
 @app.get("/api/hass/entities")
 def hass_entities() -> list[dict[str, Any]]:
     return mcp_homeassistant.fetch_entities()
+
+
+# -----------------------------------------------------------------------------
+# TARS Kinematics & Gestures Endpoints (GPTARS YouTube / Interstellar)
+# -----------------------------------------------------------------------------
+
+@app.get("/api/tars/gestures")
+def tars_gestures_list() -> dict[str, Any]:
+    catalog = {gid: asdict(g) for gid, g in GESTURE_CATALOG.items()}
+    status = GESTURE_ENGINE.get_status()
+    return {"catalog": catalog, "status": status}
+
+
+@app.post("/api/tars/gesture")
+def tars_execute_gesture(payload: dict[str, Any]) -> dict[str, Any]:
+    gname = str(payload.get("gesture") or payload.get("action") or "").strip()
+    robot_ip = payload.get("robot_ip")
+    if not gname:
+        raise HTTPException(status_code=400, detail="gesture name is required")
+    res = GESTURE_ENGINE.execute_gesture(gname, robot_ip=robot_ip)
+    return res
+
+
+@app.post("/api/tars/cue_light")
+def tars_toggle_cue_light(payload: dict[str, Any]) -> dict[str, Any]:
+    state = bool(payload.get("state")) if "state" in payload else not GESTURE_ENGINE.cue_light_active
+    return GESTURE_ENGINE.set_cue_light(state)
 
 
 # -----------------------------------------------------------------------------

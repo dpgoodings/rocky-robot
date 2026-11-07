@@ -26,6 +26,7 @@ from character_registry import REGISTRY
 from mcp_homeassistant import detect_and_execute_hass_intent
 from mcp_mac import detect_and_execute_mac_control
 from rocky_filter import apply_character_filter
+from tars_gestures import GESTURE_ENGINE
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 OLLAMA_BIN = os.path.join(PROJECT_DIR, "bin", "ollama")
@@ -343,6 +344,15 @@ class RockyBrain:
                 f"(System Action Executed via macOS MCP server: \"{mac_action}\". "
                 f"Directly confirm this action to friend in your authentic 1-2 sentence character persona.)\n{user_text}"
             )
+        elif char_id == "tars" and GESTURE_ENGINE.detect_intent(user_text):
+            gid = GESTURE_ENGINE.detect_intent(user_text) or "cue_light"
+            res = GESTURE_ENGINE.execute_gesture(gid)
+            g_name = res.get("gesture", {}).get("name", gid)
+            action_desc = f"Kinematic Gesture Executed: {g_name}. Servos and indicator state active."
+            user_payload = (
+                f"(Tactical Kinematic Gesture Executed: \"{action_desc}\". "
+                f"Directly confirm this physical motion to Cooper/David in your deadpan 1-2 sentence GPTARS persona.)\n{user_text}"
+            )
         elif TIME_QUERY_RE.search(user_text):
             now = datetime.now()
             short_time = now.strftime("%I:%M %p").lstrip("0")
@@ -463,6 +473,16 @@ class RockyBrain:
         self.ensure_ollama_running()
         messages = self._build_messages(user_text, char_id)
 
+        if char_id == "tars":
+            detected_gid = GESTURE_ENGINE.detect_intent(user_text)
+            if detected_gid:
+                gres = GESTURE_ENGINE.execute_gesture(detected_gid)
+                yield {
+                    "type": "gesture",
+                    "action": detected_gid,
+                    "gesture": gres,
+                }
+
         buffer = ""
         emitted_sentences: list[str] = []
         first_token_ms: int | None = None
@@ -533,6 +553,15 @@ class RockyBrain:
                         if not popped:
                             break
                         candidate, buffer = popped
+                        clean_cand, gtags = GESTURE_ENGINE.extract_tags(candidate)
+                        for gtag in gtags:
+                            gres = GESTURE_ENGINE.execute_gesture(gtag)
+                            yield {
+                                "type": "gesture",
+                                "action": gtag,
+                                "gesture": gres,
+                            }
+                        candidate = clean_cand
                         ended = "🔚" in candidate
                         candidate = candidate.replace("🔚", "")
                         filtered = apply_character_filter(
@@ -541,6 +570,7 @@ class RockyBrain:
                         if filtered:
                             emitted_sentences.append(filtered)
                             yield {
+                                "type": "sentence",
                                 "sentence": filtered,
                                 "index": idx,
                                 "first_token_ms": first_token_ms or 0,
@@ -561,6 +591,15 @@ class RockyBrain:
                 if marker in rem:
                     rem = rem.split(marker)[0].strip()
             if rem:
+                clean_rem, gtags = GESTURE_ENGINE.extract_tags(rem)
+                for gtag in gtags:
+                    gres = GESTURE_ENGINE.execute_gesture(gtag)
+                    yield {
+                        "type": "gesture",
+                        "action": gtag,
+                        "gesture": gres,
+                    }
+                rem = clean_rem
                 ended = "🔚" in rem
                 if ended:
                     saw_end_marker = True
@@ -571,6 +610,7 @@ class RockyBrain:
                 if filtered:
                     emitted_sentences.append(filtered)
                     yield {
+                        "type": "sentence",
                         "sentence": filtered,
                         "index": idx,
                         "first_token_ms": first_token_ms or int((time.perf_counter() - t0) * 1000),

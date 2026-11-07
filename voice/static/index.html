@@ -769,6 +769,149 @@
       width: 110px;
       outline: none;
     }
+    /* ================= TARS KINEMATICS & GESTURES HUD ================= */
+    .tars-section {
+      background: linear-gradient(180deg, rgba(20, 30, 48, 0.85) 0%, rgba(15, 23, 42, 0.95) 100%);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      border-radius: 18px;
+      padding: 14px 18px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: all 0.3s ease;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 15px rgba(56, 189, 248, 0.1);
+    }
+    .tars-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .tars-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .tars-title {
+      font-size: 0.88rem;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      color: #38bdf8;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .tars-cue-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #94a3b8;
+      transition: all 0.25s ease;
+    }
+    .tars-cue-badge.active {
+      background: rgba(34, 197, 94, 0.22);
+      border-color: #22c55e;
+      color: #4ade80;
+      box-shadow: 0 0 14px rgba(34, 197, 94, 0.5);
+    }
+    .tars-cue-bulb {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #475569;
+      transition: all 0.25s ease;
+    }
+    .tars-cue-badge.active .tars-cue-bulb {
+      background: #22c55e;
+      box-shadow: 0 0 8px #22c55e;
+      animation: cueBulbPulse 1.2s infinite ease-in-out;
+    }
+    @keyframes cueBulbPulse {
+      0%, 100% { opacity: 1; transform: scale(1.1); }
+      50% { opacity: 0.5; transform: scale(0.9); }
+    }
+    .tars-posture-badge {
+      font-size: 0.72rem;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-family: monospace;
+    }
+    .tars-body {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .tars-gesture-bar {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .tars-bar-label {
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      min-width: 65px;
+    }
+    .tars-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.18s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tars-btn:hover {
+      background: rgba(56, 189, 248, 0.18);
+      border-color: #38bdf8;
+      color: #fff;
+      transform: translateY(-1px);
+    }
+    .tars-btn:active, .tars-btn.active {
+      background: #38bdf8;
+      color: #0f172a;
+      border-color: #38bdf8;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+    }
+    .tars-btn.cue-btn {
+      border-color: rgba(34, 197, 94, 0.4);
+      color: #4ade80;
+    }
+    .tars-btn.cue-btn:hover {
+      background: rgba(34, 197, 94, 0.2);
+      border-color: #22c55e;
+      color: #86efac;
+    }
+    .tars-active-status {
+      margin-left: auto;
+      font-size: 0.72rem;
+      color: #94a3b8;
+      font-family: monospace;
+      padding: 4px 8px;
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
     @keyframes camPulse {
       0%, 100% { opacity: 1; transform: scale(1); }
       50% { opacity: 0.35; transform: scale(0.85); }
@@ -874,6 +1017,48 @@
           <button type="button" id="camDirectToggleBtn" class="cam-btn" title="Toggle between Server Proxy and Direct Robot connection">
             Feed: <span id="camRouteMode">Proxy</span>
           </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= TARS KINEMATICS & GESTURES HUD (GPTARS YOUTUBE) ================= -->
+    <section id="tarsGestureSection" class="tars-section" style="display:none;">
+      <div class="tars-header">
+        <div class="tars-title-wrap">
+          <div class="tars-title">🤖 TARS KINEMATICS &amp; ARTICULATION</div>
+          <div id="tarsCueLightBadge" class="tars-cue-badge" title="TARS Green Humor Cue Light (85% Humor)">
+            <span class="tars-cue-bulb"></span>
+            <span id="tarsCueText">CUE LIGHT: READY</span>
+          </div>
+          <div id="tarsPostureBadge" class="tars-posture-badge">
+            <span id="tarsPostureText">POSTURE: NEUTRAL</span>
+          </div>
+        </div>
+        <div class="tars-quick-actions">
+          <button type="button" id="tarsToggleCueBtn" class="tars-btn cue-btn" title="Flash / Toggle 85% Humor Cue Light">
+            💡 Toggle Cue Light
+          </button>
+        </div>
+      </div>
+
+      <div class="tars-body">
+        <div class="tars-gesture-bar">
+          <span class="tars-bar-label">Macros:</span>
+          <button type="button" class="tars-btn" data-gesture="fist_bump" title="Extend inner monolith panels for fist bump">👊 Fist Bump</button>
+          <button type="button" class="tars-btn" data-gesture="cue_light" title="Flash 85% humor indicator light">💡 Flash Cue</button>
+          <button type="button" class="tars-btn" data-gesture="bow" title="Dip upper chassis forward in USMC salute">🙇 Tactical Bow</button>
+          <button type="button" class="tars-btn" data-gesture="stand_tall" title="Extend center column to maximum height">🫡 Stand Tall</button>
+          <button type="button" class="tars-btn" data-gesture="crouch" title="Retract center column into compact rest mode">🧘 Crouch / Rest</button>
+          <button type="button" class="tars-btn" data-gesture="nod" title="Tactical vertical acknowledgment dip">🟢 Nod</button>
+          <button type="button" class="tars-btn" data-gesture="shake" title="Side-to-side swivel expressing deadpan disagreement">🔴 Shake</button>
+        </div>
+        <div class="tars-gesture-bar locomotion">
+          <span class="tars-bar-label">Walk / Turn:</span>
+          <button type="button" class="tars-btn" data-gesture="step_forward" title="Planetary walking step forward">⬆️ Step Fwd</button>
+          <button type="button" class="tars-btn" data-gesture="step_backward" title="Reverse locomotive step">⬇️ Step Back</button>
+          <button type="button" class="tars-btn" data-gesture="turn_left" title="Pivot chassis 30° left">⬅️ Pivot Left</button>
+          <button type="button" class="tars-btn" data-gesture="turn_right" title="Pivot chassis 30° right">➡️ Pivot Right</button>
+          <div id="tarsActiveStatus" class="tars-active-status">STANDBY • SERVOS READY</div>
         </div>
       </div>
     </section>
@@ -1913,6 +2098,13 @@
       askBtn.textContent = `Ask ${spec.name}`;
       textInput.placeholder = `Type a question for ${spec.name} (or say "${spec.wake_phrase || "Hey " + spec.name}")...`;
       if (resetFollowup) followupUntil = 0;
+      const tarsSec = document.getElementById("tarsGestureSection");
+      if (tarsSec) {
+        tarsSec.style.display = (charId === "tars") ? "flex" : "none";
+        if (charId === "tars" && typeof refreshTarsStatus === "function") {
+          refreshTarsStatus();
+        }
+      }
       refreshIdlePrompt();
     }
 
@@ -2600,6 +2792,10 @@
               const chunkMs = Math.max(1100, Math.round(((chunkBytes - 44) / (48000 * 2)) * 1000));
               await new Promise((r) => setTimeout(r, chunkMs));
               bmoFace.setSpeechLevel(0, false, 1.0);
+            }
+          } else if (ev.type === "gesture") {
+            if (typeof handleTarsGestureEvent === "function") {
+              handleTarsGestureEvent(ev);
             }
           } else if (ev.type === "done") {
             finalAction = ev.action || "reply";
@@ -3344,6 +3540,132 @@
             isBusy = false;
             refreshIdlePrompt();
           }
+        }
+      });
+
+      // =====================================================================
+      // TARS KINEMATICS, GESTURES & CUE LIGHT ENGINE (YOUTUBE @GPTARS)
+      // =====================================================================
+      const tarsGestureSection = document.getElementById("tarsGestureSection");
+      const tarsCueLightBadge = document.getElementById("tarsCueLightBadge");
+      const tarsCueText = document.getElementById("tarsCueText");
+      const tarsPostureBadge = document.getElementById("tarsPostureBadge");
+      const tarsPostureText = document.getElementById("tarsPostureText");
+      const tarsToggleCueBtn = document.getElementById("tarsToggleCueBtn");
+      const tarsActiveStatus = document.getElementById("tarsActiveStatus");
+
+      let cueLightFlashTimeout = null;
+      let gestureActiveTimeout = null;
+
+      function setCueLightUI(active, label = null) {
+        if (!tarsCueLightBadge) return;
+        if (active) {
+          tarsCueLightBadge.classList.add("active");
+          if (tarsCueText) tarsCueText.textContent = label || "CUE LIGHT: GREEN (85% HUMOR)";
+        } else {
+          tarsCueLightBadge.classList.remove("active");
+          if (tarsCueText) tarsCueText.textContent = label || "CUE LIGHT: READY";
+        }
+      }
+
+      function setPostureUI(posture) {
+        if (!tarsPostureText) return;
+        tarsPostureText.textContent = `POSTURE: ${(posture || "neutral").toUpperCase()}`;
+      }
+
+      function highlightGestureBtn(gestureId, durationMs = 2000) {
+        const btn = document.querySelector(`.tars-btn[data-gesture="${gestureId}"]`);
+        if (btn) {
+          btn.classList.add("active");
+          setTimeout(() => btn.classList.remove("active"), durationMs);
+        }
+      }
+
+      window.handleTarsGestureEvent = function(ev) {
+        const action = ev.action || ev.gesture?.gesture?.id || "gesture";
+        const gres = ev.gesture || {};
+        const durationMs = gres.duration_ms || 2000;
+
+        if (tarsActiveStatus) {
+          tarsActiveStatus.textContent = `EXECUTING: ${action.toUpperCase()} (${durationMs}ms)`;
+          clearTimeout(gestureActiveTimeout);
+          gestureActiveTimeout = setTimeout(() => {
+            tarsActiveStatus.textContent = "STANDBY • SERVOS READY";
+          }, durationMs + 200);
+        }
+
+        highlightGestureBtn(action, durationMs);
+
+        if (gres.posture) {
+          setPostureUI(gres.posture);
+        }
+
+        // Handle cue light flash
+        if (action === "cue_light" || gres.cue_light) {
+          setCueLightUI(true, "CUE LIGHT: 85% HUMOR ACTIVE");
+          clearTimeout(cueLightFlashTimeout);
+          cueLightFlashTimeout = setTimeout(() => {
+            setCueLightUI(false);
+          }, durationMs);
+        }
+      };
+
+      window.refreshTarsStatus = async function() {
+        try {
+          const res = await fetch("/api/tars/gestures");
+          if (!res.ok) return;
+          const data = await res.json();
+          const st = data.status || {};
+          setCueLightUI(st.cue_light);
+          setPostureUI(st.posture);
+          if (st.is_executing && st.active_gesture) {
+            tarsActiveStatus.textContent = `EXECUTING: ${st.active_gesture.toUpperCase()} (${st.time_remaining_ms}ms)`;
+            highlightGestureBtn(st.active_gesture, st.time_remaining_ms);
+          } else {
+            tarsActiveStatus.textContent = "STANDBY • SERVOS READY";
+          }
+        } catch (err) {
+          console.warn("[TARS Status Check]", err);
+        }
+      };
+
+      // Wire up TARS Gesture Macro Buttons
+      document.querySelectorAll(".tars-btn[data-gesture]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const gid = btn.dataset.gesture;
+          if (!gid) return;
+          btn.classList.add("active");
+          if (tarsActiveStatus) tarsActiveStatus.textContent = `DISPATCHING: ${gid.toUpperCase()}…`;
+
+          try {
+            const res = await fetch("/api/tars/gesture", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ gesture: gid, robot_ip: robotIp }),
+            });
+            const result = await res.json();
+            window.handleTarsGestureEvent({ action: gid, gesture: result });
+          } catch (err) {
+            console.warn("[TARS Gesture Error]", err);
+            if (tarsActiveStatus) tarsActiveStatus.textContent = `ERROR: ${err.message}`;
+            setTimeout(() => btn.classList.remove("active"), 800);
+          }
+        });
+      });
+
+      // Wire up Toggle Cue Light Button
+      tarsToggleCueBtn?.addEventListener("click", async () => {
+        try {
+          const res = await fetch("/api/tars/cue_light", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+          });
+          const result = await res.json();
+          setCueLightUI(result.cue_light, result.cue_light ? "CUE LIGHT: ACTIVE" : "CUE LIGHT: READY");
+          if (tarsActiveStatus) tarsActiveStatus.textContent = result.cue_light ? "CUE LIGHT ON • 85% HUMOR" : "CUE LIGHT OFF";
+        } catch (err) {
+          console.warn("[TARS Cue Light Error]", err);
         }
       });
     })();

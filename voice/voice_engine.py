@@ -285,7 +285,7 @@ class RockyVoiceEngine:
             out = audio
             if transpose != 0 and len(out) > 256:
                 out = self._pitch_shift_parselmouth(out, orig_sr, transpose)
-            if getattr(spec, "audio_effect", None) == "tactical_radio" or spec.id == "tars":
+            if getattr(spec, "audio_effect", None) == "tactical_radio":
                 out = self._apply_tactical_chassis_fx(out, orig_sr)
             return self._polish_audio(out, orig_sr), orig_sr
 

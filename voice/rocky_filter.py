@@ -97,6 +97,7 @@ RE_STAGE_DIRECTIONS = re.compile(
     r"\([^)]*(?:sigh|groan|moan|pause|chord|note|tone|click|chirp|sound|music|monotone|deadpan)[^)]*\)",
     re.IGNORECASE,
 )
+RE_GESTURE_TAG = re.compile(r"<gesture:[^>]+>", re.IGNORECASE)
 RE_CODE_BLOCK = re.compile(r"```[\s\S]*?```")
 RE_INLINE_CODE = re.compile(r"`([^`]+)`")
 RE_HEADING = re.compile(r"^\s*#+\s+", re.MULTILINE)
@@ -263,6 +264,7 @@ def clean_for_speech(text: str) -> str:
         return ""
 
     s = RE_ASTERISK.sub(" ", text)
+    s = RE_GESTURE_TAG.sub(" ", s)
     s = RE_BRACKETS.sub(" ", s)
     s = RE_STAGE_DIRECTIONS.sub(" ", s)
     s = RE_CODE_BLOCK.sub(" ", s)
