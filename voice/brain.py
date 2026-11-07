@@ -53,7 +53,7 @@ MOTION_GUARD_RE = re.compile(
     re.IGNORECASE,
 )
 VISION_QUERY_RE = re.compile(
-    r"\b(?:see|look|looking|camera|view|sight|watch|observe|what(?:'s|\s+is)\s+in\s+front|what\s+do\s+you\s+see|describe\s+what\s+you\s+see|inspect|surroundings|cup|blue\s+cup|object|room)\b",
+    r"\b(?:what\s+do\s+you\s+see|what(?:'s|\s+is)\s+(?:in\s+front|there|that)|describe\s+(?:what\s+you\s+see|the\s+room|the\s+view)|(?:look|look\s+at)\s+(?:this|around|ahead)|can\s+you\s+see\s+(?:what|this|anything)|what\s+am\s+i\s+holding)\b",
     re.IGNORECASE,
 )
 
@@ -458,10 +458,10 @@ class RockyBrain:
                 "stream": True,
                 "keep_alive": "60m",
                 "options": {
-                    "temperature": 0.6,
+                    "temperature": 0.72,
                     "top_p": 0.9,
-                    "repeat_penalty": 1.18,
-                    "presence_penalty": 0.2,
+                    "repeat_penalty": 1.15,
+                    "presence_penalty": 0.4,
                     "num_ctx": 1024,
                     "num_predict": 50,
                     "num_thread": 4,
