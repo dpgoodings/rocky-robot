@@ -111,7 +111,10 @@ RE_KELVIN = re.compile(r"(\d)\s*°\s*K\b")
 RE_DEGREES = re.compile(r"(\d)\s*°")
 RE_PERCENT = re.compile(r"(\d)\s*%")
 RE_WHITESPACE = re.compile(r"\s+")
-RE_AI_DISCLAIMER = re.compile(r"\bas an ai(?: language model)?,?\s*", re.IGNORECASE)
+RE_AI_DISCLAIMER = re.compile(
+    r"\b(?:as an ai(?: language model)?|i am (?:an? )?(?:ai|language model|artificial intelligence)[^.!?]*[.!?]?)\s*",
+    re.IGNORECASE,
+)
 RE_MARVIN_SIGH = re.compile(r"^(?:sigh|ugh|oh dear)[.,!]\s*", re.IGNORECASE)
 RE_WORD_PUNCT = re.compile(r"^([A-Za-z']+)([^A-Za-z']*)$")
 
@@ -277,6 +280,7 @@ def clean_for_speech(text: str) -> str:
     s = RE_DEGREES.sub(r"\1 degrees", s)
     s = RE_PERCENT.sub(r"\1 percent", s)
     s = s.replace("&", " and ")
+    s = RE_AI_DISCLAIMER.sub("", s)
 
     return RE_WHITESPACE.sub(" ", s).strip()
 

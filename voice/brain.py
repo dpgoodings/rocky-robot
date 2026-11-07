@@ -264,7 +264,7 @@ class RockyBrain:
                     ],
                     "stream": False,
                     "keep_alive": "60m",
-                    "options": {"num_ctx": 512, "num_predict": 2, "num_thread": 4},
+                    "options": {"num_ctx": 1024, "num_predict": 2, "num_thread": 4},
                 },
                 timeout=30.0,
             )
@@ -462,7 +462,7 @@ class RockyBrain:
                     "top_p": 0.9,
                     "repeat_penalty": 1.18,
                     "presence_penalty": 0.2,
-                    "num_ctx": 512,
+                    "num_ctx": 1024,
                     "num_predict": 50,
                     "num_thread": 4,
                     "stop": [
@@ -495,9 +495,13 @@ class RockyBrain:
                         first_token_ms = int((time.perf_counter() - t0) * 1000)
                     buffer += tok
 
+                    # Strip leading character/role prefix if LLM generated it at start of response
+                    if idx == 0 and not emitted_sentences:
+                        buffer = re.sub(r"^(?:Rocky|Grace|Marvin|BMO|TARS|User|Assistant|Human):\s*", "", buffer, flags=re.I)
+
                     # Cut hallucinated multi-turn dialog tokens immediately
                     cut = False
-                    for marker in ["Question:", "Answer:", "User:", "Rocky:", "Grace:", "Human:"]:
+                    for marker in ["\nQuestion:", "\nAnswer:", "\nUser:", "\nRocky:", "\nGrace:", "\nHuman:", "\nAssistant:"]:
                         if marker in buffer:
                             buffer = buffer.split(marker)[0].strip()
                             cut = True
@@ -532,7 +536,9 @@ class RockyBrain:
         saw_end_marker = False
         if len(emitted_sentences) < 2:
             rem = buffer.strip()
-            for marker in ["Question:", "Answer:", "User:", "Rocky:", "Grace:", "Human:"]:
+            if idx == 0 and not emitted_sentences:
+                rem = re.sub(r"^(?:Rocky|Grace|Marvin|BMO|TARS|User|Assistant|Human):\s*", "", rem, flags=re.I)
+            for marker in ["\nQuestion:", "\nAnswer:", "\nUser:", "\nRocky:", "\nGrace:", "\nHuman:", "\nAssistant:"]:
                 if marker in rem:
                     rem = rem.split(marker)[0].strip()
             if rem:
