@@ -56,6 +56,10 @@ VISION_QUERY_RE = re.compile(
     r"\b(?:what\s+do\s+you\s+see|what(?:'s|\s+is)\s+(?:in\s+front|there|that)|describe\s+(?:what\s+you\s+see|the\s+room|the\s+view)|(?:look|look\s+at)\s+(?:this|around|ahead)|can\s+you\s+see\s+(?:what|this|anything)|what\s+am\s+i\s+holding)\b",
     re.IGNORECASE,
 )
+CAMERA_SWITCH_RE = re.compile(
+    r"\b(?:switch|change|use|turn\s+on)\s+(?:to\s+)?(?:the\s+)?(macbook|laptop|built-?in|webcam|esp32|robot|chassis)\s+camera\b",
+    re.IGNORECASE,
+)
 
 _CACHED_ROBOT_IP: str | None = None
 
@@ -139,14 +143,16 @@ def resolve_robot_ip() -> str:
 
 
 def fetch_robot_vision(timeout: float = 25.0) -> str | None:
-    """Grabs a live frame from ESP32-CAM and queries Moondream vision model."""
-    robot_ip = resolve_robot_ip()
+    """Grabs a live frame from active camera (MacBook Pro or ESP32) and queries Moondream vision model."""
     try:
-        with httpx.Client(timeout=4.0) as client:
-            resp = client.get(f"http://{robot_ip}/capture")
-            if resp.status_code != 200:
-                return None
-            img_b64 = base64.b64encode(resp.content).decode("utf-8")
+        import cv2
+        frame = robot_vision.fetch_live_camera_frame()
+        if frame is None:
+            return None
+        success, enc = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+        if not success:
+            return None
+        img_b64 = base64.b64encode(enc.tobytes()).decode("utf-8")
 
         with httpx.Client(timeout=timeout) as client:
             r = client.post(
@@ -344,6 +350,19 @@ class RockyBrain:
             user_payload = (
                 f"(Live clock: {short_time}; date: {date_str}. Keep your 2-sentence character format; "
                 f"only read out the full date if the user asked for the date.)\n{user_text}"
+            )
+        elif CAMERA_SWITCH_RE.search(user_text):
+            m_cam = CAMERA_SWITCH_RE.search(user_text)
+            target = m_cam.group(1).lower() if m_cam else "esp32"
+            if any(k in target for k in ("macbook", "laptop", "built", "webcam")):
+                robot_vision.save_camera_config({"source_type": "macbook"})
+                action_desc = "Camera feed successfully switched to MacBook Pro FaceTime HD camera. Looking through your laptop's camera now."
+            else:
+                robot_vision.save_camera_config({"source_type": "esp32"})
+                action_desc = "Camera feed successfully switched to ESP32 robot camera. Looking through the mobile robot's chassis camera now."
+            user_payload = (
+                f"(Vision System Action Executed: \"{action_desc}\". "
+                f"Directly confirm this camera switch to friend in your authentic 1-2 sentence character persona.)\n{user_text}"
             )
         elif MOTION_GUARD_RE.search(user_text):
             m_guard = MOTION_GUARD_RE.search(user_text)

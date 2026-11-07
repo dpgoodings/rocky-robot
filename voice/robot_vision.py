@@ -462,12 +462,55 @@ def save_camera_config(cfg: dict[str, Any]) -> None:
         json.dump(merged, f, indent=2)
 
 
+_UPLOADED_FRAME_BYTES: bytes | None = None
+_UPLOADED_FRAME_TIME: float = 0.0
+
+
+def store_uploaded_frame(jpeg_bytes: bytes) -> None:
+    """Stores a live camera frame uploaded from browser or client (e.g. MacBook Pro FaceTime HD)."""
+    global _UPLOADED_FRAME_BYTES, _UPLOADED_FRAME_TIME
+    _UPLOADED_FRAME_BYTES = jpeg_bytes
+    _UPLOADED_FRAME_TIME = time.time()
+
+
+def get_latest_uploaded_frame_bytes(max_age: float = 3.5) -> bytes | None:
+    global _UPLOADED_FRAME_BYTES, _UPLOADED_FRAME_TIME
+    if _UPLOADED_FRAME_BYTES and (time.time() - _UPLOADED_FRAME_TIME) <= max_age:
+        return _UPLOADED_FRAME_BYTES
+    return None
+
+
 def fetch_live_camera_frame() -> np.ndarray | None:
-    """Fetches a current BGR frame from the configured camera (ESP32, RTSP Wyze, or HTTP)."""
+    """Fetches a current BGR frame from the configured camera (MacBook Pro, ESP32, RTSP Wyze, or HTTP)."""
     cfg = load_camera_config()
     source_type = cfg.get("source_type", "esp32")
 
-    # 1. Custom RTSP / Video Stream (e.g., Wyze camera or IP stream)
+    # 1. MacBook Pro FaceTime HD / Local USB Camera
+    if source_type in ("macbook", "webcam", "local"):
+        # Check uploaded frame from browser HUD first (fastest, full hardware permission in browser)
+        up_bytes = get_latest_uploaded_frame_bytes(max_age=4.0)
+        if up_bytes:
+            try:
+                nparr = np.frombuffer(up_bytes, np.uint8)
+                frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                if frame is not None:
+                    return frame
+            except Exception:
+                pass
+
+        # Fallback to local OpenCV capture device 0
+        try:
+            device_idx = int(cfg.get("device_index", 0))
+            cap = cv2.VideoCapture(device_idx)
+            if cap.isOpened():
+                ret, frame = cap.read()
+                cap.release()
+                if ret and frame is not None:
+                    return frame
+        except Exception:
+            pass
+
+    # 2. Custom RTSP / Video Stream (e.g., Wyze camera or IP stream)
     if source_type == "rtsp" and cfg.get("custom_url"):
         try:
             cap = cv2.VideoCapture(cfg["custom_url"])
@@ -479,7 +522,7 @@ def fetch_live_camera_frame() -> np.ndarray | None:
         except Exception:
             pass
 
-    # 2. Custom HTTP Snapshot URL
+    # 3. Custom HTTP Snapshot URL
     if source_type == "http" and cfg.get("custom_url"):
         try:
             import httpx
@@ -491,7 +534,7 @@ def fetch_live_camera_frame() -> np.ndarray | None:
         except Exception:
             pass
 
-    # 3. Default: Physical ESP32-CAM
+    # 4. Physical ESP32-CAM
     try:
         from brain import resolve_robot_ip
         import httpx

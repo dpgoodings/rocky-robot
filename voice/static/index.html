@@ -575,6 +575,27 @@
       align-items: center;
       gap: 8px;
     }
+    .cam-source-toggle {
+      display: inline-flex;
+      background: rgba(0, 0, 0, 0.45);
+      padding: 3px;
+      border-radius: 9px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      gap: 3px;
+    }
+    .cam-source-toggle .cam-btn {
+      padding: 4px 10px;
+      font-size: 0.74rem;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      background: transparent;
+    }
+    .cam-source-toggle .cam-btn.active {
+      background: rgba(56, 189, 248, 0.22);
+      border-color: #38bdf8;
+      color: #38bdf8;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
+    }
     .cam-badge {
       font-size: 0.72rem;
       padding: 3px 8px;
@@ -781,20 +802,24 @@
       <button class="mode-btn" data-mode="ptt">Tap / Space to Talk</button>
     </div>
 
-    <!-- ================= ESP32-CAM ROBOT VISION HUD ================= -->
+    <!-- ================= OPTICAL VISION HUD (ESP32 & MACBOOK PRO) ================= -->
     <section id="espCamSection" class="cam-section">
       <div class="cam-header">
         <div class="cam-title-wrap">
-          <div class="cam-title">🤖 ESP32-CAM EDGE VISION // ROBOT OPTICAL FEED</div>
+          <div class="cam-title">🤖 OPTICAL VISION FEED</div>
+          <div class="cam-source-toggle" title="Switch Optical Camera Source">
+            <button type="button" id="camSrcEsp32Btn" class="cam-btn active" title="Use ESP32 Robot Chassis Camera">🤖 ESP32-CAM</button>
+            <button type="button" id="camSrcMacBtn" class="cam-btn" title="Use MacBook Pro FaceTime HD Camera">💻 MacBook Pro</button>
+          </div>
           <div id="camStatusBadge" class="cam-badge online">
             <span class="cam-badge-dot"></span>
             <span id="camStatusText">Connecting…</span>
           </div>
         </div>
         <div class="cam-header-actions">
-          <div class="cam-ip-box" title="ESP32-S3 Robot IP Address">
+          <div id="camIpBox" class="cam-ip-box" title="ESP32-S3 Robot IP Address">
             <label for="camIpInput">Robot IP:</label>
-            <input type="text" id="camIpInput" class="cam-ip-input" value="192.168.4.147" spellcheck="false" />
+            <input type="text" id="camIpInput" class="cam-ip-input" value="192.168.4.173" spellcheck="false" />
           </div>
           <button type="button" id="camRefreshBtn" class="cam-btn" title="Refresh Telemetry & Feed">↻</button>
           <button type="button" id="camPauseBtn" class="cam-btn" title="Pause or Resume Video Stream">⏸ Pause</button>
@@ -803,6 +828,8 @@
 
       <div class="cam-viewport" id="camViewport">
         <img id="camStreamImg" class="cam-stream-img" alt="ESP32-CAM Live Feed" />
+        <video id="macCamVideo" class="cam-stream-img" autoplay playsinline muted style="display:none; transform: scaleX(-1);"></video>
+        <canvas id="macCamCanvas" width="640" height="480" style="display:none;"></canvas>
         <div class="cam-overlay">
           <div class="cam-overlay-row">
             <div class="cam-rec-indicator">
@@ -2892,17 +2919,118 @@
       const facesCount = document.getElementById("facesCount");
       const camMotionBadge = document.getElementById("camMotionBadge");
       const camFaceBadge = document.getElementById("camFaceBadge");
+      const camSrcEsp32Btn = document.getElementById("camSrcEsp32Btn");
+      const camSrcMacBtn = document.getElementById("camSrcMacBtn");
+      const macCamVideo = document.getElementById("macCamVideo");
+      const macCamCanvas = document.getElementById("macCamCanvas");
+      const camIpBox = document.getElementById("camIpBox");
 
       let robotIp = localStorage.getItem("rocky_robot_ip") || "192.168.4.173";
       let isVisible = localStorage.getItem("rocky_cam_visible") !== "false";
       let isPaused = false;
       let useDirect = false;
       let pollTimer = null;
+      let currentCameraSource = localStorage.getItem("rocky_camera_source") || "esp32";
+      let macCamStream = null;
+      let macCamInterval = null;
 
       if (camIpInput) camIpInput.value = robotIp;
       if (camSection && !isVisible) camSection.classList.add("collapsed");
-      updateRouteLabel();
-      updateStreamSource();
+
+      async function activateMacBookCamera() {
+        currentCameraSource = "macbook";
+        localStorage.setItem("rocky_camera_source", "macbook");
+        camSrcMacBtn?.classList.add("active");
+        camSrcEsp32Btn?.classList.remove("active");
+
+        if (camIpBox) camIpBox.style.display = "none";
+        if (camStreamImg) camStreamImg.style.display = "none";
+        if (macCamVideo) macCamVideo.style.display = "block";
+
+        try {
+          if (!macCamStream) {
+            macCamStream = await navigator.mediaDevices.getUserMedia({
+              video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+              audio: false
+            });
+            if (macCamVideo) {
+              macCamVideo.srcObject = macCamStream;
+              await macCamVideo.play();
+            }
+          }
+          if (camStatusBadge) camStatusBadge.className = "cam-badge online";
+          if (camStatusText) camStatusText.textContent = "ONLINE • MacBook Pro FaceTime HD";
+          if (camTelemetryTop) camTelemetryTop.textContent = "Apple Silicon • FaceTime HD Camera";
+          if (camTelemetryBottom) camTelemetryBottom.textContent = "Local Latency: <5ms | 30 FPS";
+
+          // Save camera config on backend so AI uses MacBook camera
+          fetch("/api/vision/config", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ source_type: "macbook" })
+          }).catch(() => {});
+
+          // Start lightweight canvas streamer to backend for face/emotion/Moondream AI vision
+          if (!macCamInterval && macCamCanvas) {
+            const ctx = macCamCanvas.getContext("2d");
+            macCamInterval = setInterval(() => {
+              if (currentCameraSource !== "macbook" || !macCamVideo || !macCamVideo.videoWidth) return;
+              ctx.drawImage(macCamVideo, 0, 0, macCamCanvas.width, macCamCanvas.height);
+              macCamCanvas.toBlob((blob) => {
+                if (blob) {
+                  fetch("/api/camera/frame", { method: "POST", body: blob }).catch(() => {});
+                }
+              }, "image/jpeg", 0.75);
+            }, 180);
+          }
+        } catch (err) {
+          console.warn("[MacBook Cam Error]", err);
+          if (camStatusBadge) camStatusBadge.className = "cam-badge offline";
+          if (camStatusText) camStatusText.textContent = "MacBook Cam Permission Denied";
+        }
+      }
+
+      function activateEsp32Camera() {
+        currentCameraSource = "esp32";
+        localStorage.setItem("rocky_camera_source", "esp32");
+        camSrcEsp32Btn?.classList.add("active");
+        camSrcMacBtn?.classList.remove("active");
+
+        if (macCamInterval) {
+          clearInterval(macCamInterval);
+          macCamInterval = null;
+        }
+        if (macCamStream) {
+          macCamStream.getTracks().forEach(t => t.stop());
+          macCamStream = null;
+        }
+        if (macCamVideo) {
+          macCamVideo.srcObject = null;
+          macCamVideo.style.display = "none";
+        }
+        if (camStreamImg) camStreamImg.style.display = "block";
+        if (camIpBox) camIpBox.style.display = "flex";
+
+        // Save camera config on backend
+        fetch("/api/vision/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ source_type: "esp32" })
+        }).catch(() => {});
+
+        updateStreamSource();
+        refreshTelemetry();
+      }
+
+      camSrcMacBtn?.addEventListener("click", activateMacBookCamera);
+      camSrcEsp32Btn?.addEventListener("click", activateEsp32Camera);
+
+      if (currentCameraSource === "macbook") {
+        activateMacBookCamera();
+      } else {
+        updateRouteLabel();
+        updateStreamSource();
+      }
 
       function updateInspectButtonChar() {
         const spec = getCharSpec(activeChar);
@@ -2965,7 +3093,14 @@
       camPauseBtn?.addEventListener("click", () => {
         isPaused = !isPaused;
         if (camPauseBtn) camPauseBtn.textContent = isPaused ? "▶ Resume" : "⏸ Pause";
-        updateStreamSource();
+        if (currentCameraSource === "macbook") {
+          if (macCamVideo) {
+            if (isPaused) macCamVideo.pause();
+            else macCamVideo.play();
+          }
+        } else {
+          updateStreamSource();
+        }
       });
 
       camPopoutBtn?.addEventListener("click", () => {

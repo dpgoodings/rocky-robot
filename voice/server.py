@@ -461,6 +461,16 @@ def vision_config(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+@app.post("/api/camera/frame")
+async def upload_camera_frame(req: Request) -> dict[str, Any]:
+    """Receives uploaded JPEG frame from client or MacBook Pro FaceTime HD camera."""
+    body = await req.body()
+    if body:
+        robot_vision.store_uploaded_frame(body)
+        return {"status": "ok", "bytes": len(body)}
+    return {"status": "empty"}
+
+
 @app.get("/api/vision/faces")
 def vision_faces() -> list[dict[str, Any]]:
     return robot_vision.list_enrolled_faces()
@@ -993,6 +1003,14 @@ async def _fetch_cached_camera_frame(ip: str) -> bytes | None:
     # Cache for 70ms (~14 FPS) to prevent DMA/PSRAM starvation on ESP32
     if _LATEST_CAMERA_FRAME is not None and (now - _LAST_FRAME_TIME) < 0.07:
         return _LATEST_CAMERA_FRAME
+
+    cfg = robot_vision.load_camera_config()
+    if cfg.get("source_type") in ("macbook", "webcam", "local"):
+        up_bytes = robot_vision.get_latest_uploaded_frame_bytes(max_age=3.5)
+        if up_bytes:
+            _LATEST_CAMERA_FRAME = up_bytes
+            _LAST_FRAME_TIME = now
+            return up_bytes
 
     try:
         async with httpx.AsyncClient(timeout=2.0) as client:
