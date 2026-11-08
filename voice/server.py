@@ -32,6 +32,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+import agent_bridge
 import mcp_homeassistant
 import memory
 import robot_vision
@@ -470,6 +471,43 @@ def tars_execute_gesture(payload: dict[str, Any]) -> dict[str, Any]:
 def tars_toggle_cue_light(payload: dict[str, Any]) -> dict[str, Any]:
     state = bool(payload.get("state")) if "state" in payload else not GESTURE_ENGINE.cue_light_active
     return GESTURE_ENGINE.set_cue_light(state)
+
+
+# -----------------------------------------------------------------------------
+# Antigravity Agent & Codebase Endpoints (Pair Programming & Live Updates)
+# -----------------------------------------------------------------------------
+
+@app.get("/api/agent/diagnostics")
+def agent_diagnostics() -> dict[str, Any]:
+    return {
+        "diagnostics": agent_bridge.get_system_diagnostics(),
+        "server": agent_bridge.get_server_health(),
+    }
+
+
+@app.get("/api/agent/git-status")
+def agent_git_status() -> dict[str, Any]:
+    return {
+        "status": agent_bridge.git_status(),
+        "diff": agent_bridge.git_diff(),
+        "log": agent_bridge.git_log(limit=3),
+    }
+
+
+@app.post("/api/agent/commit")
+def agent_commit(payload: dict[str, Any]) -> dict[str, Any]:
+    msg = payload.get("message")
+    result = agent_bridge.git_commit_and_push(msg)
+    return {"result": result}
+
+
+@app.post("/api/agent/task")
+def agent_task(payload: dict[str, Any]) -> dict[str, Any]:
+    prompt = str(payload.get("prompt") or "").strip()
+    if not prompt:
+        raise HTTPException(status_code=400, detail="prompt is required")
+    result = agent_bridge.run_agent_task(prompt)
+    return {"result": result}
 
 
 # -----------------------------------------------------------------------------

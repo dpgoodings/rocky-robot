@@ -23,6 +23,7 @@ import httpx
 import memory
 import robot_vision
 from character_registry import REGISTRY
+from agent_bridge import detect_and_execute_agent_action
 from mcp_homeassistant import detect_and_execute_hass_intent
 from mcp_mac import detect_and_execute_mac_control
 from rocky_filter import apply_character_filter
@@ -210,7 +211,7 @@ class RockyBrain:
         self.max_turns = max_turns
         self.histories: dict[str, list[dict[str, str]]] = {}
         # Pre-seed working memory from persistent SQLite store (ignoring duplicate loops)
-        for cid in ["rocky", "tars", "marvin", "bmo"]:
+        for cid in ["rocky", "tars", "marvin", "bmo", "antigravity"]:
             raw_prior = memory.load_recent_dialogue(cid, limit=max_turns * 2)
             # Filter consecutive duplicate assistant messages
             prior: list[dict[str, str]] = []
@@ -331,10 +332,19 @@ class RockyBrain:
         messages = [{"role": "system", "content": sys_content}]
         messages.extend(hist[-(self.max_turns * 2) :])
 
-        hass_action = detect_and_execute_hass_intent(user_text)
-        mac_action = detect_and_execute_mac_control(user_text) if not hass_action else None
+        agent_action = None
+        if char_id == "antigravity" or re.search(r"\b(?:antigravity|agy|git|repo|codebase|commit|diagnostics)\b", user_text, re.I):
+            agent_action = detect_and_execute_agent_action(user_text)
 
-        if hass_action:
+        hass_action = detect_and_execute_hass_intent(user_text) if not agent_action else None
+        mac_action = detect_and_execute_mac_control(user_text) if (not hass_action and not agent_action) else None
+
+        if agent_action:
+            user_payload = (
+                f"(Antigravity Agent Action Executed: \"{agent_action}\". "
+                f"Directly and clearly report this result to David in your authentic, intelligent 1-2 sentence Antigravity persona.)\n{user_text}"
+            )
+        elif hass_action:
             user_payload = (
                 f"(Smart Home Action Executed in Home Assistant: \"{hass_action}\". "
                 f"Directly confirm this action to friend in your authentic 1-2 sentence character persona.)\n{user_text}"
@@ -536,11 +546,11 @@ class RockyBrain:
 
                     # Strip leading character/role prefix if LLM generated it at start of response
                     if idx == 0 and not emitted_sentences:
-                        buffer = re.sub(r"^(?:Rocky|Grace|Marvin|BMO|TARS|User|Assistant|Human):\s*", "", buffer, flags=re.I)
+                        buffer = re.sub(r"^(?:Rocky|Grace|Marvin|BMO|TARS|Antigravity|User|Assistant|Human):\s*", "", buffer, flags=re.I)
 
                     # Cut hallucinated multi-turn dialog tokens immediately
                     cut = False
-                    for marker in ["\nQuestion:", "\nAnswer:", "\nUser:", "\nRocky:", "\nGrace:", "\nHuman:", "\nAssistant:"]:
+                    for marker in ["\nQuestion:", "\nAnswer:", "\nUser:", "\nRocky:", "\nGrace:", "\nHuman:", "\nAssistant:", "\nAntigravity:"]:
                         if marker in buffer:
                             buffer = buffer.split(marker)[0].strip()
                             cut = True
@@ -586,8 +596,8 @@ class RockyBrain:
         if len(emitted_sentences) < 2:
             rem = buffer.strip()
             if idx == 0 and not emitted_sentences:
-                rem = re.sub(r"^(?:Rocky|Grace|Marvin|BMO|TARS|User|Assistant|Human):\s*", "", rem, flags=re.I)
-            for marker in ["\nQuestion:", "\nAnswer:", "\nUser:", "\nRocky:", "\nGrace:", "\nHuman:", "\nAssistant:"]:
+                rem = re.sub(r"^(?:Rocky|Grace|Marvin|BMO|TARS|Antigravity|User|Assistant|Human):\s*", "", rem, flags=re.I)
+            for marker in ["\nQuestion:", "\nAnswer:", "\nUser:", "\nRocky:", "\nGrace:", "\nHuman:", "\nAssistant:", "\nAntigravity:"]:
                 if marker in rem:
                     rem = rem.split(marker)[0].strip()
             if rem:

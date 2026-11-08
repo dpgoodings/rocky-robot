@@ -912,6 +912,162 @@
       background: rgba(0, 0, 0, 0.3);
       border: 1px solid rgba(255, 255, 255, 0.08);
     }
+    /* ================= ANTIGRAVITY AGENT DEV CONSOLE ================= */
+    .agy-section {
+      background: linear-gradient(180deg, rgba(30, 27, 75, 0.85) 0%, rgba(15, 23, 42, 0.95) 100%);
+      border: 1px solid rgba(99, 102, 241, 0.35);
+      border-radius: 18px;
+      padding: 14px 18px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: all 0.3s ease;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 15px rgba(99, 102, 241, 0.15);
+    }
+    .agy-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .agy-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .agy-title {
+      font-size: 0.88rem;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      color: #818cf8;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .agy-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      background: rgba(99, 102, 241, 0.18);
+      border: 1px solid rgba(99, 102, 241, 0.35);
+      color: #a5b4fc;
+    }
+    .agy-bulb {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #6366f1;
+      box-shadow: 0 0 8px #6366f1;
+      animation: agyPulse 1.8s infinite ease-in-out;
+    }
+    @keyframes agyPulse {
+      0%, 100% { opacity: 1; transform: scale(1.1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+    .agy-diag-badge {
+      font-size: 0.72rem;
+      color: #c7d2fe;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-family: monospace;
+    }
+    .agy-body {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .agy-action-bar {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .agy-bar-label {
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: #a5b4fc;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      min-width: 95px;
+    }
+    .agy-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #e0e7ff;
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.18s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .agy-btn:hover {
+      background: rgba(99, 102, 241, 0.22);
+      border-color: #818cf8;
+      color: #fff;
+      transform: translateY(-1px);
+    }
+    .agy-btn:active, .agy-btn.active {
+      background: #6366f1;
+      color: #ffffff;
+      border-color: #818cf8;
+      box-shadow: 0 0 12px rgba(99, 102, 241, 0.45);
+    }
+    .agy-btn.primary {
+      background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+      border-color: #818cf8;
+      color: #fff;
+      box-shadow: 0 0 12px rgba(99, 102, 241, 0.3);
+    }
+    .agy-btn.primary:hover {
+      background: linear-gradient(135deg, #4338ca 0%, #4f46e5 100%);
+      box-shadow: 0 0 16px rgba(99, 102, 241, 0.5);
+    }
+    .agy-console-output {
+      background: rgba(10, 10, 20, 0.85);
+      border: 1px solid rgba(99, 102, 241, 0.25);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-top: 6px;
+      font-family: monospace;
+      font-size: 0.75rem;
+      color: #c7d2fe;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+    .agy-console-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #818cf8;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .agy-console-close {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+    .agy-console-close:hover { color: #fff; }
+    #agyConsoleText {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
     @keyframes camPulse {
       0%, 100% { opacity: 1; transform: scale(1); }
       50% { opacity: 0.35; transform: scale(0.85); }
@@ -1059,6 +1215,46 @@
           <button type="button" class="tars-btn" data-gesture="turn_left" title="Pivot chassis 30° left">⬅️ Pivot Left</button>
           <button type="button" class="tars-btn" data-gesture="turn_right" title="Pivot chassis 30° right">➡️ Pivot Right</button>
           <div id="tarsActiveStatus" class="tars-active-status">STANDBY • SERVOS READY</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= ANTIGRAVITY AGENT DEV CONSOLE HUD ================= -->
+    <section id="antigravitySection" class="agy-section" style="display:none;">
+      <div class="agy-header">
+        <div class="agy-title-wrap">
+          <div class="agy-title">🌌 ANTIGRAVITY AGENT DEV CONSOLE</div>
+          <div id="agyStatusBadge" class="agy-badge" title="DeepMind Code Agent Status">
+            <span class="agy-bulb"></span>
+            <span id="agyStatusText">AGENT ACTIVE • WORKSPACE READY</span>
+          </div>
+          <div id="agyDiagnosticsBadge" class="agy-diag-badge" title="Live MacBook Pro Diagnostics">
+            <span id="agyDiagText">System Diagnostics Loading…</span>
+          </div>
+        </div>
+        <div class="agy-quick-actions">
+          <button type="button" id="agyRefreshBtn" class="agy-btn" title="Refresh Git Status & System Diagnostics">
+            ↻ Refresh
+          </button>
+        </div>
+      </div>
+
+      <div class="agy-body">
+        <div class="agy-action-bar">
+          <span class="agy-bar-label">Code Actions:</span>
+          <button type="button" class="agy-btn" id="agyGitStatusBtn" title="Check working tree status">📊 Git Status</button>
+          <button type="button" class="agy-btn" id="agyGitDiffBtn" title="Show uncommitted diff">📝 Git Diff</button>
+          <button type="button" class="agy-btn" id="agyGitLogBtn" title="View recent commits">📜 Git Log</button>
+          <button type="button" class="agy-btn" id="agyGitCommitBtn" title="Commit all changes and push to origin main">🚀 Commit &amp; Push</button>
+          <button type="button" class="agy-btn" id="agyGitPullBtn" title="Pull latest changes from remote">⬇️ Git Pull</button>
+          <button type="button" class="agy-btn primary" id="agyRunTaskBtn" title="Run autonomous coding update via Antigravity agy CLI">💻 Perform Code Update</button>
+        </div>
+        <div id="agyConsoleOutput" class="agy-console-output" style="display:none;">
+          <div class="agy-console-header">
+            <span>Terminal Output:</span>
+            <button type="button" id="agyCloseConsoleBtn" class="agy-console-close">✕</button>
+          </div>
+          <pre id="agyConsoleText"></pre>
         </div>
       </div>
     </section>
@@ -2103,6 +2299,13 @@
         tarsSec.style.display = (charId === "tars") ? "flex" : "none";
         if (charId === "tars" && typeof refreshTarsStatus === "function") {
           refreshTarsStatus();
+        }
+      }
+      const agySec = document.getElementById("antigravitySection");
+      if (agySec) {
+        agySec.style.display = (charId === "antigravity") ? "flex" : "none";
+        if (charId === "antigravity" && typeof refreshAgyStatus === "function") {
+          refreshAgyStatus();
         }
       }
       refreshIdlePrompt();
@@ -3666,6 +3869,148 @@
           if (tarsActiveStatus) tarsActiveStatus.textContent = result.cue_light ? "CUE LIGHT ON • 85% HUMOR" : "CUE LIGHT OFF";
         } catch (err) {
           console.warn("[TARS Cue Light Error]", err);
+        }
+      });
+
+      // =====================================================================
+      // ANTIGRAVITY AGENT DEV CONSOLE & CODEBASE INTEGRATION
+      // =====================================================================
+      const antigravitySection = document.getElementById("antigravitySection");
+      const agyStatusText = document.getElementById("agyStatusText");
+      const agyDiagText = document.getElementById("agyDiagText");
+      const agyConsoleOutput = document.getElementById("agyConsoleOutput");
+      const agyConsoleText = document.getElementById("agyConsoleText");
+      const agyCloseConsoleBtn = document.getElementById("agyCloseConsoleBtn");
+      const agyRefreshBtn = document.getElementById("agyRefreshBtn");
+      const agyGitStatusBtn = document.getElementById("agyGitStatusBtn");
+      const agyGitDiffBtn = document.getElementById("agyGitDiffBtn");
+      const agyGitLogBtn = document.getElementById("agyGitLogBtn");
+      const agyGitCommitBtn = document.getElementById("agyGitCommitBtn");
+      const agyGitPullBtn = document.getElementById("agyGitPullBtn");
+      const agyRunTaskBtn = document.getElementById("agyRunTaskBtn");
+
+      function showAgyConsole(text) {
+        if (!agyConsoleOutput || !agyConsoleText) return;
+        agyConsoleText.textContent = text;
+        agyConsoleOutput.style.display = "block";
+      }
+
+      agyCloseConsoleBtn?.addEventListener("click", () => {
+        if (agyConsoleOutput) agyConsoleOutput.style.display = "none";
+      });
+
+      window.refreshAgyStatus = async function() {
+        try {
+          const res = await fetch("/api/agent/diagnostics");
+          if (!res.ok) return;
+          const data = await res.json();
+          if (agyDiagText && data.diagnostics) {
+            agyDiagText.textContent = data.diagnostics;
+          }
+        } catch (err) {
+          console.warn("[AGY Status Check]", err);
+        }
+      };
+
+      agyRefreshBtn?.addEventListener("click", () => {
+        window.refreshAgyStatus();
+      });
+
+      agyGitStatusBtn?.addEventListener("click", async () => {
+        agyGitStatusBtn.classList.add("active");
+        try {
+          const res = await fetch("/api/agent/git-status");
+          const data = await res.json();
+          showAgyConsole(data.status + "\n\nDiff Summary:\n" + (data.diff || "None"));
+          if (agyStatusText) agyStatusText.textContent = data.status;
+        } catch (err) {
+          showAgyConsole("Error: " + err.message);
+        } finally {
+          setTimeout(() => agyGitStatusBtn.classList.remove("active"), 400);
+        }
+      });
+
+      agyGitDiffBtn?.addEventListener("click", async () => {
+        agyGitDiffBtn.classList.add("active");
+        try {
+          const res = await fetch("/api/agent/git-status");
+          const data = await res.json();
+          showAgyConsole(data.diff || "No uncommitted code changes in active workspace.");
+        } catch (err) {
+          showAgyConsole("Error: " + err.message);
+        } finally {
+          setTimeout(() => agyGitDiffBtn.classList.remove("active"), 400);
+        }
+      });
+
+      agyGitLogBtn?.addEventListener("click", async () => {
+        agyGitLogBtn.classList.add("active");
+        try {
+          const res = await fetch("/api/agent/git-status");
+          const data = await res.json();
+          showAgyConsole(data.log || "No recent commits found.");
+        } catch (err) {
+          showAgyConsole("Error: " + err.message);
+        } finally {
+          setTimeout(() => agyGitLogBtn.classList.remove("active"), 400);
+        }
+      });
+
+      agyGitCommitBtn?.addEventListener("click", async () => {
+        const msg = prompt("Enter commit message (or leave blank for automatic timestamped commit):", "");
+        if (msg === null) return;
+        agyGitCommitBtn.classList.add("active");
+        showAgyConsole("Staging changes, committing, and pushing to origin main…");
+        try {
+          const res = await fetch("/api/agent/commit", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: msg.trim() || undefined })
+          });
+          const data = await res.json();
+          showAgyConsole(data.result || "Commit completed.");
+        } catch (err) {
+          showAgyConsole("Commit Error: " + err.message);
+        } finally {
+          setTimeout(() => agyGitCommitBtn.classList.remove("active"), 400);
+        }
+      });
+
+      agyGitPullBtn?.addEventListener("click", async () => {
+        agyGitPullBtn.classList.add("active");
+        showAgyConsole("Pulling latest commits from origin main…");
+        try {
+          const res = await fetch("/api/agent/task", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: "git pull origin main" })
+          });
+          const data = await res.json();
+          showAgyConsole(data.result || "Git pull completed.");
+        } catch (err) {
+          showAgyConsole("Git Pull Error: " + err.message);
+        } finally {
+          setTimeout(() => agyGitPullBtn.classList.remove("active"), 400);
+        }
+      });
+
+      agyRunTaskBtn?.addEventListener("click", async () => {
+        const promptText = prompt("Describe the codebase update or coding task you want Antigravity to perform:", "");
+        if (!promptText || !promptText.trim()) return;
+        agyRunTaskBtn.classList.add("active");
+        showAgyConsole(`Dispatching agentic task to Antigravity CLI:\n"${promptText}"\n\nPlease wait…`);
+        try {
+          const res = await fetch("/api/agent/task", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: promptText.trim() })
+          });
+          const data = await res.json();
+          showAgyConsole(data.result || "Task finished.");
+        } catch (err) {
+          showAgyConsole("Task Execution Error: " + err.message);
+        } finally {
+          setTimeout(() => agyRunTaskBtn.classList.remove("active"), 400);
         }
       });
     })();
