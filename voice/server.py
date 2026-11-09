@@ -446,6 +446,35 @@ def hass_entities() -> list[dict[str, Any]]:
     return mcp_homeassistant.fetch_entities()
 
 
+@app.get("/api/hass/check-config")
+def hass_check_config() -> dict[str, Any]:
+    """Validates Home Assistant YAML configuration."""
+    return mcp_homeassistant.check_config()
+
+
+@app.get("/api/hass/broken-entities")
+def hass_broken_entities() -> list[dict[str, Any]]:
+    """Scans and lists all unavailable and unknown entities."""
+    return mcp_homeassistant.find_broken_entities()
+
+
+@app.post("/api/hass/reload")
+def hass_reload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Reloads core config, automations, scripts, or all."""
+    domain = str(payload.get("domain", "all")).strip()
+    return mcp_homeassistant.reload_services(domain)
+
+
+@app.post("/api/hass/gemini")
+def hass_gemini_query(payload: dict[str, Any]) -> dict[str, Any]:
+    """Dispatches a prompt directly to Home Assistant's Gemini agent."""
+    prompt = str(payload.get("prompt", "")).strip()
+    if not prompt:
+        raise HTTPException(status_code=400, detail="prompt is required")
+    response_text = mcp_homeassistant.query_gemini_ha(prompt)
+    return {"prompt": prompt, "response": response_text}
+
+
 # -----------------------------------------------------------------------------
 # TARS Kinematics & Gestures Endpoints (GPTARS YouTube / Interstellar)
 # -----------------------------------------------------------------------------

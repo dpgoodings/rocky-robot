@@ -126,6 +126,32 @@ def git_pull() -> str:
 # 2. System Diagnostics (MacBook Pro Hardware & Process Health)
 # -----------------------------------------------------------------------------
 
+def check_hass_config() -> str:
+    """Validates Home Assistant YAML configuration."""
+    try:
+        import mcp_homeassistant
+        res = mcp_homeassistant.check_config()
+        if res.get("result") == "valid":
+            return "Home Assistant configuration is valid and error-free."
+        errs = res.get("errors") or res.get("message")
+        return f"Home Assistant configuration check failed: {errs}"
+    except Exception as exc:
+        return f"Could not check Home Assistant configuration: {exc}"
+
+
+def check_hass_devices() -> str:
+    """Scans Home Assistant for offline or unavailable entities."""
+    try:
+        import mcp_homeassistant
+        broken = mcp_homeassistant.find_broken_entities()
+        if not broken:
+            return "All monitored Home Assistant devices and entities are online and healthy."
+        sample = [b["name"] for b in broken[:4]]
+        return f"Detected {len(broken)} unavailable entities in Home Assistant, including {', '.join(sample)}."
+    except Exception as exc:
+        return f"Could not scan Home Assistant devices: {exc}"
+
+
 def get_system_diagnostics() -> str:
     """Returns MacBook Pro battery, CPU load, memory, and disk health."""
     # 1. Battery
@@ -205,6 +231,8 @@ INTENT_PATTERNS: list[tuple[re.Pattern[str], Any]] = [
     (re.compile(r"\b(?:git\s+pull|pull\s+(?:latest\s+)?changes|update\s+from\s+repo|pull\s+code)\b", re.I), git_pull),
     (re.compile(r"\b(?:battery|system\s+stats|cpu\s+usage|memory\s+usage|macbook\s+health|system\s+health|diagnostics)\b", re.I), get_system_diagnostics),
     (re.compile(r"\b(?:server\s+health|server\s+status|voice\s+server\s+status)\b", re.I), get_server_health),
+    (re.compile(r"\b(?:check\s+(?:home\s+assistant\s+|ha\s+)?config(?:uration)?|validate\s+(?:home\s+assistant\s+|ha\s+)?(?:yaml|config(?:uration)?))\b", re.I), check_hass_config),
+    (re.compile(r"\b(?:scan\s+(?:home\s+assistant\s+|ha\s+)?(?:for\s+)?(?:broken|unavailable|offline)\s+(?:entities|devices)|check\s+broken\s+devices)\b", re.I), check_hass_devices),
 ]
 
 COMMIT_RE = re.compile(

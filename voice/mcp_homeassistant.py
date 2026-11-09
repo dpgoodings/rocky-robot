@@ -104,6 +104,71 @@ def fetch_entities(force_refresh: bool = False) -> list[dict[str, Any]]:
     return _ENTITIES_CACHE
 
 
+def check_config() -> dict[str, Any]:
+    """Validates Home Assistant YAML configuration via /api/config/core/check_config."""
+    cfg = get_config()
+    if not cfg["token"]:
+        return {"result": "error", "message": "Home Assistant token not configured"}
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            r = client.post(f"{cfg['url']}/api/config/core/check_config", headers=_headers())
+            if r.status_code == 200:
+                return r.json()
+            return {"result": "error", "message": f"HTTP {r.status_code}: {r.text}"}
+    except Exception as exc:
+        return {"result": "error", "message": str(exc)}
+
+
+def reload_services(domain: str = "all") -> dict[str, Any]:
+    """Reloads Home Assistant core configs, automations, scripts, or custom templates."""
+    cfg = get_config()
+    if not cfg["token"]:
+        return {"success": False, "error": "Token not configured"}
+    service_map = {
+        "all": ("homeassistant", "reload_all"),
+        "automations": ("automation", "reload"),
+        "scripts": ("script", "reload"),
+        "core": ("homeassistant", "reload_core_config"),
+    }
+    svc_domain, svc_name = service_map.get(domain.lower(), ("homeassistant", "reload_all"))
+    return call_service(svc_domain, svc_name)
+
+
+def find_broken_entities() -> list[dict[str, Any]]:
+    """Identifies all devices/sensors in Home Assistant with unavailable or unknown states."""
+    entities = fetch_entities(force_refresh=True)
+    broken: list[dict[str, Any]] = []
+    for e in entities:
+        st = e.get("state")
+        if st in ("unavailable", "unknown"):
+            broken.append({
+                "entity_id": e.get("entity_id"),
+                "name": e.get("attributes", {}).get("friendly_name") or e.get("entity_id"),
+                "state": st,
+            })
+    return broken
+
+
+def query_gemini_ha(prompt: str) -> str:
+    """Dispatches a prompt directly to Home Assistant's Google Generative AI agent."""
+    cfg = get_config()
+    if not cfg["token"]:
+        return "Home Assistant token not configured."
+    try:
+        with httpx.Client(timeout=25.0) as client:
+            payload = {
+                "text": prompt,
+                "agent_id": "conversation.google_ai_conversation",
+            }
+            r = client.post(f"{cfg['url']}/api/conversation/process", headers=_headers(), json=payload)
+            if r.status_code == 200:
+                data = r.json()
+                return data.get("response", {}).get("speech", {}).get("plain", {}).get("speech", "No response from Gemini.")
+            return f"Home Assistant error (HTTP {r.status_code})"
+    except Exception as exc:
+        return f"Query failed: {exc}"
+
+
 def find_entity_by_name(target_name: str, domain: str | None = None) -> dict[str, Any] | None:
     """Finds an entity matching the spoken target name (e.g., 'porch light', 'roborock vacuum')."""
     clean_target = target_name.strip().lower()
@@ -215,6 +280,22 @@ STATE_QUERY_RE = re.compile(
     r"\b(?:what\s+is\s+the|status\s+of|is\s+the|check\s+the)\s+(?:the\s+)?([a-zA-Z0-9_ -]+?)(?:\s+on|\s+off|\s+open|\s+locked|\s+temperature|\s+status)?\b",
     re.IGNORECASE,
 )
+CHECK_CONFIG_RE = re.compile(
+    r"\b(?:check\s+(?:home\s+assistant\s+|ha\s+)?config(?:uration)?|validate\s+(?:home\s+assistant\s+|ha\s+)?(?:yaml|config(?:uration)?)|test\s+(?:home\s+assistant\s+|ha\s+)?config)\b",
+    re.IGNORECASE,
+)
+RELOAD_RE = re.compile(
+    r"\b(?:reload\s+(?:home\s+assistant\s+|ha\s+)?(automations?|scripts?|core|all))\b",
+    re.IGNORECASE,
+)
+BROKEN_ENTITIES_RE = re.compile(
+    r"\b(?:check|scan|find|list|show)\s+(?:for\s+)?(?:broken|unavailable|offline|disconnected)\s+(?:home\s+assistant\s+|ha\s+)?(?:entities|devices|sensors)\b",
+    re.IGNORECASE,
+)
+GEMINI_DELEGATE_RE = re.compile(
+    r"\b(?:ask\s+home\s+assistant\s+(?:gemini\s+)?to|have\s+home\s+assistant\s+code|ask\s+gemini\s+to\s+code)\s+(.+)",
+    re.IGNORECASE,
+)
 
 
 def detect_and_execute_hass_intent(user_text: str) -> str | None:
@@ -231,7 +312,39 @@ def detect_and_execute_hass_intent(user_text: str) -> str | None:
     if any(k in text.lower() for k in ["safari", "notes", "camera", "volume", "website", "desktop"]):
         return None
 
-    # 1. Turn ON command
+    # 1. Check YAML Configuration / check_config
+    if CHECK_CONFIG_RE.search(text):
+        res = check_config()
+        if res.get("result") == "valid":
+            return "Home Assistant configuration is valid and error-free."
+        errs = res.get("errors") or res.get("message") or "Unknown error"
+        return f"Home Assistant configuration check failed: {errs}"
+
+    # 2. Reload Services (automations, scripts, core)
+    m_reload = RELOAD_RE.search(text)
+    if m_reload:
+        domain_raw = m_reload.group(1).lower()
+        domain = "automations" if "auto" in domain_raw else ("scripts" if "script" in domain_raw else ("core" if "core" in domain_raw else "all"))
+        res = reload_services(domain)
+        if res.get("success"):
+            return f"Successfully reloaded Home Assistant {domain}."
+        return f"Failed to reload Home Assistant {domain}: {res.get('error')}"
+
+    # 3. Find Broken / Unavailable Entities
+    if BROKEN_ENTITIES_RE.search(text):
+        broken = find_broken_entities()
+        if not broken:
+            return "All monitored Home Assistant devices and entities are online and healthy."
+        names = [b["name"] for b in broken[:4]]
+        return f"Found {len(broken)} unavailable devices in Home Assistant, including {', '.join(names)}."
+
+    # 4. Delegate to Gemini on Home Assistant
+    m_gemini = GEMINI_DELEGATE_RE.search(text)
+    if m_gemini:
+        prompt = m_gemini.group(1).strip()
+        return query_gemini_ha(prompt)
+
+    # 5. Turn ON command
     m_on = TURN_ON_RE.search(text)
     if m_on:
         target = m_on.group(1).strip()
@@ -245,7 +358,7 @@ def detect_and_execute_hass_intent(user_text: str) -> str | None:
                 return f"Turned on {fname}"
             return f"Failed to turn on {fname}: {res.get('error')}"
 
-    # 2. Turn OFF command
+    # 6. Turn OFF command
     m_off = TURN_OFF_RE.search(text)
     if m_off:
         target = m_off.group(1).strip()
@@ -259,7 +372,7 @@ def detect_and_execute_hass_intent(user_text: str) -> str | None:
                 return f"Turned off {fname}"
             return f"Failed to turn off {fname}: {res.get('error')}"
 
-    # 3. Query state command
+    # 7. Query state command
     m_state = STATE_QUERY_RE.search(text)
     if m_state:
         target = m_state.group(1).strip()
