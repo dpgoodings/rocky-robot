@@ -1,0 +1,182 @@
+[
+  {
+    "name": "foot_left",
+    "watertight": true,
+    "volume_cm3": 22.54,
+    "triangles": 5336,
+    "dims_mm": "38\u00d764\u00d726",
+    "stl": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/stl/foot_left.stl",
+    "3mf": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/3mf/foot_left.3mf"
+  },
+  {
+    "name": "foot_right",
+    "watertight": true,
+    "volume_cm3": 22.54,
+    "triangles": 5336,
+    "dims_mm": "38\u00d764\u00d726",
+    "stl": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/stl/foot_right.stl",
+    "3mf": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/3mf/foot_right.3mf"
+  },
+  {
+    "name": "leg_left",
+    "watertight": true,
+    "volume_cm3": 12.66,
+    "triangles": 8958,
+    "dims_mm": "26\u00d730\u00d759",
+    "stl": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/stl/leg_left.stl",
+    "3mf": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/3mf/leg_left.3mf"
+  },
+  {
+    "name": "leg_right",
+    "watertight": true,
+    "volume_cm3": 12.66,
+    "triangles": 8958,
+    "dims_mm": "26\u00d730\u00d759",
+    "stl": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/stl/leg_right.stl",
+    "3mf": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/3mf/leg_right.3mf"
+  },
+  {
+    "name": "pelvis",
+    "watertight": true,
+    "volume_cm3": 37.75,
+    "triangles": 18190,
+    "dims_mm": "52\u00d750\u00d731",
+    "stl": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/stl/pelvis.stl",
+    "3mf": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/3mf/pelvis.3mf"
+  },
+  {
+    "name": "torso_front",
+    "watertight": true,
+    "volume_cm3": 28.28,
+    "triangles": 64540,
+    "dims_mm": "79\u00d733\u00d774",
+    "stl": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/stl/torso_front.stl",
+    "3mf": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/3mf/torso_front.3mf"
+  },
+  {
+    "name": "torso_back",
+    "watertight": true,
+    "volume_cm3": 35.75,
+    "triangles": 74202,
+    "dims_mm": "79\u00d745\u00d774",
+    "stl": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/stl/torso_back.stl",
+    "3mf": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/3mf/torso_back.3mf"
+  },
+  {
+    "name": "backpack_shell",
+    "watertight": true,
+    "volume_cm3": 31.8,
+    "triangles": 22268,
+    "dims_mm": "72\u00d730\u00d768",
+    "stl": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/stl/backpack_shell.stl",
+    "3mf": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/3mf/backpack_shell.3mf"
+  },
+  {
+    "name": "backpack_lid",
+    "watertight": true,
+    "volume_cm3": 16.2,
+    "triangles": 5256,
+    "dims_mm": "69\u00d718\u00d765",
+    "stl": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/stl/backpack_lid.stl",
+    "3mf": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/3mf/backpack_lid.3mf"
+  },
+  {
+    "name": "neck_yoke",
+    "watertight": true,
+    "volume_cm3": 10.46,
+    "triangles": 4946,
+    "dims_mm": "35\u00d726\u00d733",
+    "stl": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/stl/neck_yoke.stl",
+    "3mf": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/3mf/neck_yoke.3mf"
+  },
+  {
+    "name": "shoulder_yoke_left",
+    "watertight": true,
+    "volume_cm3": 6.92,
+    "triangles": 8462,
+    "dims_mm": "20\u00d734\u00d731",
+    "stl": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/stl/shoulder_yoke_left.stl",
+    "3mf": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/3mf/shoulder_yoke_left.3mf"
+  },
+  {
+    "name": "shoulder_yoke_right",
+    "watertight": true,
+    "volume_cm3": 6.92,
+    "triangles": 8462,
+    "dims_mm": "20\u00d734\u00d731",
+    "stl": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/stl/shoulder_yoke_right.stl",
+    "3mf": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/3mf/shoulder_yoke_right.3mf"
+  },
+  {
+    "name": "arm_left",
+    "watertight": true,
+    "volume_cm3": 10.83,
+    "triangles": 70078,
+    "dims_mm": "20\u00d729\u00d782",
+    "stl": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/stl/arm_left.stl",
+    "3mf": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/3mf/arm_left.3mf"
+  },
+  {
+    "name": "arm_right",
+    "watertight": true,
+    "volume_cm3": 10.83,
+    "triangles": 70182,
+    "dims_mm": "20\u00d729\u00d782",
+    "stl": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/stl/arm_right.stl",
+    "3mf": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/3mf/arm_right.3mf"
+  },
+  {
+    "name": "head_front",
+    "watertight": true,
+    "volume_cm3": 29.94,
+    "triangles": 31160,
+    "dims_mm": "97\u00d737\u00d783",
+    "stl": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/stl/head_front.stl",
+    "3mf": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/3mf/head_front.3mf"
+  },
+  {
+    "name": "head_back",
+    "watertight": true,
+    "volume_cm3": 35.25,
+    "triangles": 30976,
+    "dims_mm": "97\u00d754\u00d783",
+    "stl": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/stl/head_back.stl",
+    "3mf": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/3mf/head_back.3mf"
+  },
+  {
+    "name": "head_visor_bezel",
+    "watertight": true,
+    "volume_cm3": 6.07,
+    "triangles": 3144,
+    "dims_mm": "64\u00d74\u00d754",
+    "stl": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/stl/head_visor_bezel.stl",
+    "3mf": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/3mf/head_visor_bezel.3mf"
+  },
+  {
+    "name": "headphone_band",
+    "watertight": true,
+    "volume_cm3": 15.05,
+    "triangles": 1296,
+    "dims_mm": "112\u00d718\u00d741",
+    "stl": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/stl/headphone_band.stl",
+    "3mf": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/3mf/headphone_band.3mf"
+  },
+  {
+    "name": "headphone_cup_left",
+    "watertight": true,
+    "volume_cm3": 10.07,
+    "triangles": 6222,
+    "dims_mm": "13\u00d740\u00d740",
+    "stl": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/stl/headphone_cup_left.stl",
+    "3mf": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/3mf/headphone_cup_left.3mf"
+  },
+  {
+    "name": "headphone_cup_right",
+    "watertight": true,
+    "volume_cm3": 10.07,
+    "triangles": 6222,
+    "dims_mm": "13\u00d740\u00d740",
+    "stl": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/stl/headphone_cup_right.stl",
+    "3mf": "/Users/dad/.gemini/antigravity/scratch/marvin-robot/output/3mf/headphone_cup_right.3mf"
+  }
+]

@@ -45,6 +45,7 @@ from rocky_filter import (
     parse_wake_utterance,
 )
 from tars_gestures import GESTURE_ENGINE, GESTURE_CATALOG
+from face_tracker import FACE_TRACKER
 from voice_engine import RockyVoiceEngine
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -500,6 +501,20 @@ def tars_execute_gesture(payload: dict[str, Any]) -> dict[str, Any]:
 def tars_toggle_cue_light(payload: dict[str, Any]) -> dict[str, Any]:
     state = bool(payload.get("state")) if "state" in payload else not GESTURE_ENGINE.cue_light_active
     return GESTURE_ENGINE.set_cue_light(state)
+
+
+@app.get("/api/robot/tracking")
+def robot_tracking_status() -> dict[str, Any]:
+    return FACE_TRACKER.status()
+
+
+@app.post("/api/robot/tracking")
+def robot_tracking_toggle(payload: dict[str, Any]) -> dict[str, Any]:
+    enabled = bool(payload.get("enabled", True))
+    if enabled:
+        ip = str(payload.get("robot_ip") or resolve_robot_ip()).strip()
+        return FACE_TRACKER.start(ip)
+    return FACE_TRACKER.stop()
 
 
 # -----------------------------------------------------------------------------

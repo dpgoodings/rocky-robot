@@ -1,0 +1,10 @@
+[project]
+name = "marvin-cad"
+version = "0.1.0"
+description = "Parametric 3D-printable STL & 3MF CAD assembly for a Marvin-inspired servo desktop robot assistant"
+requires-python = ">=3.11"
+dependencies = [
+    "build123d>=0.13.0",
+    "trimesh>=4.0.0",
+    "numpy>=1.26.0",
+]

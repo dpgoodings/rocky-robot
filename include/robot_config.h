@@ -1,8 +1,13 @@
 #pragma once
 
 // Robot Identity & Mode
-#define ROBOT_NAME          "Rocky-S3"
-#define ROBOT_ROLE          "Autonomous Exploration Scout"
+#define ROBOT_NAME          "Marvin-S3"
+#define ROBOT_ROLE          "Bipedal Paranoid Android Assistant"
+
+// Hardware Subsystem Toggles
+#define ENABLE_SDMMC        0   // 0 = frees GPIO 38/39/40 for I2S audio (compact S3 CAM has no SD)
+#define ENABLE_PCA9685      1   // 10-DOF servos via I2C PCA9685
+#define ENABLE_ST7789       1   // 2.0" 320x240 IPS LCD visor face
 
 // Wi-Fi Configuration
 #define WIFI_SSID           "Heaven"

@@ -34,3 +34,8 @@ voice/models/
 *.sqlite3
 voice/storage/
 
+# Large regenerable CAD HTML viewer & scratch internal meshes
+cad/output/viewer.html
+cad/output/_internals_stl/
+cad/.venv/
+

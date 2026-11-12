@@ -150,10 +150,32 @@ GESTURE_CATALOG: dict[str, GestureDef] = {
         servo_angles={"gait": "pivot_right", "angle": 30},
         icon="➡️",
     ),
+    "sigh": GestureDef(
+        id="sigh",
+        name="Marvin Sigh",
+        category="posture",
+        description="Droops head and shoulders in classic melancholic Marvin resignation.",
+        duration_ms=2200,
+        cue_light="off",
+        servo_angles={"head_tilt": 64, "left_shoulder": 74, "right_shoulder": 74},
+        icon="😔",
+    ),
+    "wave": GestureDef(
+        id="wave",
+        name="Reluctant Wave",
+        category="social",
+        description="Raises right arm for a half-hearted greeting wave.",
+        duration_ms=2200,
+        cue_light="pulse",
+        servo_angles={"right_shoulder_pitch": 140, "right_shoulder_roll": 115},
+        icon="👋",
+    ),
 }
 
 # Spoken Intent Regex Patterns
 GESTURE_INTENT_MAP: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"\b(?:sigh|depress(?:ed|ing)|gloomy|brood|miserable)\b", re.I), "sigh"),
+    (re.compile(r"\b(?:wave|say\s+hi|say\s+hello|greet)\b", re.I), "wave"),
     (re.compile(r"\b(?:fist\s*bump|pound\s*it|knuckles|give\s+me\s+(?:a\s+)?fist\s*bump|bump\s+me)\b", re.I), "fist_bump"),
     (re.compile(r"\b(?:flash\s+(?:your\s+)?cue|cue\s*light(?:\s+(?:on|off|flash))?|indicator\s*light|are\s+you\s+kidding|is\s+that\s+a\s+joke)\b", re.I), "cue_light"),
     (re.compile(r"\b(?:take\s+a\s+bow|bow(?:\s+for\s+me)?|salute|curtsy)\b", re.I), "bow"),

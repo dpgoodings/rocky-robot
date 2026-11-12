@@ -23,6 +23,9 @@
 
 #include "camera_pins.h"
 #include "robot_config.h"
+#include "marvin_pins.h"
+#include "marvin_motion.h"
+#include "marvin_face.h"
 
 // Globals
 httpd_handle_t camera_httpd = NULL;
@@ -38,6 +41,50 @@ bool initSDCard();
 bool initCamera();
 void startCameraServer();
 void logMissionEvent(const char* event);
+
+static void marvinLoopTask(void* arg) {
+    (void)arg;
+    TickType_t lastWake = xTaskGetTickCount();
+    for (;;) {
+        #if ENABLE_PCA9685
+        marvin_motion::tick(20);
+        #endif
+        #if ENABLE_ST7789
+        marvin_face::tick();
+        #endif
+        vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(20));
+    }
+}
+
+static String extractJsonStr(const String& body, const char* key) {
+    String pat = String("\"") + key + "\"";
+    int k = body.indexOf(pat);
+    if (k < 0) return "";
+    int col = body.indexOf(':', k + pat.length());
+    if (col < 0) return "";
+    int q1 = body.indexOf('"', col + 1);
+    if (q1 < 0) return "";
+    int q2 = body.indexOf('"', q1 + 1);
+    if (q2 < 0) return "";
+    return body.substring(q1 + 1, q2);
+}
+
+static bool extractJsonFloat(const String& body, const char* key, float& outVal) {
+    String pat = String("\"") + key + "\"";
+    int k = body.indexOf(pat);
+    if (k < 0) return false;
+    int col = body.indexOf(':', k + pat.length());
+    if (col < 0) return false;
+    int start = col + 1;
+    while (start < (int)body.length() && (body[start] == ' ' || body[start] == '\t')) start++;
+    if (start >= (int)body.length()) return false;
+    char c = body[start];
+    if ((c >= '0' && c <= '9') || c == '-' || c == '.') {
+        outVal = body.substring(start).toFloat();
+        return true;
+    }
+    return false;
+}
 
 // MJPEG Stream constants
 #define PART_BOUNDARY "123456789000000000000987654321"
@@ -62,11 +109,25 @@ void setup() {
     // 2. Initialize Camera
     cameraAvailable = initCamera();
 
-    // 3. Initialize SD Card (with pin pullups)
+    // 3. Initialize SD Card (only if ENABLE_SDMMC == 1; 0 frees GPIO 38-40 for I2S audio)
+    #if ENABLE_SDMMC
     sdAvailable = initSDCard();
     if (sdAvailable) {
         logMissionEvent("SYSTEM_BOOT: SD card mounted successfully.");
     }
+    #else
+    sdAvailable = false;
+    Serial.println("[Storage] SDMMC disabled (GPIO 38/39/40 reserved for I2S audio).");
+    #endif
+
+    // 3b. Initialize Marvin 10-Servo PCA9685 & ST7789 GLOOM-MO Visor Display
+    #if ENABLE_PCA9685
+    marvin_motion::init();
+    #endif
+    #if ENABLE_ST7789
+    marvin_face::init();
+    #endif
+    xTaskCreatePinnedToCore(marvinLoopTask, "marvin_loop", 4096, nullptr, 1, nullptr, 1);
 
     // 4. Test snapshot to SD Card
     if (cameraAvailable && sdAvailable) {
@@ -315,17 +376,38 @@ static const char PROGMEM INDEX_HTML[] = R"rawliteral(
         </div>
 
         <div class="controls">
-            <button onclick="savePhoto()">📸 Save Snapshot to SD</button>
-            <button class="secondary" onclick="window.open('/capture', '_blank')">🖼️ View Single Frame</button>
-            <button class="secondary" onclick="setRes(8)">📐 VGA (640x480)</button>
-            <button class="secondary" onclick="setRes(5)">⚡ QVGA (320x240)</button>
-            <button class="secondary" onclick="refreshStatus()">📊 Refresh Telemetry</button>
+            <button onclick="sendGesture('step_forward')">🚶 Waddle</button>
+            <button onclick="sendGesture('nod')">🟢 Nod</button>
+            <button onclick="sendGesture('shake')">🔴 Shake</button>
+            <button onclick="sendGesture('wave')">👋 Wave</button>
+            <button onclick="sendGesture('sigh')">😔 Sigh</button>
+            <button class="secondary" onclick="sendGesture('home')">🏠 Home</button>
+            <button class="secondary" onclick="setMood('bored')">😒 Bored</button>
+            <button class="secondary" onclick="setMood('happy')">🙂 Happy</button>
+            <button class="secondary" onclick="setMood('surprised')">😮 Surprised</button>
+            <button class="secondary" onclick="savePhoto()">📸 Save Photo</button>
+            <button class="secondary" onclick="window.open('/capture', '_blank')">🖼️ Frame</button>
+            <button class="secondary" onclick="refreshStatus()">📊 Status</button>
         </div>
 
         <div class="stats" id="stats-panel">Loading telemetry...</div>
     </div>
 
     <script>
+        async function sendGesture(act) {
+            await fetch('/gesture?action=' + encodeURIComponent(act), {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({action: act})
+            });
+        }
+        async function setMood(mood) {
+            await fetch('/face', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({mood, gx: 0, gy: 0, speaking: false})
+            });
+        }
         async function setRes(val) {
             await fetch(`/control?var=framesize&val=${val}`);
         }
@@ -516,17 +598,41 @@ static esp_err_t control_handler(httpd_req_t *req) {
 }
 
 static esp_err_t action_handler(httpd_req_t *req) {
-    char content[256];
-    size_t recv_size = min(req->content_len, sizeof(content) - 1);
-    int ret = httpd_req_recv(req, content, recv_size);
-    if (ret <= 0) {
-        if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
-            httpd_resp_send_408(req);
+    char content[256] = {0};
+    if (req->content_len > 0) {
+        size_t recv_size = min(req->content_len, sizeof(content) - 1);
+        int ret = httpd_req_recv(req, content, recv_size);
+        if (ret < 0) {
+            if (ret == HTTPD_SOCK_ERR_TIMEOUT) httpd_resp_send_408(req);
+            return ESP_FAIL;
         }
-        return ESP_FAIL;
+        content[ret] = '\0';
     }
-    content[ret] = '\0';
-    Serial.printf("[Action Command Received] %s\n", content);
+
+    String body(content);
+    String action = extractJsonStr(body, "action");
+    if (action.isEmpty()) {
+        // Also support ?action= query param (used by tars_gestures.py)
+        char qbuf[96] = {0};
+        if (httpd_req_get_url_query_str(req, qbuf, sizeof(qbuf)) == ESP_OK) {
+            char aval[48] = {0};
+            if (httpd_query_key_value(qbuf, "action", aval, sizeof(aval)) == ESP_OK) {
+                action = String(aval);
+            }
+        }
+    }
+
+    float dur = 2200.0f;
+    extractJsonFloat(body, "duration_ms", dur);
+    if (!action.isEmpty()) {
+        Serial.printf("[Action] Executing '%s' (%lu ms)\n", action.c_str(), (unsigned long)dur);
+        marvin_motion::triggerAction(action, (unsigned long)dur);
+        if (action == "sigh" || action == "crouch" || action == "brood") {
+            marvin_face::setState("sad", 0.0f, -0.3f, false);
+        } else if (action == "wave" || action == "fist_bump") {
+            marvin_face::setState("happy", 0.0f, 0.0f, false);
+        }
+    }
     logMissionEvent(content);
 
     httpd_resp_set_type(req, "application/json");
@@ -534,11 +640,65 @@ static esp_err_t action_handler(httpd_req_t *req) {
     return httpd_resp_send(req, "{\"status\":\"executed\"}", HTTPD_RESP_USE_STRLEN);
 }
 
+static esp_err_t servo_handler(httpd_req_t *req) {
+    char content[256] = {0};
+    size_t recv_size = min(req->content_len, sizeof(content) - 1);
+    int ret = httpd_req_recv(req, content, recv_size);
+    if (ret <= 0) {
+        if (ret == HTTPD_SOCK_ERR_TIMEOUT) httpd_resp_send_408(req);
+        return ESP_FAIL;
+    }
+    content[ret] = '\0';
+    String body(content);
+
+    float pan = 0, tilt = 0, ch = -1, angle = 90, speed = 220;
+    extractJsonFloat(body, "speed", speed);
+    if (extractJsonFloat(body, "ch", ch) && extractJsonFloat(body, "angle", angle)) {
+        if (ch >= 0 && ch < MARVIN_SERVO_COUNT) {
+            marvin_motion::setTarget((uint8_t)ch, angle, speed);
+        }
+    }
+    if (extractJsonFloat(body, "pan", pan)) {
+        marvin_motion::setTarget(CH_HEAD_PAN, pan, speed);
+    }
+    if (extractJsonFloat(body, "tilt", tilt)) {
+        marvin_motion::setTarget(CH_HEAD_TILT, tilt, speed);
+    }
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    return httpd_resp_send(req, "{\"status\":\"ok\"}", HTTPD_RESP_USE_STRLEN);
+}
+
+static esp_err_t face_handler(httpd_req_t *req) {
+    char content[256] = {0};
+    size_t recv_size = min(req->content_len, sizeof(content) - 1);
+    int ret = httpd_req_recv(req, content, recv_size);
+    if (ret <= 0) {
+        if (ret == HTTPD_SOCK_ERR_TIMEOUT) httpd_resp_send_408(req);
+        return ESP_FAIL;
+    }
+    content[ret] = '\0';
+    String body(content);
+
+    String mood = extractJsonStr(body, "mood");
+    float gx = marvin_face::gazeX;
+    float gy = marvin_face::gazeY;
+    extractJsonFloat(body, "gx", gx);
+    extractJsonFloat(body, "gy", gy);
+    bool speaking = (body.indexOf("\"speaking\":true") >= 0 || body.indexOf("\"speaking\": true") >= 0);
+    marvin_face::setState(mood, gx, gy, speaking);
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    return httpd_resp_send(req, "{\"status\":\"ok\"}", HTTPD_RESP_USE_STRLEN);
+}
+
 void startCameraServer() {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = 80;
     config.ctrl_port = 32768;
-    config.max_uri_handlers = 12;
+    config.max_uri_handlers = 14;
     config.max_open_sockets = 7;
     config.backlog_conn = 5;
     config.stack_size = 8192;
@@ -550,6 +710,9 @@ void startCameraServer() {
     httpd_uri_t save_uri = { .uri = "/save", .method = HTTP_POST, .handler = save_handler, .user_ctx = NULL };
     httpd_uri_t control_uri = { .uri = "/control", .method = HTTP_GET, .handler = control_handler, .user_ctx = NULL };
     httpd_uri_t action_uri = { .uri = "/action", .method = HTTP_POST, .handler = action_handler, .user_ctx = NULL };
+    httpd_uri_t gesture_uri = { .uri = "/gesture", .method = HTTP_POST, .handler = action_handler, .user_ctx = NULL };
+    httpd_uri_t servo_uri = { .uri = "/servo", .method = HTTP_POST, .handler = servo_handler, .user_ctx = NULL };
+    httpd_uri_t face_uri = { .uri = "/face", .method = HTTP_POST, .handler = face_handler, .user_ctx = NULL };
     httpd_uri_t stream_uri = { .uri = "/stream", .method = HTTP_GET, .handler = stream_handler, .user_ctx = NULL };
 
     if (httpd_start(&camera_httpd, &config) == ESP_OK) {
@@ -559,7 +722,10 @@ void startCameraServer() {
         httpd_register_uri_handler(camera_httpd, &save_uri);
         httpd_register_uri_handler(camera_httpd, &control_uri);
         httpd_register_uri_handler(camera_httpd, &action_uri);
-        Serial.println("[Server] Command & Telemetry Server active on Port 80.");
+        httpd_register_uri_handler(camera_httpd, &gesture_uri);
+        httpd_register_uri_handler(camera_httpd, &servo_uri);
+        httpd_register_uri_handler(camera_httpd, &face_uri);
+        Serial.println("[Server] Command, Servo, Face & Telemetry Server active on Port 80.");
     }
 
     // High-throughput isolated stream server on Port 81 (eliminates socket starvation on Port 80)
