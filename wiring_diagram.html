@@ -287,6 +287,7 @@
     .wire-spi-cs { stroke: #f59e0b; }       /* Amber */
     .wire-spi-dc { stroke: #ec4899; }       /* Pink */
     .wire-spi-rst { stroke: #14b8a6; }      /* Teal */
+    .wire-spi-bl { stroke: #facc15; }       /* Gold (LCD Backlight GPIO 45) */
     .wire-i2s-bclk { stroke: #eab308; }     /* Yellow */
     .wire-i2s-lrc { stroke: #a855f7; }      /* Purple */
     .wire-i2s-micsd { stroke: #2dd4bf; }    /* Cyan-green */
@@ -476,7 +477,7 @@
         <circle cx="130" cy="85" r="22" fill="#020617" stroke="#475569" stroke-width="2"/>
         <circle cx="130" cy="85" r="14" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
         <circle cx="130" cy="85" r="6" fill="#0284c7"/>
-        <text x="130" y="120" text-anchor="middle" font-size="9" fill="#94a3b8">OV2640 Camera (Internal GPIO 4-18)</text>
+        <text x="130" y="120" text-anchor="middle" font-size="9" fill="#94a3b8">OV2640 Camera (Internal GPIO 4-13, 15-18)</text>
 
         <!-- MicroSD Slot Graphics -->
         <rect x="95" y="132" width="70" height="36" rx="4" fill="#090d16" stroke="#334155"/>
@@ -505,21 +506,25 @@
         <circle class="pin-pad" id="pin-esp-21" cx="12" cy="280" r="4.5" data-net="SPI_SCLK" data-name="GPIO 21 (LCD SCLK)"/>
         <text x="24" y="283" class="pin-label">IO 21 (SCLK)</text>
 
-        <!-- Pin: GPIO 14 (CS) (y=310) -->
-        <circle class="pin-pad" id="pin-esp-14" cx="12" cy="310" r="4.5" data-net="SPI_CS" data-name="GPIO 14 (LCD CS)"/>
-        <text x="24" y="313" class="pin-label">IO 14 (CS)</text>
+        <!-- Pin: GPIO 41 (CS) (y=310) -->
+        <circle class="pin-pad" id="pin-esp-41" cx="12" cy="310" r="4.5" data-net="SPI_CS" data-name="GPIO 41 (LCD CS)"/>
+        <text x="24" y="313" class="pin-label">IO 41 (CS)</text>
 
-        <!-- Pin: GPIO 41 (DC) (y=340) -->
-        <circle class="pin-pad" id="pin-esp-41" cx="12" cy="340" r="4.5" data-net="SPI_DC" data-name="GPIO 41 (LCD DC)"/>
-        <text x="24" y="343" class="pin-label">IO 41 (DC)</text>
+        <!-- Pin: GPIO 42 (DC) (y=340) -->
+        <circle class="pin-pad" id="pin-esp-42" cx="12" cy="340" r="4.5" data-net="SPI_DC" data-name="GPIO 42 (LCD DC)"/>
+        <text x="24" y="343" class="pin-label">IO 42 (DC)</text>
 
-        <!-- Pin: GPIO 42 (RST) (y=370) -->
-        <circle class="pin-pad" id="pin-esp-42" cx="12" cy="370" r="4.5" data-net="SPI_RST" data-name="GPIO 42 (LCD RST)"/>
-        <text x="24" y="373" class="pin-label">IO 42 (RST)</text>
+        <!-- Pin: GPIO 2 (RST) (y=370) -->
+        <circle class="pin-pad" id="pin-esp-2" cx="12" cy="370" r="4.5" data-net="SPI_RST" data-name="GPIO 2 (LCD RST)"/>
+        <text x="24" y="373" class="pin-label">IO 2 (RST)</text>
 
-        <!-- Pin: GPIO 3 (MIC SD) (y=400) -->
-        <circle class="pin-pad" id="pin-esp-3" cx="12" cy="400" r="4.5" data-net="I2S_MIC_SD" data-name="GPIO 3 (Mic Data In)"/>
-        <text x="24" y="403" class="pin-label">IO 3 (MIC SD)</text>
+        <!-- Pin: GPIO 45 (BL) (y=400) -->
+        <circle class="pin-pad" id="pin-esp-45" cx="12" cy="400" r="4.5" data-net="SPI_BL" data-name="GPIO 45 (LCD Backlight Enable)"/>
+        <text x="24" y="403" class="pin-label">IO 45 (BL)</text>
+
+        <!-- Pin: GPIO 3 (MIC SD) (y=428) -->
+        <circle class="pin-pad" id="pin-esp-3" cx="12" cy="428" r="4.5" data-net="I2S_MIC_SD" data-name="GPIO 3 (Mic Data In)"/>
+        <text x="24" y="431" class="pin-label">IO 3 (MIC SD)</text>
 
         <!-- RIGHT PIN HEADER (ESP32-S3) -->
         <!-- Pin: 5V / VIN (y=190) -->
@@ -534,9 +539,9 @@
         <circle class="pin-pad" id="pin-esp-1" cx="248" cy="250" r="4.5" data-net="I2C_SDA" data-name="GPIO 1 (PCA9685 SDA)"/>
         <text x="236" y="253" class="pin-label" text-anchor="end">IO 1 (SDA)</text>
 
-        <!-- Pin: GPIO 2 (SCL) (y=280) -->
-        <circle class="pin-pad" id="pin-esp-2" cx="248" cy="280" r="4.5" data-net="I2C_SCL" data-name="GPIO 2 (PCA9685 SCL)"/>
-        <text x="236" y="283" class="pin-label" text-anchor="end">IO 2 (SCL)</text>
+        <!-- Pin: GPIO 14 (SCL) (y=280) -->
+        <circle class="pin-pad" id="pin-esp-14" cx="248" cy="280" r="4.5" data-net="I2C_SCL" data-name="GPIO 14 (PCA9685 SCL)"/>
+        <text x="236" y="283" class="pin-label" text-anchor="end">IO 14 (SCL)</text>
 
         <!-- Pin: GPIO 38 (BCLK) (y=310) -->
         <circle class="pin-pad" id="pin-esp-38" cx="248" cy="310" r="4.5" data-net="I2S_BCLK" data-name="GPIO 38 (Shared I2S BCLK Clock)"/>
@@ -551,7 +556,7 @@
         <text x="236" y="373" class="pin-label" text-anchor="end">IO 40 (AMP DIN)</text>
 
         <!-- Pin: Reserved / Onboard PSRAM Callout -->
-        <text x="130" y="440" text-anchor="middle" font-size="8.5" fill="#f87171">⚠ GPIO 35-37 Locked by Octal PSRAM</text>
+        <text x="130" y="454" text-anchor="middle" font-size="8.5" fill="#f87171">⚠ GPIO 35-37 Locked by Octal PSRAM</text>
       </g>
 
 
@@ -590,13 +595,9 @@
         <circle class="pin-pad" id="pin-lcd-rst" cx="95" cy="208" r="4" data-net="SPI_RST" data-name="LCD RST"/>
         <text x="85" y="211" class="pin-label" text-anchor="end">RST</text>
 
-        <!-- Backlight BL Jumpered to VCC locally -->
-        <circle class="pin-pad-jumper" id="pin-lcd-bl" cx="95" cy="226" r="4" data-net="3V3" data-name="LCD BL (Backlight): Bridged directly to VCC (No ESP32 wire!)"/>
-        <text x="85" y="229" class="pin-label" text-anchor="end" fill="#facc15">BL ⚡</text>
-
-        <!-- Local Jumper Arc from BL to VCC -->
-        <path d="M 95 226 C 115 226, 115 100, 95 100" fill="none" stroke="#facc15" stroke-width="1.8" stroke-dasharray="3,2"/>
-        <text x="108" y="165" font-size="7" fill="#fde047" transform="rotate(90 108 165)">LOCAL BRIDGE TO VCC</text>
+        <!-- Backlight BL wired to ESP32 GPIO 45 (driven HIGH by firmware) -->
+        <circle class="pin-pad" id="pin-lcd-bl" cx="95" cy="226" r="4" data-net="SPI_BL" data-name="LCD BL (Backlight): Driven HIGH by ESP32 GPIO 45"/>
+        <text x="85" y="229" class="pin-label" text-anchor="end" fill="#facc15">BL</text>
       </g>
 
 
@@ -717,7 +718,7 @@
         <circle class="pin-pad" id="pin-pca-sda" cx="14" cy="120" r="4.5" data-net="I2C_SDA" data-name="PCA9685 SDA (GPIO 1)"/>
         <text x="26" y="124" class="pin-label">SDA</text>
 
-        <circle class="pin-pad" id="pin-pca-scl" cx="14" cy="145" r="4.5" data-net="I2C_SCL" data-name="PCA9685 SCL (GPIO 2)"/>
+        <circle class="pin-pad" id="pin-pca-scl" cx="14" cy="145" r="4.5" data-net="I2C_SCL" data-name="PCA9685 SCL (GPIO 14)"/>
         <text x="26" y="149" class="pin-label">SCL</text>
 
         <!-- OE Pin: FLOATING (No wire needed!) -->
@@ -860,17 +861,21 @@
         <path class="wire wire-spi-sclk" data-net="SPI_SCLK" data-category="lcd"
               d="M 125 354 C 145 354, 150 350, 172 350"/>
 
-        <!-- LCD CS to GPIO 14 -->
+        <!-- LCD CS to GPIO 41 -->
         <path class="wire wire-spi-cs" data-net="SPI_CS" data-category="lcd"
               d="M 125 372 C 145 372, 150 380, 172 380"/>
 
-        <!-- LCD DC to GPIO 41 -->
+        <!-- LCD DC to GPIO 42 -->
         <path class="wire wire-spi-dc" data-net="SPI_DC" data-category="lcd"
               d="M 125 390 C 145 390, 150 410, 172 410"/>
 
-        <!-- LCD RST to GPIO 42 -->
+        <!-- LCD RST to GPIO 2 -->
         <path class="wire wire-spi-rst" data-net="SPI_RST" data-category="lcd"
               d="M 125 408 C 145 408, 150 440, 172 440"/>
+
+        <!-- LCD BL to GPIO 45 -->
+        <path class="wire wire-spi-bl" data-net="SPI_BL" data-category="lcd"
+              d="M 125 426 C 145 426, 150 470, 172 470"/>
 
 
         <!-- --- B. MICROPHONE (I2S) IN HEAD --- -->
@@ -884,7 +889,7 @@
 
         <!-- Mic SD to GPIO 3 -->
         <path class="wire wire-i2s-micsd" data-net="I2S_MIC_SD" data-category="audio"
-              d="M 125 710 C 150 710, 150 470, 172 470"/>
+              d="M 125 710 C 150 710, 150 498, 172 498"/>
 
         <!-- Mic SCK to GPIO 38 trunk -->
         <path class="wire wire-i2s-bclk" data-net="I2S_BCLK" data-category="audio"
@@ -912,7 +917,7 @@
         <path class="wire wire-i2c-sda" data-net="I2C_SDA" data-category="servos neck"
               d="M 408 320 C 520 320, 620 190, 724 190"/>
 
-        <!-- 5. I2C SCL: GPIO 2 to PCA9685 SCL -->
+        <!-- 5. I2C SCL: GPIO 14 to PCA9685 SCL -->
         <path class="wire wire-i2c-scl" data-net="I2C_SCL" data-category="servos neck"
               d="M 408 350 C 520 350, 620 215, 724 215"/>
 
@@ -1017,9 +1022,9 @@
             </tr>
             <tr>
               <td><strong>Waveshare ST7789 BL</strong></td>
-              <td><span class="badge badge-jumper">LOCAL JUMPER</span></td>
-              <td>Jumper wire to LCD VCC (3.3V)</td>
-              <td><strong>Zero wires to ESP32!</strong> Bridge BL to VCC right on the 8-pin display header for full-brightness display.</td>
+              <td><span class="badge badge-jumper">GPIO 45</span></td>
+              <td>ESP32-S3 <strong>GPIO 45</strong> (or local jumper to 3.3V)</td>
+              <td>Firmware drives <code>LCD_PIN_BL</code> (<strong>GPIO 45</strong>) HIGH on boot (allows software backlight control; bridging to 3.3V also works for always-on).</td>
             </tr>
             <tr>
               <td><strong>PCA9685 Right Header</strong></td>
@@ -1028,10 +1033,10 @@
               <td>Only used for cascading a second PCA9685 board. Unused for 10 servos.</td>
             </tr>
             <tr>
-              <td><strong>ESP32 GPIO 4-18, 35-37</strong></td>
+              <td><strong>ESP32 GPIO 4-13, 15-18, 35-37</strong></td>
               <td><span class="badge badge-danger">DO NOT WIRE</span></td>
               <td><em>Internal only</em></td>
-              <td>Used internally on the Freenove CAM board for OV2640 camera bus and 8MB Octal PSRAM.</td>
+              <td>Used internally on the Freenove CAM board for OV2640 camera bus and 8MB Octal PSRAM (note: <strong>GPIO 14</strong> is free and used for PCA9685 SCL).</td>
             </tr>
           </tbody>
         </table>
@@ -1058,7 +1063,7 @@
           <tr><td>2</td><td><span class="code-net">Common GND</span></td><td><span style="color:#94a3b8; font-weight:700;">Black</span></td><td>Unified ground return plane</td></tr>
           <tr><td>3</td><td><span class="code-net">ESP 3V3</span></td><td><span style="color:#f97316; font-weight:700;">Orange</span></td><td>3.3V logic supply down to PCA9685 VCC</td></tr>
           <tr><td>4</td><td><span class="code-net">GPIO 1</span></td><td><span style="color:#10b981; font-weight:700;">Green</span></td><td>I2C SDA (Servo driver data)</td></tr>
-          <tr><td>5</td><td><span class="code-net">GPIO 2</span></td><td><span style="color:#06b6d4; font-weight:700;">Cyan</span></td><td>I2C SCL (Servo driver clock)</td></tr>
+          <tr><td>5</td><td><span class="code-net">GPIO 14</span></td><td><span style="color:#06b6d4; font-weight:700;">Cyan</span></td><td>I2C SCL (Servo driver clock)</td></tr>
           <tr><td>6</td><td><span class="code-net">GPIO 38</span></td><td><span style="color:#eab308; font-weight:700;">Yellow</span></td><td>I2S BCLK (Shared audio bit clock down to amp)</td></tr>
           <tr><td>7</td><td><span class="code-net">GPIO 39</span></td><td><span style="color:#a855f7; font-weight:700;">Purple</span></td><td>I2S LRC (Shared audio sync down to amp)</td></tr>
           <tr><td>8</td><td><span class="code-net">GPIO 40</span></td><td><span style="color:#f43f5e; font-weight:700;">Rose</span></td><td>I2S DIN (Audio stream out down to MAX98357A)</td></tr>
@@ -1098,7 +1103,7 @@
       <h3>⚡ Assembly & Safety Rules</h3>
       <div style="display:grid; grid-template-columns: 1fr 1fr; gap:14px;">
         <div class="callout callout-danger">
-          <div><strong>PCA9685 VCC MUST BE 3.3V:</strong> Never power PCA9685 logic from 5V! It will push 5V back onto GPIO 1 and 2 and fry the ESP32-S3 I2C pins.</div>
+          <div><strong>PCA9685 VCC MUST BE 3.3V:</strong> Never power PCA9685 logic from 5V! It will push 5V back onto GPIO 1 and 14 and fry the ESP32-S3 I2C pins.</div>
         </div>
         <div class="callout callout-warning">
           <div><strong>ZERO SERVOS FIRST:</strong> Center CH0–9 to 90° (1500 µs) with horns detached before screwing into limbs to prevent stripped gears.</div>
