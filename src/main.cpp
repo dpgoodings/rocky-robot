@@ -59,7 +59,6 @@ static void marvinLoopTask(void* arg) {
         #if ENABLE_ST7789
         marvin_face::tick();
         #endif
-        ArduinoOTA.handle();
         vTaskDelay(pdMS_TO_TICKS(20));
     }
 }
@@ -213,15 +212,18 @@ void loop() {
         if (cmd == "capture") {
             char filename[64];
             snprintf(filename, sizeof(filename), "%s/photo_%lu.jpg", PHOTO_DIR, millis() / 1000);
-            camera_fb_t *fb = esp_camera_fb_get();
-            if (fb && sdAvailable) {
-                File file = SD_MMC.open(filename, FILE_WRITE);
-                if (file) {
-                    file.write(fb->buf, fb->len);
-                    file.close();
-                    Serial.printf("[Console] Photo saved -> %s (%u bytes)\n", filename, fb->len);
+            if (!cameraMutex || xSemaphoreTake(cameraMutex, pdMS_TO_TICKS(250)) == pdTRUE) {
+                camera_fb_t *fb = esp_camera_fb_get();
+                if (fb && sdAvailable) {
+                    File file = SD_MMC.open(filename, FILE_WRITE);
+                    if (file) {
+                        file.write(fb->buf, fb->len);
+                        file.close();
+                        Serial.printf("[Console] Photo saved -> %s (%u bytes)\n", filename, fb->len);
+                    }
                 }
-                esp_camera_fb_return(fb);
+                if (fb) esp_camera_fb_return(fb);
+                if (cameraMutex) xSemaphoreGive(cameraMutex);
             }
         } else if (cmd == "sdinit") {
             Serial.println("[Console] Re-initializing SD Card...");
@@ -272,7 +274,7 @@ void loop() {
             Serial.println("Available serial commands: 'red', 'green', 'blue', 'yellow', 'purple', 'cyan', 'orange', 'white', 'black', 'eyeroll', 'glitch', 'scan', 'sigh', 'status', 'help'");
         }
     }
-    delay(100);
+    delay(20);
 }
 
 // ----------------------------------------------------
@@ -597,7 +599,9 @@ static esp_err_t capture_handler(httpd_req_t *req) {
     }
     httpd_resp_set_type(req, "image/jpeg");
     httpd_resp_set_hdr(req, "Content-Disposition", "inline; filename=capture.jpg");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache, no-store, must-revalidate");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_set_hdr(req, "Connection", "keep-alive");
     esp_err_t res = httpd_resp_send(req, (const char *)fb->buf, fb->len);
     esp_camera_fb_return(fb);
     if (cameraMutex) xSemaphoreGive(cameraMutex);
@@ -662,6 +666,13 @@ static esp_err_t status_handler(httpd_req_t *req) {
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
     httpd_resp_set_hdr(req, "Connection", "keep-alive");
     return httpd_resp_send(req, json, strlen(json));
+}
+
+static esp_err_t ping_handler(httpd_req_t *req) {
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_set_hdr(req, "Connection", "keep-alive");
+    return httpd_resp_send(req, "{\"status\":\"ok\",\"robot\":\"" ROBOT_NAME "\"}", HTTPD_RESP_USE_STRLEN);
 }
 
 static esp_err_t save_handler(httpd_req_t *req) {
@@ -795,7 +806,7 @@ static esp_err_t action_handler(httpd_req_t *req) {
 
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-    httpd_resp_set_hdr(req, "Connection", "close");
+    httpd_resp_set_hdr(req, "Connection", "keep-alive");
     return httpd_resp_send(req, "{\"status\":\"executed\"}", HTTPD_RESP_USE_STRLEN);
 }
 
@@ -835,7 +846,7 @@ static esp_err_t face_handler(httpd_req_t *req) {
     String seq = "";
     float gx = marvin_face::gazeX;
     float gy = marvin_face::gazeY;
-    bool speaking = false;
+    bool speaking = marvin_face::isSpeaking;
 
     // 1. Support GET Query Parameters: /face?mood=happy or /face?sequence=eye_roll
     char qbuf[128] = {0};
@@ -847,6 +858,9 @@ static esp_err_t face_handler(httpd_req_t *req) {
         if (httpd_query_key_value(qbuf, "seq", val, sizeof(val)) == ESP_OK) seq = String(val);
         if (httpd_query_key_value(qbuf, "sequence", val, sizeof(val)) == ESP_OK) seq = String(val);
         if (httpd_query_key_value(qbuf, "anim", val, sizeof(val)) == ESP_OK) seq = String(val);
+        if (httpd_query_key_value(qbuf, "speaking", val, sizeof(val)) == ESP_OK) {
+            speaking = (!strcmp(val, "true") || !strcmp(val, "1"));
+        }
 
         char posVal[16] = {0};
         if (httpd_query_key_value(qbuf, "pos", posVal, sizeof(posVal)) == ESP_OK) {
@@ -899,7 +913,11 @@ static esp_err_t face_handler(httpd_req_t *req) {
             if (!st.isEmpty()) marvin_face::setFaceStyle(st);
             extractJsonFloat(body, "gx", gx);
             extractJsonFloat(body, "gy", gy);
-            speaking = (body.indexOf("\"speaking\":true") >= 0 || body.indexOf("\"speaking\": true") >= 0);
+            if (body.indexOf("\"speaking\":true") >= 0 || body.indexOf("\"speaking\": true") >= 0) {
+                speaking = true;
+            } else if (body.indexOf("\"speaking\":false") >= 0 || body.indexOf("\"speaking\": false") >= 0) {
+                speaking = false;
+            }
 
             #if ENABLE_PCA9685
             // Unified head servo dispatch: pan & tilt directly in /face
@@ -1014,6 +1032,7 @@ void startCameraServer() {
 
     httpd_uri_t index_uri = { .uri = "/", .method = HTTP_GET, .handler = index_handler, .user_ctx = NULL };
     httpd_uri_t favicon_uri = { .uri = "/favicon.ico", .method = HTTP_GET, .handler = favicon_handler, .user_ctx = NULL };
+    httpd_uri_t ping_uri = { .uri = "/ping", .method = HTTP_GET, .handler = ping_handler, .user_ctx = NULL };
     httpd_uri_t status_uri = { .uri = "/status", .method = HTTP_GET, .handler = status_handler, .user_ctx = NULL };
     httpd_uri_t capture_uri = { .uri = "/capture", .method = HTTP_GET, .handler = capture_handler, .user_ctx = NULL };
     httpd_uri_t save_uri = { .uri = "/save", .method = HTTP_POST, .handler = save_handler, .user_ctx = NULL };
@@ -1030,6 +1049,7 @@ void startCameraServer() {
     if (httpd_start(&camera_httpd, &config) == ESP_OK) {
         httpd_register_uri_handler(camera_httpd, &index_uri);
         httpd_register_uri_handler(camera_httpd, &favicon_uri);
+        httpd_register_uri_handler(camera_httpd, &ping_uri);
         httpd_register_uri_handler(camera_httpd, &status_uri);
         httpd_register_uri_handler(camera_httpd, &capture_uri);
         httpd_register_uri_handler(camera_httpd, &save_uri);

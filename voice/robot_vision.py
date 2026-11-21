@@ -480,6 +480,92 @@ def get_latest_uploaded_frame_bytes(max_age: float = 3.5) -> bytes | None:
     return None
 
 
+_ESP32_CAPTURE_LOCK = threading.Lock()
+_ESP32_CLIENT: Any = None
+_LAST_ESP32_BYTES: bytes | None = None
+_LAST_ESP32_TIME: float = 0.0
+_LAST_ESP32_IP: str = ""
+
+
+def _get_esp32_client():
+    global _ESP32_CLIENT
+    import httpx
+    if _ESP32_CLIENT is None or _ESP32_CLIENT.is_closed:
+        limits = httpx.Limits(max_keepalive_connections=4, max_connections=8, keepalive_expiry=1.8)
+        timeout = httpx.Timeout(connect=1.2, read=3.0, write=1.0, pool=1.0)
+        _ESP32_CLIENT = httpx.Client(limits=limits, timeout=timeout)
+    return _ESP32_CLIENT
+
+
+def fetch_esp32_frame_bytes_cached(robot_ip: str, max_age: float = 0.075) -> bytes | None:
+    """Thread-safe single-flight ESP32 JPEG capture with HTTP keep-alive and short TTL cache."""
+    global _LAST_ESP32_BYTES, _LAST_ESP32_TIME, _LAST_ESP32_IP, _ESP32_CLIENT
+    now = time.time()
+    if (
+        _LAST_ESP32_BYTES is not None
+        and _LAST_ESP32_IP == robot_ip
+        and (now - _LAST_ESP32_TIME) < max_age
+    ):
+        return _LAST_ESP32_BYTES
+
+    with _ESP32_CAPTURE_LOCK:
+        now = time.time()
+        if (
+            _LAST_ESP32_BYTES is not None
+            and _LAST_ESP32_IP == robot_ip
+            and (now - _LAST_ESP32_TIME) < max_age
+        ):
+            return _LAST_ESP32_BYTES
+        for attempt in range(2):
+            try:
+                client = _get_esp32_client()
+                resp = client.get(f"http://{robot_ip}/capture")
+                if resp.status_code == 200 and resp.content:
+                    _LAST_ESP32_BYTES = resp.content
+                    _LAST_ESP32_TIME = time.time()
+                    _LAST_ESP32_IP = robot_ip
+                    return resp.content
+            except Exception:
+                # Reset pooled client on stale keep-alive socket / transient error and retry once
+                if attempt == 0 and _ESP32_CLIENT is not None:
+                    try:
+                        _ESP32_CLIENT.close()
+                    except Exception:
+                        pass
+                    _ESP32_CLIENT = None
+        return _LAST_ESP32_BYTES if _LAST_ESP32_IP == robot_ip else None
+
+
+def fetch_active_frame_bytes(robot_ip: str | None = None, max_age: float = 0.08) -> bytes | None:
+    """Returns JPEG bytes from the active configured camera source (MacBook or ESP32)."""
+    cfg = load_camera_config()
+    source_type = cfg.get("source_type", "esp32")
+
+    if source_type in ("macbook", "webcam", "local"):
+        up_bytes = get_latest_uploaded_frame_bytes(max_age=3.5)
+        if up_bytes:
+            return up_bytes
+        try:
+            device_idx = int(cfg.get("device_index", 0))
+            cap = cv2.VideoCapture(device_idx)
+            if cap.isOpened():
+                ret, frame = cap.read()
+                cap.release()
+                if ret and frame is not None:
+                    ok, enc = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                    if ok:
+                        return enc.tobytes()
+        except Exception:
+            pass
+        return None
+
+    ip = robot_ip or cfg.get("esp32_ip")
+    if not ip:
+        from brain import resolve_robot_ip
+        ip = resolve_robot_ip()
+    return fetch_esp32_frame_bytes_cached(ip, max_age=max_age)
+
+
 def fetch_live_camera_frame() -> np.ndarray | None:
     """Fetches a current BGR frame from the configured camera (MacBook Pro, ESP32, RTSP Wyze, or HTTP)."""
     cfg = load_camera_config()
@@ -534,16 +620,14 @@ def fetch_live_camera_frame() -> np.ndarray | None:
         except Exception:
             pass
 
-    # 4. Physical ESP32-CAM
+    # 4. Physical ESP32-CAM (single-flight cached keep-alive)
     try:
         from brain import resolve_robot_ip
-        import httpx
         robot_ip = resolve_robot_ip()
-        with httpx.Client(timeout=2.5) as client:
-            resp = client.get(f"http://{robot_ip}/capture")
-            if resp.status_code == 200:
-                nparr = np.frombuffer(resp.content, np.uint8)
-                return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        raw = fetch_esp32_frame_bytes_cached(robot_ip, max_age=0.15)
+        if raw:
+            nparr = np.frombuffer(raw, np.uint8)
+            return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     except Exception:
         pass
 

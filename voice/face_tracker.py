@@ -50,6 +50,7 @@ class MarvinFaceTracker:
     def stop(self) -> dict[str, Any]:
         with self._lock:
             self.enabled = False
+            self.last_face = None
             self._stop_event.set()
         return self.status()
 
@@ -69,10 +70,11 @@ class MarvinFaceTracker:
         limits = httpx.Limits(max_keepalive_connections=4, max_connections=8, keepalive_expiry=30.0)
         timeout = httpx.Timeout(connect=0.8, read=1.2, write=0.8, pool=0.8)
 
-        # Persistent HTTP client with keep-alive connection reuse
+        # Persistent HTTP client with keep-alive connection reuse for /face updates
         with httpx.Client(limits=limits, timeout=timeout) as client:
             last_mood_sent = ""
             last_mood_sent_time = 0.0
+            last_face_seen_time = 0.0
 
             while not self._stop_event.is_set():
                 with self._lock:
@@ -83,11 +85,13 @@ class MarvinFaceTracker:
                     continue
 
                 try:
-                    resp = client.get(f"http://{ip}/capture")
-                    if resp.status_code != 200 or not resp.content:
+                    cfg = robot_vision.load_camera_config()
+                    source_type = cfg.get("source_type", "esp32")
+                    raw_bytes = robot_vision.fetch_active_frame_bytes(ip, max_age=0.05)
+                    if not raw_bytes:
                         time.sleep(0.08)
                         continue
-                    arr = np.frombuffer(resp.content, dtype=np.uint8)
+                    arr = np.frombuffer(raw_bytes, dtype=np.uint8)
                     frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
                     if frame is None:
                         time.sleep(0.08)
@@ -98,6 +102,7 @@ class MarvinFaceTracker:
                     _, faces = detector.detect(frame)
 
                     if faces is not None and len(faces) > 0:
+                        last_face_seen_time = time.time()
                         best = max(faces, key=lambda f: float(f[2] * f[3]))
                         cx = float(best[0] + best[2] * 0.5)
                         cy = float(best[1] + best[3] * 0.5)
@@ -116,10 +121,11 @@ class MarvinFaceTracker:
                             pass
 
                         with self._lock:
-                            if abs(err_x) > 0.05:
-                                self.pan_deg = max(15.0, min(165.0, self.pan_deg - err_x * 12.0))
-                            if abs(err_y) > 0.05:
-                                self.tilt_deg = max(58.0, min(132.0, self.tilt_deg - err_y * 9.0))
+                            if source_type == "esp32":
+                                if abs(err_x) > 0.05:
+                                    self.pan_deg = max(15.0, min(165.0, self.pan_deg - err_x * 12.0))
+                                if abs(err_y) > 0.05:
+                                    self.tilt_deg = max(58.0, min(132.0, self.tilt_deg - err_y * 9.0))
                             pan, tilt = self.pan_deg, self.tilt_deg
                             self.last_mood = mapped_mood
                             self.last_face = {
@@ -133,14 +139,15 @@ class MarvinFaceTracker:
                             }
                             self.last_error = ""
 
-                        # Single unified POST payload: head servos + screen gaze + facial expression
+                        # Single unified POST payload: screen gaze + facial expression (+ head servos for ESP32 cam)
                         payload: dict[str, Any] = {
-                            "pan": round(pan, 1),
-                            "tilt": round(tilt, 1),
-                            "speed": 240,
                             "gx": round(float(max(-1.0, min(1.0, err_x * 1.4))), 3),
                             "gy": round(float(max(-1.0, min(1.0, -err_y * 1.4))), 3),
                         }
+                        if source_type == "esp32":
+                            payload["pan"] = round(pan, 1)
+                            payload["tilt"] = round(tilt, 1)
+                            payload["speed"] = 240
 
                         now = time.time()
                         # Update mood if changed or periodically every 3 seconds to keep sync
@@ -153,11 +160,19 @@ class MarvinFaceTracker:
                     else:
                         with self._lock:
                             self.last_face = None
+                        # Return to neutral default mood if no face seen for >3.5s
+                        now = time.time()
+                        if last_face_seen_time > 0 and (now - last_face_seen_time) > 3.5 and last_mood_sent != "default":
+                            last_mood_sent = "default"
+                            last_mood_sent_time = now
+                            with self._lock:
+                                self.last_mood = "default"
+                            client.post(f"http://{ip}/face", json={"mood": "default", "gx": 0.0, "gy": 0.0})
                 except Exception as exc:
                     with self._lock:
                         self.last_error = str(exc)
 
-                time.sleep(0.02)  # High responsiveness (~30 Hz tracking cadence)
+                time.sleep(0.04)  # Smooth ~20 Hz tracking cadence without starving ESP32 stream
 
 
 FACE_TRACKER = MarvinFaceTracker()

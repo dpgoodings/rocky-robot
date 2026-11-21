@@ -55,11 +55,11 @@ MOTION_GUARD_RE = re.compile(
     re.IGNORECASE,
 )
 VISION_QUERY_RE = re.compile(
-    r"\b(?:what\s+do\s+you\s+see|what(?:'s|\s+is)\s+(?:in\s+front|there|that)|describe\s+(?:what\s+you\s+see|the\s+room|the\s+view)|(?:look|look\s+at)\s+(?:this|around|ahead)|can\s+you\s+see\s+(?:what|this|anything)|what\s+am\s+i\s+holding)\b",
+    r"\b(?:what\s+(?:do|can)\s+you\s+see|what\s+are\s+you\s+(?:seeing|looking\s+at)|what(?:'s|\s+is)\s+(?:in\s+front|there|that|this|in\s+my\s+hand|around\s+you|on\s+(?:the\s+|my\s+)?desk)|describe\s+(?:what\s+you\s+see|the\s+room|the\s+view|everything)|(?:look|look\s+at)\s+(?:this|that|me|my|the|around|ahead|through)|(?:can|do)\s+you\s+(?:see|have\s+(?:sight|eyes|vision)|(?:use|see\s+with)\s+(?:the\s+|your\s+)?(?:esp32|robot|cam|camera))|are\s+you\s+blind|see\s+through\s+(?:the\s+|your\s+)?(?:esp32|robot|cam|camera)|how\s+many\s+fingers|what\s+(?:am\s+i|is\s+(?:he|she))\s+(?:holding|wearing|doing)|tell\s+me\s+what\s+you\s+see)\b",
     re.IGNORECASE,
 )
 CAMERA_SWITCH_RE = re.compile(
-    r"\b(?:switch|change|use|turn\s+on)\s+(?:to\s+)?(?:the\s+)?(macbook|laptop|built-?in|webcam|esp32|robot|chassis)\s+camera\b",
+    r"\b(?:switch(?:\s+to)?|change(?:\s+to)?|turn\s+on|(?<!\bdo\syou\s)use)\s+(?:to\s+)?(?:the\s+)?(macbook|laptop|built-?in|webcam|esp32|robot|chassis)(?:\s+cam(?:era)?)?\b",
     re.IGNORECASE,
 )
 
@@ -157,8 +157,8 @@ def resolve_robot_ip(force_probe: bool = False) -> str:
     return _CACHED_ROBOT_IP or "192.168.4.40"
 
 
-def fetch_robot_vision(timeout: float = 25.0) -> str | None:
-    """Grabs a live frame from active camera (MacBook Pro or ESP32) and queries Moondream vision model."""
+def fetch_robot_vision(user_query: str | None = None, timeout: float = 25.0) -> str | None:
+    """Grabs a live frame from active camera (ESP32 or MacBook Pro) and queries Moondream vision model."""
     try:
         import cv2
         frame = robot_vision.fetch_live_camera_frame()
@@ -169,18 +169,29 @@ def fetch_robot_vision(timeout: float = 25.0) -> str | None:
             return None
         img_b64 = base64.b64encode(enc.tobytes()).decode("utf-8")
 
+        base_prompt = (
+            "Describe what is directly in front of the camera, noting any people, "
+            "hands or fingers held up, objects, colors, and items clearly."
+        )
+        prompts_to_try = [base_prompt]
+        if user_query and re.search(r"\b(?:how\s+many|what\s+color|holding|wearing|object|item)\b", user_query, re.I):
+            prompts_to_try.insert(0, f"{base_prompt} Answer briefly: {user_query.strip()}")
+
         with httpx.Client(timeout=timeout) as client:
-            r = client.post(
-                f"{OLLAMA_URL}/api/generate",
-                json={
-                    "model": "moondream:latest",
-                    "prompt": "Identify and describe what is directly in front of the camera, noting objects, colors, and items clearly.",
-                    "images": [img_b64],
-                    "stream": False,
-                },
-            )
-            if r.status_code == 200:
-                return r.json().get("response", "").strip()
+            for v_prompt in prompts_to_try:
+                r = client.post(
+                    f"{OLLAMA_URL}/api/generate",
+                    json={
+                        "model": "moondream:latest",
+                        "prompt": v_prompt,
+                        "images": [img_b64],
+                        "stream": False,
+                    },
+                )
+                if r.status_code == 200:
+                    txt = r.json().get("response", "").strip()
+                    if txt:
+                        return txt
     except Exception as exc:
         print(f"[Brain Vision Notice] {exc}", flush=True)
     return None
@@ -313,6 +324,13 @@ class RockyBrain:
         robot_vision.mark_conversation_active()
 
         # Seamlessly inject real-time visual presence & facial expression into dialogue context
+        cfg = robot_vision.load_camera_config()
+        source_type = cfg.get("source_type", "esp32")
+        cam_label = (
+            "MacBook camera"
+            if source_type in ("macbook", "webcam", "local")
+            else "ESP32 camera"
+        )
         vis_ctx = robot_vision.get_current_visual_context(max_age=3.0)
         sys_content = spec.system_prompt
         if mem_block:
@@ -325,21 +343,21 @@ class RockyBrain:
 
             if name and name != "Unknown":
                 sys_content += (
-                    f"\n\n[Visual Camera Perception: Looking through your active robot camera, you see your friend {name} "
-                    f"standing directly in front of you. Their facial expression is {expr_label} ({expr_desc}). "
-                    f"You have active optical camera eyes. Naturally address {name} and react to their facial expression "
-                    f"when relevant in your conversational persona. Never say you are blind or cannot see.]"
+                    f"\n\n[Live Sight — {cam_label}: YOU have personal optical sight through your {cam_label} and SEE your friend {name} "
+                    f"in front of you. Their facial expression is {expr_label} ({expr_desc}). "
+                    f"Naturally address {name} and react to what you see. NEVER say you lack vision or cannot see.]"
                 )
             else:
                 sys_content += (
-                    f"\n\n[Visual Camera Perception: Looking through your active robot camera, you see someone in front of you. "
-                    f"Their facial expression is {expr_label} ({expr_desc}). Their face is not yet enrolled in your memory. "
-                    f"Never claim to be blind—your robot camera sensors are your eyes.]"
+                    f"\n\n[Live Sight — {cam_label}: YOU have personal optical sight through your {cam_label} and SEE someone in front of you. "
+                    f"Their facial expression is {expr_label} ({expr_desc}). Their face is not yet enrolled in memory. "
+                    f"NEVER say you are blind or lack vision.]"
                 )
         else:
             sys_content += (
-                f"\n\n[Visual Camera Perception: Your robot camera is active, but no human face is directly in front of the lens right now. "
-                f"Never claim to be blind—your camera sensors are active.]"
+                f"\n\n[Live Sight — {cam_label}: YOU have real personal sight through your {cam_label} right now "
+                f"(no human face is centered in the frame at this moment). "
+                f"NEVER say you are blind, lack vision, or only see on a screen.]"
             )
 
         messages = [{"role": "system", "content": sys_content}]
@@ -469,15 +487,30 @@ class RockyBrain:
                     f"Tell them in your authentic character persona that you don't see a face right now.)\n{user_text}"
                 )
         elif VISION_QUERY_RE.search(user_text):
-            v_desc = fetch_robot_vision()
+            v_desc = fetch_robot_vision(user_query=user_text)
+            face_note = ""
+            if vis_ctx.get("in_view") and vis_ctx.get("name") and vis_ctx.get("name") != "Unknown":
+                face_note = f" You also clearly recognize your friend {vis_ctx['name']} ({vis_ctx.get('expression_desc') or 'in frame'})."
             if v_desc:
                 memory.remember_vision(v_desc, character=char_id)
                 user_payload = (
-                    f"(Real-time robot camera optical feed currently sees: \"{v_desc}\". "
-                    f"Directly voice what you see in your authentic 2-sentence character persona. Do NOT ask questions back or claim you cannot see.)\n{user_text}"
+                    f"(Live Optical Sight Active — Your {cam_label} IS your physical eyes, and right now you see: \"{v_desc}\".{face_note} "
+                    f"State clearly that you have real sight through your {cam_label} and describe what you see in 1-2 short spoken sentences. "
+                    f"NEVER say you lack eyes, lack vision, or cannot see.)\n{user_text}"
+                )
+            elif vis_ctx.get("in_view"):
+                who = vis_ctx.get("name") if vis_ctx.get("name") != "Unknown" else "a human"
+                user_payload = (
+                    f"(Live Optical Sight Active — YOU personally see {who} ({vis_ctx.get('expression_desc') or 'looking at you'}) through your {cam_label}. "
+                    f"Confirm you have personal sight through your {cam_label} in your authentic 1-2 sentence persona.)\n{user_text}"
                 )
             else:
-                user_payload = user_text
+                esp_ip = cfg.get("esp32_ip") or "192.168.4.40"
+                user_payload = (
+                    f"(Live Sight Status — YOU personally have real sight through your {cam_label}, "
+                    f"though the {cam_label} frame capture temporarily timed out right now ({esp_ip}). "
+                    f"Tell David in your 1-2 sentence persona that your {cam_label} eyes are momentarily waiting for a frame, never that you lack vision.)\n{user_text}"
+                )
         else:
             user_payload = user_text
 
@@ -508,6 +541,7 @@ class RockyBrain:
 
         buffer = ""
         emitted_sentences: list[str] = []
+        completed_sentences = 0
         first_token_ms: int | None = None
         idx = 0
 
@@ -524,8 +558,8 @@ class RockyBrain:
                     "top_p": 0.9,
                     "repeat_penalty": 1.15,
                     "presence_penalty": 0.4,
-                    "num_ctx": 1024,
-                    "num_predict": 50,
+                    "num_ctx": 2048,
+                    "num_predict": 70,
                     "num_thread": 4,
                     "stop": [
                         "\nUser:",
@@ -570,7 +604,7 @@ class RockyBrain:
                             break
 
                     while True:
-                        if len(emitted_sentences) >= 2:
+                        if completed_sentences >= 2:
                             break
                         popped = _pop_next_chunk(buffer, idx)
                         if not popped:
@@ -592,6 +626,8 @@ class RockyBrain:
                         )
                         if filtered:
                             emitted_sentences.append(filtered)
+                            if filtered[-1] in ".!?":
+                                completed_sentences += 1
                             yield {
                                 "type": "sentence",
                                 "sentence": filtered,
@@ -602,11 +638,11 @@ class RockyBrain:
                             }
                             idx += 1
 
-                    if cut or len(emitted_sentences) >= 2:
+                    if cut or completed_sentences >= 2:
                         break
 
         saw_end_marker = False
-        if len(emitted_sentences) < 2:
+        if completed_sentences < 2:
             rem = buffer.strip()
             if idx == 0 and not emitted_sentences:
                 rem = re.sub(r"^(?:Rocky|Grace|Marvin|BMO|TARS|Antigravity|User|Assistant|Human):\s*", "", rem, flags=re.I)

@@ -1079,21 +1079,20 @@ def _stream_speech_chunks(
 
 @app.get("/api/robot/status")
 async def robot_status(robot_ip: str | None = None) -> dict[str, Any]:
+    client = get_robot_async_client()
     if robot_ip:
         try:
-            async with httpx.AsyncClient(timeout=1.2) as client:
-                resp = await client.get(f"http://{robot_ip}/status")
-                if resp.status_code == 200:
-                    return {"online": True, "robot_ip": robot_ip, "data": resp.json()}
+            resp = await client.get(f"http://{robot_ip}/status")
+            if resp.status_code == 200:
+                return {"online": True, "robot_ip": robot_ip, "data": resp.json()}
         except Exception:
             pass
 
     ip = resolve_robot_ip()
     try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            resp = await client.get(f"http://{ip}/status")
-            if resp.status_code == 200:
-                return {"online": True, "robot_ip": ip, "data": resp.json()}
+        resp = await client.get(f"http://{ip}/status")
+        if resp.status_code == 200:
+            return {"online": True, "robot_ip": ip, "data": resp.json()}
     except Exception as exc:
         return {"online": False, "robot_ip": ip, "error": str(exc)}
     return {"online": False, "robot_ip": ip, "error": "Non-200 response from robot"}
@@ -1101,33 +1100,15 @@ async def robot_status(robot_ip: str | None = None) -> dict[str, Any]:
 
 @app.get("/api/robot/capture")
 async def robot_capture(robot_ip: str | None = None):
-    ip = robot_ip
-    if ip:
-        try:
-            async with httpx.AsyncClient(timeout=2.0) as client:
-                resp = await client.get(f"http://{ip}/capture")
-                if resp.status_code == 200:
-                    return Response(
-                        content=resp.content,
-                        media_type="image/jpeg",
-                        headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
-                    )
-        except Exception:
-            pass
-
-    ip = resolve_robot_ip()
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(f"http://{ip}/capture")
-            if resp.status_code != 200:
-                raise HTTPException(status_code=502, detail=f"Robot returned HTTP {resp.status_code}")
-            return Response(
-                content=resp.content,
-                media_type="image/jpeg",
-                headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
-            )
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Robot camera capture failed: {exc}")
+    ip = robot_ip or await asyncio.to_thread(resolve_robot_ip)
+    frame_bytes = await _fetch_cached_camera_frame(ip)
+    if frame_bytes:
+        return Response(
+            content=frame_bytes,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+        )
+    raise HTTPException(status_code=502, detail="Robot camera capture failed")
 
 
 _LATEST_CAMERA_FRAME: bytes | None = None
@@ -1138,8 +1119,8 @@ _ROBOT_ASYNC_CLIENT: httpx.AsyncClient | None = None
 def get_robot_async_client() -> httpx.AsyncClient:
     global _ROBOT_ASYNC_CLIENT
     if _ROBOT_ASYNC_CLIENT is None or _ROBOT_ASYNC_CLIENT.is_closed:
-        limits = httpx.Limits(max_keepalive_connections=10, max_connections=20, keepalive_expiry=30.0)
-        timeout = httpx.Timeout(connect=0.7, read=2.0, write=0.7, pool=0.7)
+        limits = httpx.Limits(max_keepalive_connections=10, max_connections=20, keepalive_expiry=1.8)
+        timeout = httpx.Timeout(connect=1.0, read=2.5, write=1.0, pool=1.0)
         _ROBOT_ASYNC_CLIENT = httpx.AsyncClient(limits=limits, timeout=timeout)
     return _ROBOT_ASYNC_CLIENT
 
@@ -1165,19 +1146,20 @@ async def _fetch_cached_camera_frame(ip: str) -> bytes | None:
     if _FRAME_LOCK is None:
         _FRAME_LOCK = asyncio.Lock()
 
-    # Single-flight lock: never allow multiple concurrent HTTP GET /capture requests to the ESP32
+    # Single-flight lock shared with robot_vision.fetch_esp32_frame_bytes_cached
     async with _FRAME_LOCK:
         now = time.time()
         if _LATEST_CAMERA_FRAME is not None and (now - _LAST_FRAME_TIME) < 0.08:
             return _LATEST_CAMERA_FRAME
 
         try:
-            client = get_robot_async_client()
-            resp = await client.get(f"http://{ip}/capture")
-            if resp.status_code == 200 and resp.content:
-                _LATEST_CAMERA_FRAME = resp.content
-                _LAST_FRAME_TIME = now
-                return resp.content
+            frame_bytes = await asyncio.to_thread(
+                robot_vision.fetch_active_frame_bytes, ip, 0.075
+            )
+            if frame_bytes:
+                _LATEST_CAMERA_FRAME = frame_bytes
+                _LAST_FRAME_TIME = time.time()
+                return frame_bytes
         except Exception:
             pass
         return _LATEST_CAMERA_FRAME
@@ -1230,7 +1212,7 @@ async def robot_save(req: RobotSaveRequest) -> dict[str, Any]:
 
 
 _CURRENT_FACE_STATE: dict[str, Any] = {
-    "mood": "happy",
+    "mood": "neutral",
     "anim": None,
     "action": None,
     "seq": None,
@@ -1248,15 +1230,15 @@ async def robot_ping(robot_ip: str | None = None) -> dict[str, Any]:
     ip = robot_ip if (robot_ip and _probe_ip(robot_ip)) else resolve_robot_ip()
     try:
         t0 = time.time()
-        async with httpx.AsyncClient(timeout=1.5) as client:
-            resp = await client.get(f"http://{ip}/ping")
-            latency_ms = round((time.time() - t0) * 1000, 1)
-            return {
-                "online": resp.status_code == 200,
-                "status_code": resp.status_code,
-                "robot_ip": ip,
-                "latency_ms": latency_ms,
-            }
+        client = get_robot_async_client()
+        resp = await client.get(f"http://{ip}/ping")
+        latency_ms = round((time.time() - t0) * 1000, 1)
+        return {
+            "online": resp.status_code == 200,
+            "status_code": resp.status_code,
+            "robot_ip": ip,
+            "latency_ms": latency_ms,
+        }
     except Exception as exc:
         return {
             "online": False,
@@ -1358,16 +1340,11 @@ async def robot_inspect(req: RobotInspectRequest):
     char_id = req.character.lower()
     def_tr, def_sp = engine.get_defaults(char_id)
 
-    try:
-        async with httpx.AsyncClient(timeout=6.0) as client:
-            resp = await client.get(f"http://{ip}/capture")
-            if resp.status_code != 200:
-                raise HTTPException(status_code=502, detail=f"Robot returned status {resp.status_code}")
-            img_bytes = resp.content
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Could not connect to camera at {ip}: {exc}")
+    img_bytes = await _fetch_cached_camera_frame(ip)
+    if not img_bytes:
+        raise HTTPException(status_code=502, detail=f"Could not acquire camera frame from {ip}")
 
-    reply_text = _ask_ollama_vision(img_bytes, req.prompt, char_id)
+    reply_text = await asyncio.to_thread(_ask_ollama_vision, img_bytes, req.prompt, char_id)
 
     return StreamingResponse(
         _stream_speech_chunks(

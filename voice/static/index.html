@@ -792,6 +792,15 @@
     .cam-btn.active-guard:hover {
       background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
     }
+    .cam-btn.active-track {
+      background: linear-gradient(135deg, #059669 0%, #047857 100%);
+      border-color: #34d399;
+      color: #fff;
+      box-shadow: 0 0 14px rgba(52, 211, 153, 0.4);
+    }
+    .cam-btn.active-track:hover {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    }
     .cam-ip-box {
       display: flex;
       align-items: center;
@@ -1197,6 +1206,9 @@
           </button>
           <button type="button" id="motionGuardBtn" class="cam-btn" title="Toggle Guard Mode (Motion & Face Sentry)">
             🛡️ Guard: Off
+          </button>
+          <button type="button" id="trackFaceBtn" class="cam-btn" title="Toggle real-time head servo tracking, gaze & expression mirroring">
+            🎯 Track Face: Off
           </button>
           <button type="button" id="enrollFaceBtn" class="cam-btn" title="Enroll your face into Rocky/BMO biometric memory from live camera">
             👤 Enroll Face
@@ -2175,10 +2187,13 @@
         case "sleepy":
         case "bored":
         case "tired":
-        case "sad":
           return { mood: "tired" };
-        case "angry":
+        case "sad":
+          return { mood: "sad" };
+        case "surprised":
         case "alarmed":
+          return { mood: "surprised" };
+        case "angry":
         case "pained":
           return { mood: "angry" };
         case "curious":
@@ -3524,6 +3539,7 @@
       const camTelemetryBottom = document.getElementById("camTelemetryBottom");
       const camCharName = document.getElementById("camCharName");
       const motionGuardBtn = document.getElementById("motionGuardBtn");
+      const trackFaceBtn = document.getElementById("trackFaceBtn");
       const enrollFaceBtn = document.getElementById("enrollFaceBtn");
       const facesListBtn = document.getElementById("facesListBtn");
       const facesCount = document.getElementById("facesCount");
@@ -3765,7 +3781,7 @@
           }
 
           if (camMotionBadge) {
-            const motionPct = ((status.motion_ratio || 0) * 100).toFixed(1);
+            const motionPct = (((status.motion_score ?? status.motion_ratio) || 0) * 100).toFixed(1);
             const isMotion = !!status.motion_detected;
             const motionColor = isMotion ? "#ef4444" : "#a3e635";
             camMotionBadge.innerHTML = `🛡️ ${guardOn ? 'GUARD' : 'STANDBY'} • Motion: <span style="color:${motionColor};font-weight:700">${motionPct}%</span>`;
@@ -3787,12 +3803,51 @@
                 "disgust": "😒 Skeptical"
               }[expr] || `🙂 ${expr}`;
               camFaceBadge.innerHTML = `👤 <span style="color:#38bdf8;font-weight:700">${topFace.name}</span> • ${exprEmoji}`;
-            } else {
+            } else if (!trackFaceBtn?.classList.contains("active-track")) {
               camFaceBadge.innerHTML = `👤 Face: None`;
             }
           }
         } catch (_) {}
       }
+
+      async function refreshTrackingStatus() {
+        try {
+          const res = await fetch("/api/robot/tracking");
+          if (!res.ok) return;
+          const st = await res.json();
+          const trackOn = !!st.enabled;
+          if (trackFaceBtn) {
+            trackFaceBtn.textContent = trackOn ? "🎯 Track Face: ON" : "🎯 Track Face: Off";
+            trackFaceBtn.classList.toggle("active-track", trackOn);
+          }
+          if (trackOn && camFaceBadge) {
+            if (st.last_face) {
+              const expr = st.last_face.expression || "neutral";
+              camFaceBadge.innerHTML = `🎯 <span style="color:#34d399;font-weight:700">Tracking</span> • ${expr}`;
+            } else {
+              camFaceBadge.innerHTML = `🎯 <span style="color:#34d399;font-weight:700">Tracking</span> • Scanning…`;
+            }
+          }
+        } catch (_) {}
+      }
+
+      trackFaceBtn?.addEventListener("click", async () => {
+        const currentlyOn = trackFaceBtn.classList.contains("active-track");
+        const nextState = !currentlyOn;
+        try {
+          const res = await fetch("/api/robot/tracking", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enabled: nextState, robot_ip: robotIp }),
+          });
+          if (res.ok) {
+            await refreshTrackingStatus();
+            if (!nextState) await refreshVisionStatus();
+          }
+        } catch (err) {
+          alert("Failed to toggle face tracking: " + err.message);
+        }
+      });
 
       motionGuardBtn?.addEventListener("click", async () => {
         const currentlyOn = motionGuardBtn.classList.contains("active-guard");
@@ -3868,15 +3923,18 @@
       camRefreshBtn?.addEventListener("click", () => {
         refreshTelemetry();
         refreshVisionStatus();
+        refreshTrackingStatus();
         updateStreamSource();
       });
 
       refreshTelemetry();
       refreshVisionStatus();
+      refreshTrackingStatus();
       pollTimer = setInterval(() => {
         if (isVisible && !document.hidden) {
           refreshTelemetry();
           refreshVisionStatus();
+          refreshTrackingStatus();
         }
       }, 3000);
 

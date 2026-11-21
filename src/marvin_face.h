@@ -928,6 +928,8 @@ public:
     bool confused = false;
     unsigned long confusedStartTime = 0;
     bool curious = false;
+    bool sad = false;
+    bool surprised = false;
     bool sweat = false;
 
     // Autonomous Saccades
@@ -1112,6 +1114,18 @@ public:
             bufDrawThickLine(eyeRx - 14, eyeY - 8, eyeRx + 18, eyeY - 17, 4, COL_BMO_INK);
             bufFillEllipse(eyeLx, eyeY, 9, 12, COL_BMO_INK);
             bufFillEllipse(eyeRx, eyeY, 9, 12, COL_BMO_INK);
+        } else if (surprised) {
+            // Startled wide eyes + raised brows
+            bufDrawThickLine(eyeLx - 14, eyeY - 22, eyeLx + 12, eyeY - 25, 4, COL_BMO_INK);
+            bufDrawThickLine(eyeRx - 12, eyeY - 25, eyeRx + 14, eyeY - 22, 4, COL_BMO_INK);
+            bufFillEllipse(eyeLx, eyeY, 13, 18, COL_BMO_INK);
+            bufFillEllipse(eyeRx, eyeY, 13, 18, COL_BMO_INK);
+        } else if (sad) {
+            // Downcast sad eyes with tilted brows (stays awake, no Zzz)
+            bufDrawThickLine(eyeLx - 16, eyeY - 11, eyeLx + 12, eyeY - 18, 4, COL_BMO_INK);
+            bufDrawThickLine(eyeRx - 12, eyeY - 18, eyeRx + 16, eyeY - 11, 4, COL_BMO_INK);
+            bufFillEllipse(eyeLx, eyeY + 2, 10, 12, COL_BMO_INK);
+            bufFillEllipse(eyeRx, eyeY + 2, 10, 12, COL_BMO_INK);
         } else if (curious) {
             // Inquisitive look: left eye normal, right eye raised + arched eyebrow
             bufFillEllipse(eyeLx, eyeY, 10, 14, COL_BMO_INK);
@@ -1128,8 +1142,13 @@ public:
         // 6. Dynamic Lip-Synced Mouth
         int mouthX = cx + (int)(curGazeX * 14.0f);
         int mouthY = eyeY + 26 + (int)(mouthOpen * 3.0f);
-        float smileVal = (mood == MOOD_HAPPY || laugh) ? 1.0f : (mood == MOOD_TIRED ? 0.15f : (mood == MOOD_ANGRY ? -0.55f : (curious ? 0.25f : 0.70f)));
-        bufDrawBmoMouthOpen(mouthX, mouthY, mouthOpen, smileVal, 1.35f);
+        if (surprised && !isTalking && mouthOpen < 0.08f) {
+            bufFillEllipse(mouthX, mouthY + 2, 7, 9, COL_BMO_INK);
+            bufFillEllipse(mouthX, mouthY + 2, 4, 6, COL_BMO_MOUTH_BG);
+        } else {
+            float smileVal = (mood == MOOD_HAPPY || laugh) ? 1.0f : (sad ? -0.75f : (mood == MOOD_TIRED ? 0.10f : (mood == MOOD_ANGRY ? -0.55f : (curious ? 0.20f : 0.20f))));
+            bufDrawBmoMouthOpen(mouthX, mouthY, mouthOpen, smileVal, 1.35f);
+        }
 
         // 7. Extra Props: Sweat Drop
         if (sweat || confused) {
@@ -1266,12 +1285,13 @@ static void showMessage(const String& msg) {
     xSemaphoreGive(faceMutex);
 }
 
-static void setRoboMood(const String& moodStr) {
-    bool taken = (faceMutex && xSemaphoreTake(faceMutex, pdMS_TO_TICKS(50)) == pdTRUE);
-    if (!taken) return;
+static void setRoboMoodUnlocked(const String& moodStr) {
     msgMode = false;
     String m = moodStr;
     m.toLowerCase();
+    bmoFace.curious = false;
+    bmoFace.sad = false;
+    bmoFace.surprised = false;
     if (m == "bmo") {
         currentStyle = STYLE_BMO;
         needsFullWipe = true;
@@ -1281,31 +1301,40 @@ static void setRoboMood(const String& moodStr) {
     } else if (m == "happy" || m == "smile" || m == "joy" || m == "excited") {
         roboEyes.setMood(MOOD_HAPPY);
         bmoFace.mood = MOOD_HAPPY;
-        bmoFace.curious = false;
-    } else if (m == "tired" || m == "sleepy" || m == "bored" || m == "sad") {
+    } else if (m == "sad") {
+        roboEyes.setMood(MOOD_TIRED);
+        bmoFace.mood = MOOD_DEFAULT;
+        bmoFace.sad = true;
+    } else if (m == "tired" || m == "sleepy" || m == "bored") {
         roboEyes.setMood(MOOD_TIRED);
         bmoFace.mood = MOOD_TIRED;
-        bmoFace.curious = false;
     } else if (m == "angry" || m == "mad" || m == "pained") {
         roboEyes.setMood(MOOD_ANGRY);
         bmoFace.mood = MOOD_ANGRY;
-        bmoFace.curious = false;
     } else if (m == "curious" || m == "thinking" || m == "listening" || m == "focused") {
         roboEyes.setMood(MOOD_DEFAULT);
         bmoFace.mood = MOOD_DEFAULT;
         bmoFace.curious = true;
     } else if (m == "alarmed" || m == "shocked" || m == "surprised") {
-        roboEyes.setMood(MOOD_ANGRY);
-        bmoFace.mood = MOOD_ANGRY;
+        roboEyes.setMood(MOOD_DEFAULT);
+        roboEyes.anim_confused();
+        bmoFace.mood = MOOD_DEFAULT;
+        bmoFace.surprised = true;
         bmoFace.confused = true;
         bmoFace.confusedStartTime = millis();
-        bmoFace.curious = false;
     } else {
         roboEyes.setMood(MOOD_DEFAULT);
         bmoFace.mood = MOOD_DEFAULT;
-        bmoFace.curious = false;
+        bmoFace.laugh = false;
+        bmoFace.confused = false;
     }
     needsRedraw = true;
+}
+
+static void setRoboMood(const String& moodStr) {
+    bool taken = (faceMutex && xSemaphoreTake(faceMutex, pdMS_TO_TICKS(50)) == pdTRUE);
+    if (!taken) return;
+    setRoboMoodUnlocked(moodStr);
     xSemaphoreGive(faceMutex);
 }
 
@@ -1359,12 +1388,12 @@ static void setRoboColor(uint16_t col) {
 static inline void setMood(const char* mood) { setRoboMood(String(mood)); }
 static inline void triggerSequence(const String& seq) { triggerRoboAnim(seq); }
 static inline void setState(const String& mood, float gx, float gy, bool speaking) {
+    bool taken = (faceMutex && xSemaphoreTake(faceMutex, pdMS_TO_TICKS(50)) == pdTRUE);
+    if (!taken) return;
     gazeX = gx;
     gazeY = gy;
     isSpeaking = speaking;
-    if (!mood.isEmpty()) setRoboMood(mood);
-    bool taken = (faceMutex && xSemaphoreTake(faceMutex, pdMS_TO_TICKS(50)) == pdTRUE);
-    if (!taken) return;
+    if (!mood.isEmpty()) setRoboMoodUnlocked(mood);
     msgMode = false;
     roboEyes.setGaze(gx, gy);
     bmoFace.setGaze(gx, gy);
