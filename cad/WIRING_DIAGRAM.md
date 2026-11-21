@@ -25,8 +25,8 @@ flowchart LR
   S3_3V -->|"3.3V"| LCD["Waveshare 2.0in ST7789 LCD"]
   S3_3V -->|"3.3V"| MIC["INMP441 I2S Mic"]
 
-  S3["Freenove ESP32-S3-WROOM CAM"] <-->|"I2C (GPIO 1/2)"| PCA["PCA9685 (CH0..CH9)"]
-  S3 -->|"SPI (GPIO 14,21,41,42,47)"| LCD
+  S3["Freenove ESP32-S3-WROOM CAM"] <-->|"I2C (GPIO 1/14)"| PCA["PCA9685 (CH0..CH9)"]
+  S3 -->|"SPI (GPIO 2,21,41,42,45,47)"| LCD
   MIC -->|"I2S In (GPIO 3,38,39)"| S3
   S3 -->|"I2S Out (GPIO 38,39,40)"| AMP["MAX98357A Amp"]
   AMP -->|"SPK+ / SPK-"| SPK["28mm 8-Ohm Speaker"]
@@ -111,7 +111,7 @@ Only **8 thin wires** pass through the `neck_yoke` wire arch into the torso/back
 2. `GND` (Common Ground)
 3. `3V3` (ESP32-S3 `3V3` → PCA9685 `VCC`)
 4. `SDA` (`GPIO 1` → PCA9685 `SDA`)
-5. `SCL` (`GPIO 2` → PCA9685 `SCL`)
+5. `SCL` (`GPIO 14` → PCA9685 `SCL`)
 6. `BCLK` (`GPIO 38` → MAX98357A `BCLK`)
 7. `LRC` (`GPIO 39` → MAX98357A `LRC`)
 8. `DIN` (`GPIO 40` → MAX98357A `DIN`)
