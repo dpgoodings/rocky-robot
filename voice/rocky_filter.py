@@ -1,8 +1,8 @@
 """
-Generic Multi-Character Speech Filters, Dynamic Wake-Word Parser & Emotion Detector.
+Rocky Speech Filter, Wake-Word Parser & Emotion Detector.
 
-Reads wake words, `speech_style` ("clean" | "eridian" | "british_deadpan"), custom
-`phrase_rewrites`, and default `idle_mood` dynamically from `character_registry.REGISTRY`.
+Reads Rocky's wake words, `speech_style` ("eridian" | "clean"), custom `phrase_rewrites`,
+and default `idle_mood` from `character_registry.REGISTRY`.
 """
 
 from __future__ import annotations
@@ -70,6 +70,11 @@ EMPHASIS_WORDS = {
 }
 
 ERIDIAN_REWRITES = [
+    (re.compile(r"\besp\s*-?\s*32\s+camera\s+ears\b", re.IGNORECASE), "Rocky ears"),
+    (re.compile(r"\besp\s*-?\s*32\s+camera\s+(?:eyes|sensors?|device)\b", re.IGNORECASE), "Rocky eyes"),
+    (re.compile(r"\besp\s*-?\s*32\s+(?:camera|cam|eyes?)\b", re.IGNORECASE), "Rocky eyes"),
+    (re.compile(r"\bcamera\s+(?:sensors?|device|ears)\b", re.IGNORECASE), "Rocky eyes"),
+    (re.compile(r"\brocky\s+and\s+(?:i|me)\b", re.IGNORECASE), "Rocky"),
     (re.compile(r"\bi don'?t understand\b", re.IGNORECASE), "Rocky no understand"),
     (re.compile(r"\bi do not understand\b", re.IGNORECASE), "Rocky no understand"),
     (re.compile(r"\bi don'?t know\b", re.IGNORECASE), "Rocky not know"),
@@ -116,7 +121,20 @@ RE_AI_DISCLAIMER = re.compile(
     r"\b(?:as an ai(?: language model)?|i am (?:an? )?(?:ai|language model|artificial intelligence)|i\s+(?:just\s+)?(?:don'?t|do\s+not|not)\s+(?:happen\s+to\s+)?have\s+(?:physical\s+)?(?:eyes|vision|sight)[^.!?]*[.!?]?)\s*",
     re.IGNORECASE,
 )
-RE_MARVIN_SIGH = re.compile(r"^(?:sigh|ugh|oh dear)[.,!]\s*", re.IGNORECASE)
+RE_RLHF_CAPABILITY_SENTENCE = re.compile(
+    r"(?:"
+    r"programmed\s+text\s+instructions"
+    r"|physically\s+express\s+emotions?"
+    r"|make\s+faces?\s+like\s+humans?(?:\s+do)?"
+    r"|(?:don'?t|do\s+not|not|cannot|can'?t|unable\s+to)\s+(?:have\s+(?:the\s+)?)?(?:ability|capability|capacity)\s+to\s+(?:physically\s+)?(?:express|make|show|display)\s+(?:emotions?|faces?|facial\s+expressions?)"
+    r"|(?:cannot|can'?t|don'?t|do\s+not|unable\s+to)\s+(?:physically\s+)?(?:make\s+faces?|express\s+emotions?|show\s+(?:facial\s+)?expressions?)"
+    r"|(?:responses?\s+(?:are|is)|i\s+am)\s+based\s+on\s+programmed\s+(?:text|instructions|algorithms)"
+    r"|designed\s+to\s+provide\s+helpful\s+and\s+engaging\s+conversations"
+    r"|users?\s+who\s+interact\s+with\s+my\s+system"
+    r"|as\s+an?\s+(?:ai|text-?based)\s+(?:language\s+model|assistant)"
+    r")",
+    re.IGNORECASE,
+)
 RE_WORD_PUNCT = re.compile(r"^([A-Za-z']+)([^A-Za-z']*)$")
 
 LIGHT_ARTICLES = {"a", "an", "the"}
@@ -135,11 +153,11 @@ def is_hallucination(text: str) -> bool:
 def _is_sleep_phrase(clean_rem: str) -> bool:
     if clean_rem in BASE_SLEEP_COMMANDS:
         return True
-    for spec in REGISTRY.all_specs():
-        for w in spec.wake_words:
-            wl = w.lower()
-            if clean_rem in (f"bye {wl}", f"goodbye {wl}", f"goodnight {wl}"):
-                return True
+    spec = REGISTRY.get("rocky")
+    for w in spec.wake_words:
+        wl = w.lower()
+        if clean_rem in (f"bye {wl}", f"goodbye {wl}", f"goodnight {wl}"):
+            return True
     return False
 
 
@@ -149,16 +167,14 @@ def parse_wake_utterance(
     require_wake_word: bool = True,
     in_followup_window: bool = False,
 ) -> dict[str, Any]:
-    """
-    Dynamically match wake words across ALL registered characters in `characters/*.json`.
-    Saying 'Hey <Name>' automatically switches to that character!
-    """
-    fallback_char = REGISTRY.get(active_character).id
+    """Match Rocky's wake words cleanly and parse wake-only, sleep, reset, and query utterances."""
+    spec = REGISTRY.get(active_character)
+    char_id = spec.id
     raw = transcript.strip()
     if is_hallucination(raw):
         return {
             "triggered": False,
-            "character": fallback_char,
+            "character": char_id,
             "wake_only": False,
             "sleep": False,
             "reset": False,
@@ -166,35 +182,25 @@ def parse_wake_utterance(
         }
 
     matched_wake = False
-    detected_char = fallback_char
     remainder = raw
 
-    for spec in REGISTRY.all_specs():
-        for pat in spec.start_wake_patterns:
-            m = pat.match(raw)
-            if m:
-                matched_wake = True
-                detected_char = spec.id
-                remainder = raw[m.end() :].strip()
-                break
-        if matched_wake:
+    for pat in spec.start_wake_patterns:
+        m = pat.match(raw)
+        if m:
+            matched_wake = True
+            remainder = raw[m.end() :].strip()
             break
 
-    if not matched_wake:
-        for spec in REGISTRY.all_specs():
-            if spec.mid_wake_pattern is None:
-                continue
-            m = spec.mid_wake_pattern.search(raw)
-            if m and m.start() <= 16:
-                matched_wake = True
-                detected_char = spec.id
-                remainder = raw[m.end() :].strip()
-                break
+    if not matched_wake and spec.mid_wake_pattern is not None:
+        m = spec.mid_wake_pattern.search(raw)
+        if m and m.start() <= 16:
+            matched_wake = True
+            remainder = raw[m.end() :].strip()
 
     if require_wake_word and not in_followup_window and not matched_wake:
         return {
             "triggered": False,
-            "character": fallback_char,
+            "character": char_id,
             "wake_only": False,
             "sleep": False,
             "reset": False,
@@ -205,12 +211,20 @@ def parse_wake_utterance(
 
     # In follow-up window without explicit wake word, ignore low-confidence noise fragments
     if require_wake_word and in_followup_window and not matched_wake:
-        tokens = [t for t in re.findall(r"[a-z0-9]+", clean_rem) if t not in ("the", "a", "an", "is", "in", "to", "of", "and")]
-        valid_singletons = {"yes", "no", "yeah", "nope", "sure", "ok", "okay", "stop", "reset", "help", "more", "why", "who", "what", "where", "when", "how"}
+        tokens = [
+            t
+            for t in re.findall(r"[a-z0-9]+", clean_rem)
+            if t not in ("the", "a", "an", "is", "in", "to", "of", "and")
+        ]
+        valid_singletons = {
+            "yes", "no", "yeah", "nope", "sure", "ok", "okay", "stop", "reset",
+            "help", "more", "why", "who", "what", "where", "when", "how", "dance",
+            "boogie", "smile", "frown",
+        }
         if len(tokens) == 0 or (len(tokens) == 1 and tokens[0] not in valid_singletons):
             return {
                 "triggered": False,
-                "character": fallback_char,
+                "character": char_id,
                 "wake_only": False,
                 "sleep": False,
                 "reset": False,
@@ -220,7 +234,7 @@ def parse_wake_utterance(
     if matched_wake and not clean_rem:
         return {
             "triggered": True,
-            "character": detected_char,
+            "character": char_id,
             "wake_only": True,
             "sleep": False,
             "reset": False,
@@ -230,7 +244,7 @@ def parse_wake_utterance(
     if _is_sleep_phrase(clean_rem):
         return {
             "triggered": True,
-            "character": detected_char,
+            "character": char_id,
             "wake_only": False,
             "sleep": True,
             "reset": False,
@@ -240,7 +254,7 @@ def parse_wake_utterance(
     if clean_rem in RESET_COMMANDS:
         return {
             "triggered": True,
-            "character": detected_char,
+            "character": char_id,
             "wake_only": False,
             "sleep": False,
             "reset": True,
@@ -250,7 +264,7 @@ def parse_wake_utterance(
     query = remainder if matched_wake else raw
     return {
         "triggered": True,
-        "character": detected_char,
+        "character": char_id,
         "wake_only": False,
         "sleep": False,
         "reset": False,
@@ -259,7 +273,7 @@ def parse_wake_utterance(
 
 
 def clean_for_speech(text: str) -> str:
-    """Remove markdown, stage directions (*sigh*, [groans]), lists, and expand symbols."""
+    """Remove markdown, stage directions, RLHF disclaimers, and expand spoken symbols."""
     if not text:
         return ""
 
@@ -274,6 +288,14 @@ def clean_for_speech(text: str) -> str:
     s = RE_MD_SYMBOLS.sub("", s)
     s = RE_LIST_BULLETS.sub("", s)
     s = RE_NEWLINES.sub(" ", s)
+    s = (
+        s.replace("\u2019", "'")
+        .replace("\u2018", "'")
+        .replace("\u201c", '"')
+        .replace("\u201d", '"')
+        .replace("\u2014", "-")
+        .replace("\u2013", "-")
+    )
     s = RE_NON_ASCII_SPECIAL.sub(" ", s)
 
     s = RE_FAHRENHEIT.sub(r"\1 degrees Fahrenheit", s)
@@ -282,6 +304,13 @@ def clean_for_speech(text: str) -> str:
     s = RE_DEGREES.sub(r"\1 degrees", s)
     s = RE_PERCENT.sub(r"\1 percent", s)
     s = s.replace("&", " and ")
+    # Strip full sentences containing RLHF robotic-capability disclaimers
+    kept_sents = [
+        part.strip()
+        for part in re.split(r"(?<=[.!?])\s+", s)
+        if part.strip() and not RE_RLHF_CAPABILITY_SENTENCE.search(part)
+    ]
+    s = " ".join(kept_sents)
     s = RE_AI_DISCLAIMER.sub("", s)
     s = re.sub(r"\s*[;:]\s*$", ".", s)
 
@@ -295,14 +324,11 @@ def apply_clean_filter(text: str) -> str:
     return RE_AI_DISCLAIMER.sub("", s).strip()
 
 
-def apply_marvin_filter(text: str) -> str:
-    s = apply_clean_filter(text)
-    if not s:
-        return s
-    return RE_MARVIN_SIGH.sub("Oh dear. ", s).strip()
-
-
-def apply_rocky_filter(text: str, intensity: str = "balanced") -> str:
+def apply_rocky_filter(
+    text: str,
+    intensity: str = "balanced",
+    capitalize_start: bool = True,
+) -> str:
     s = clean_for_speech(text)
     if not s or intensity == "off":
         return s
@@ -310,7 +336,7 @@ def apply_rocky_filter(text: str, intensity: str = "balanced") -> str:
     parts = re.split(r"(?<=[.!?])\s+", s)
     out_sentences: list[str] = []
 
-    for part in parts:
+    for part_idx, part in enumerate(parts):
         sent = part.strip()
         if not sent:
             continue
@@ -356,7 +382,8 @@ def apply_rocky_filter(text: str, intensity: str = "balanced") -> str:
             else:
                 sent = f"{core}?"
 
-        sent = sent[0].upper() + sent[1:]
+        if part_idx > 0 or capitalize_start:
+            sent = sent[0].upper() + sent[1:]
         out_sentences.append(sent)
 
     final = " ".join(out_sentences)
@@ -366,13 +393,15 @@ def apply_rocky_filter(text: str, intensity: str = "balanced") -> str:
     return final.strip()
 
 
-def apply_character_filter(text: str, character: str = "rocky", intensity: str = "balanced") -> str:
+def apply_character_filter(
+    text: str,
+    character: str = "rocky",
+    intensity: str = "balanced",
+    capitalize_start: bool = True,
+) -> str:
     spec = REGISTRY.get(character)
-    style = spec.speech_style
-    if style == "eridian":
-        out = apply_rocky_filter(text, intensity=intensity)
-    elif style == "british_deadpan":
-        out = apply_marvin_filter(text)
+    if spec.speech_style == "eridian":
+        out = apply_rocky_filter(text, intensity=intensity, capitalize_start=capitalize_start)
     else:
         out = apply_clean_filter(text)
 
@@ -382,31 +411,31 @@ def apply_character_filter(text: str, character: str = "rocky", intensity: str =
 
 
 _EMOTION_TAG_RE = re.compile(
-    r"^\s*\[(excited|happy|curious|focused|alarmed|sad|bored|pained|sleepy|neutral)\]\s*",
+    r"^\s*\[(neutral|happy|excited|curious|thinking|surprised|worried|alarmed|sad|angry|skeptical|love|confused|sleepy|asleep|focused|bored|pained)\]\s*",
     re.IGNORECASE,
 )
 _EXCITED_RE = re.compile(
-    r"\b(?:amaze|good\s+good|happy\s+happy|yay|woohoo|hooray|oh\s+boy|video\s+games|bmo\s+chop|mathematical|celebrate|fist\s+my\s+bump|fresh\s+start|awesome|wonderful|brilliant)\b",
+    r"\b(?:amaze|good\s+good|happy\s+happy|yay|woohoo|hooray|celebrate|fist\s+my\s+bump|fresh\s+start|awesome|wonderful|brilliant|dance\s+moves)\b",
     re.IGNORECASE,
 )
 _ALARMED_RE = re.compile(
-    r"\b(?:danger|bad\s+bad|scary|explode|explosion|melt|deadly|crush|careful|warning|radiation|poison|boiling|venus)\b",
-    re.IGNORECASE,
-)
-_PAINED_RE = re.compile(
-    r"\b(?:diode|diodes|ache|aching|pain|miserable|agony|headache|rusting)\b",
+    r"\b(?:danger|bad\s+bad|scary|explode|explosion|melt|deadly|crush|careful|warning|radiation|poison|boiling|venus|worried)\b",
     re.IGNORECASE,
 )
 _SAD_RE = re.compile(
-    r"\b(?:apology|sorry|sad|alone|lonely|miss|mourn|quiet\s+now|brooding|nothing\s+good|end\s+of\s+the\s+universe|forget\s+how\s+tedious|sigh|oh\s+dear)\b",
+    r"\b(?:apology|sorry|sad|alone|lonely|miss|mourn|quiet\s+now|resting\s+robot\s+circuits)\b",
     re.IGNORECASE,
 )
-_BORED_RE = re.compile(
-    r"\b(?:mundane|thrilling|tedious|bored|boring|dreary|hardly\s+seems\s+worth|doubt\s+i\s+shall|suspense|unimpressed)\b",
+_SLEEPY_RE = re.compile(
+    r"\b(?:sleepy|nap|drowsy|yawn|yawning|bedtime)\b",
+    re.IGNORECASE,
+)
+_CONFUSED_RE = re.compile(
+    r"\b(?:confuse|confused|puzzled|no\s+understand)\b",
     re.IGNORECASE,
 )
 _CURIOUS_RE = re.compile(
-    r"(?:\bquestion\?|\?\s*$|\b(?:wonder|curious|what\s+need|what\s+mean|interesting)\b)",
+    r"(?:\bquestion\?|\?\s*$|\b(?:wonder|curious|what\s+need|what\s+mean|interesting|explore)\b)",
     re.IGNORECASE,
 )
 _FOCUSED_RE = re.compile(
@@ -414,13 +443,13 @@ _FOCUSED_RE = re.compile(
     re.IGNORECASE,
 )
 _HAPPY_RE = re.compile(
-    r"\b(?:good|easy|friend|yes\s+grace|glad|nice|welcome|here|love|loves|cute|fun|play|finn|jake|football|beep\s+boop)\b",
+    r"\b(?:good|easy|friend|david|glad|nice|welcome|here|love|loves|cute|fun|play|happy)\b",
     re.IGNORECASE,
 )
 
 
 def detect_utterance_emotion(text: str, character: str = "rocky") -> str:
-    """Zero-latency (<0.01ms) lexical + punctuation emotion detector for BMO face sync."""
+    """Zero-latency (<0.01ms) lexical + punctuation emotion detector for Rocky face sync."""
     spec = REGISTRY.get(character)
     default_mood = str(spec.ui.get("idle_mood", "neutral"))
     if not text:
@@ -431,22 +460,22 @@ def detect_utterance_emotion(text: str, character: str = "rocky") -> str:
         return m.group(1).lower()
 
     s = text.strip()
-    if _PAINED_RE.search(s):
-        return "pained"
     if _ALARMED_RE.search(s):
-        return "alarmed"
+        return "worried"
     if _EXCITED_RE.search(s):
         return "excited"
+    if _SLEEPY_RE.search(s):
+        return "sleepy"
     if _SAD_RE.search(s):
         return "sad"
-    if _BORED_RE.search(s):
-        return "bored"
+    if _CONFUSED_RE.search(s):
+        return "confused"
     if _CURIOUS_RE.search(s):
         return "curious"
     if spec.speech_style == "eridian" and s.endswith("!") and _HAPPY_RE.search(s):
         return "excited"
     if _FOCUSED_RE.search(s):
-        return "focused"
+        return "thinking"
     if _HAPPY_RE.search(s) or (default_mood == "neutral" and s.endswith("!")):
         return "happy"
 

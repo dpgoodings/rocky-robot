@@ -9,6 +9,7 @@ Persists registered facial biometrics to SQLite `memory.db`.
 from __future__ import annotations
 
 import base64
+from collections import deque
 import json
 import os
 import sqlite3
@@ -390,7 +391,8 @@ def get_current_visual_context(max_age: float = 2.0) -> dict[str, Any]:
         status = GUARD_ENGINE.last_status
         recent_faces = status.get("recognized_faces", [])
         if recent_faces and (now - getattr(GUARD_ENGINE, "last_scan_time", 0)) < 4.0:
-            top = recent_faces[0]
+            known_faces = [f for f in recent_faces if f.get("name") and f.get("name") != "Unknown"]
+            top = known_faces[0] if known_faces else recent_faces[0]
             name = top.get("name")
             res = {
                 "in_view": True,
@@ -398,6 +400,8 @@ def get_current_visual_context(max_age: float = 2.0) -> dict[str, Any]:
                 "expression": top.get("expression", "neutral"),
                 "expression_desc": top.get("expression_desc", "looking attentive"),
                 "confidence": top.get("confidence", 0.0),
+                "face_count": len(recent_faces),
+                "known_names": [f["name"] for f in known_faces],
             }
             _CACHED_VIS_CONTEXT = res
             _VIS_CONTEXT_TIMESTAMP = now
@@ -411,7 +415,8 @@ def get_current_visual_context(max_age: float = 2.0) -> dict[str, Any]:
         if frame is not None:
             faces = recognize_faces(frame)
             if faces:
-                top = faces[0]
+                known_faces = [f for f in faces if f.get("name") and f.get("name") != "Unknown"]
+                top = known_faces[0] if known_faces else faces[0]
                 name = top.get("name")
                 res = {
                     "in_view": True,
@@ -419,6 +424,8 @@ def get_current_visual_context(max_age: float = 2.0) -> dict[str, Any]:
                     "expression": top.get("expression", "neutral"),
                     "expression_desc": top.get("expression_desc", "looking attentive"),
                     "confidence": top.get("confidence", 0.0),
+                    "face_count": len(faces),
+                    "known_names": [f["name"] for f in known_faces],
                 }
                 _CACHED_VIS_CONTEXT = res
                 _VIS_CONTEXT_TIMESTAMP = now
@@ -432,6 +439,8 @@ def get_current_visual_context(max_age: float = 2.0) -> dict[str, Any]:
         "expression": None,
         "expression_desc": None,
         "confidence": 0.0,
+        "face_count": 0,
+        "known_names": [],
     }
     _CACHED_VIS_CONTEXT = res
     _VIS_CONTEXT_TIMESTAMP = now
@@ -635,6 +644,277 @@ def fetch_live_camera_frame() -> np.ndarray | None:
 
 
 # -----------------------------------------------------------------------------
+# Wave-to-Wake / Hand Wave Detection (MediaPipe if available, else OpenCV)
+# -----------------------------------------------------------------------------
+
+class HandWaveDetector:
+    """Detects a side-to-side hand wave in the upper frame.
+
+    Uses MediaPipe GestureRecognizer / Hands when `mediapipe` is installed in the
+    venv, and seamlessly falls back to a zero-dependency OpenCV upper-frame
+    oscillating-centroid detector so wave-to-wake works out of the box.
+    """
+
+    def __init__(
+        self,
+        window_s: float = 1.6,
+        cooldown_s: float = 3.0,
+        min_excursion: float = 0.08,
+        min_reversals: int = 2,
+    ) -> None:
+        self._lock = threading.Lock()
+        self.window_s = float(window_s)
+        self.cooldown_s = float(cooldown_s)
+        self.min_excursion = float(min_excursion)
+        self.min_reversals = int(min_reversals)
+
+        self._prev_roi: np.ndarray | None = None
+        self._centroid_hist: deque[tuple[float, float]] = deque(maxlen=28)
+        self._flow_hist: deque[tuple[float, float]] = deque(maxlen=28)
+        self.last_wave_at: float = 0.0
+        self.wave_count: int = 0
+
+        self._mp_mode: str = "opencv_centroid"
+        self._mp_gesture: Any = None
+        self._mp_hands: Any = None
+        self._init_mediapipe_if_available()
+
+    @property
+    def method(self) -> str:
+        return self._mp_mode
+
+    def _init_mediapipe_if_available(self) -> None:
+        try:
+            import mediapipe as mp  # type: ignore
+        except Exception:
+            self._mp_mode = "opencv_centroid"
+            return
+
+        # Prefer MediaPipe Tasks GestureRecognizer if model file is already cached locally
+        task_candidates = [
+            os.path.join(MODELS_DIR, "gesture_recognizer.task"),
+            os.path.join(os.path.expanduser("~"), ".cache", "desk-robot", "gesture_recognizer.task"),
+        ]
+        for task_path in task_candidates:
+            if os.path.isfile(task_path) and os.path.getsize(task_path) > 10_000:
+                try:
+                    from mediapipe.tasks.python import BaseOptions, vision  # type: ignore
+                    self._mp_gesture = vision.GestureRecognizer.create_from_options(
+                        vision.GestureRecognizerOptions(
+                            base_options=BaseOptions(model_asset_path=task_path),
+                            num_hands=2,
+                            min_hand_detection_confidence=0.5,
+                        )
+                    )
+                    self._mp_mode = "mediapipe_gesture"
+                    return
+                except Exception:
+                    self._mp_gesture = None
+
+        # Next try classic MediaPipe Solutions Hands if bundled
+        try:
+            if hasattr(mp, "solutions") and hasattr(mp.solutions, "hands"):
+                self._mp_hands = mp.solutions.hands.Hands(
+                    static_image_mode=False,
+                    max_num_hands=2,
+                    min_detection_confidence=0.5,
+                    min_tracking_confidence=0.45,
+                )
+                self._mp_mode = "mediapipe_hands"
+                return
+        except Exception:
+            self._mp_hands = None
+
+        self._mp_mode = "opencv_centroid"
+
+    def reset(self) -> None:
+        with self._lock:
+            self._prev_roi = None
+            self._centroid_hist.clear()
+            self._flow_hist.clear()
+
+    def _extract_x_mediapipe(self, frame_bgr: np.ndarray) -> float | None:
+        rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+        if self._mp_gesture is not None:
+            import mediapipe as mp  # type: ignore
+            mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+            res = self._mp_gesture.recognize(mp_img)
+            for lms, cats in zip(res.hand_landmarks, res.gestures):
+                top = cats[0] if cats else None
+                if top is not None and top.category_name == "Open_Palm" and top.score >= 0.55:
+                    return float(lms[0].x)
+            return None
+        if self._mp_hands is not None:
+            res = self._mp_hands.process(rgb)
+            if res and res.multi_hand_landmarks:
+                # Pick highest raised hand in upper frame (smallest wrist y)
+                best = min(res.multi_hand_landmarks, key=lambda h: h.landmark[0].y)
+                if best.landmark[0].y <= 0.85:
+                    return float(best.landmark[0].x)
+        return None
+
+    def _extract_vx_opencv(self, frame_bgr: np.ndarray) -> float | None:
+        """Compute normalized horizontal velocity of a localized moving region in the upper frame."""
+        small = cv2.resize(frame_bgr, (96, 72), interpolation=cv2.INTER_AREA)
+        roi_h = int(small.shape[0] * 0.75)  # Upper 75% where a raised hand waves
+        roi = small[:roi_h, :]
+        gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+        blur = cv2.GaussianBlur(gray, (5, 5), 0)
+
+        prev = self._prev_roi
+        self._prev_roi = blur
+        if prev is None or prev.shape != blur.shape:
+            return None
+
+        diff = cv2.absdiff(blur, prev)
+        _, mask = cv2.threshold(diff, 20, 255, cv2.THRESH_BINARY)
+        total_area = float(mask.shape[0] * mask.shape[1])
+        nz = int(np.count_nonzero(mask))
+        # Reject tiny sensor noise (<0.8%) or whole-frame camera shake (>48%)
+        if nz < total_area * 0.008 or nz > total_area * 0.48:
+            return None
+
+        # Dense optical flow on tiny 96x54 ROI (<0.5 ms in OpenCV C++) gives signed horizontal motion
+        flow = cv2.calcOpticalFlowFarneback(
+            prev,
+            blur,
+            None,
+            pyr_scale=0.5,
+            levels=2,
+            winsize=9,
+            iterations=2,
+            poly_n=5,
+            poly_sigma=1.1,
+            flags=0,
+        )
+        vx_vals = flow[:, :, 0][mask > 0]
+        if vx_vals.size < 12:
+            return None
+        # Keep strongly moving pixels so static edge pixels don't dilute velocity
+        mag = np.abs(vx_vals)
+        strong = vx_vals[mag >= max(0.6, float(np.percentile(mag, 60)))]
+        if strong.size == 0:
+            return None
+        return float(np.median(strong)) / float(mask.shape[1])
+
+    def _check_oscillation(self, xs: list[float]) -> bool:
+        if len(xs) < 4:
+            return False
+        excursion = max(xs) - min(xs)
+        if excursion < self.min_excursion:
+            return False
+
+        # Count significant horizontal direction reversals (left->right->left)
+        reversals = 0
+        last_dir = 0
+        step_thresh = 0.025
+        for prev_x, cur_x in zip(xs[:-1], xs[1:]):
+            dx = cur_x - prev_x
+            if abs(dx) < step_thresh:
+                continue
+            cur_dir = 1 if dx > 0 else -1
+            if last_dir != 0 and cur_dir != last_dir:
+                reversals += 1
+            last_dir = cur_dir
+        return reversals >= self.min_reversals
+
+    def _check_flow_oscillation(self, vxs: list[float]) -> bool:
+        """Check whether signed horizontal velocity samples oscillate left/right repeatedly."""
+        if len(vxs) < 3:
+            return False
+        reversals = 0
+        last_dir = 0
+        total_travel = 0.0
+        vel_thresh = 0.012  # ~1.2% of frame width per step
+        for vx in vxs:
+            if abs(vx) < vel_thresh:
+                continue
+            total_travel += abs(vx)
+            cur_dir = 1 if vx > 0 else -1
+            if last_dir != 0 and cur_dir != last_dir:
+                reversals += 1
+            last_dir = cur_dir
+        return reversals >= self.min_reversals and total_travel >= self.min_excursion
+
+    def detect(self, frame_bgr: np.ndarray, now: float | None = None) -> bool:
+        """Process one BGR frame and return True when a hand wave is detected."""
+        if frame_bgr is None or not isinstance(frame_bgr, np.ndarray) or frame_bgr.size == 0:
+            return False
+        t = time.time() if now is None else float(now)
+
+        with self._lock:
+            use_mp = self._mp_mode.startswith("mediapipe")
+            if use_mp:
+                try:
+                    cx_norm = self._extract_x_mediapipe(frame_bgr)
+                    if cx_norm is not None:
+                        self._centroid_hist.append((t, cx_norm))
+                    while self._centroid_hist and (t - self._centroid_hist[0][0]) > self.window_s:
+                        self._centroid_hist.popleft()
+                    xs = [x for _, x in self._centroid_hist]
+                    if (t - self.last_wave_at) >= self.cooldown_s and self._check_oscillation(xs):
+                        self.last_wave_at = t
+                        self.wave_count += 1
+                        self._centroid_hist.clear()
+                        return True
+                    return False
+                except Exception:
+                    pass
+
+            vx_norm = self._extract_vx_opencv(frame_bgr)
+            if vx_norm is not None:
+                self._flow_hist.append((t, vx_norm))
+            while self._flow_hist and (t - self._flow_hist[0][0]) > self.window_s:
+                self._flow_hist.popleft()
+
+            vxs = [v for _, v in self._flow_hist]
+            if (t - self.last_wave_at) >= self.cooldown_s and self._check_flow_oscillation(vxs):
+                self.last_wave_at = t
+                self.wave_count += 1
+                self._flow_hist.clear()
+                return True
+            return False
+
+
+WAVE_DETECTOR = HandWaveDetector()
+
+
+def detect_hand_wave(frame_bgr: np.ndarray, now: float | None = None) -> bool:
+    """Lightweight wave-to-wake helper. Returns True when a hand wave is detected."""
+    waved = WAVE_DETECTOR.detect(frame_bgr, now=now)
+    if waved:
+        try:
+            GUARD_ENGINE.last_status["last_wave_at"] = round(WAVE_DETECTOR.last_wave_at, 3)
+        except Exception:
+            pass
+    return waved
+
+
+def get_vision_status() -> dict[str, Any]:
+    """Consolidated vision, sentry, biometric memory, and wave-to-wake status."""
+    now = time.time()
+    last_wave = float(WAVE_DETECTOR.last_wave_at)
+    raw = GUARD_ENGINE.last_status
+    status_copy = {
+        "motion_detected": bool(raw.get("motion_detected", False)),
+        "motion_score": float(raw.get("motion_score", 0.0)),
+        "recognized_faces": list(raw.get("recognized_faces", [])),
+        "last_event_time": raw.get("last_event_time"),
+        "alert_active": bool(raw.get("alert_active", False)),
+        "last_wave_at": round(last_wave, 3) if last_wave > 0 else 0.0,
+    }
+    return {
+        "status": status_copy,
+        "config": load_camera_config(),
+        "enrolled_faces": list_enrolled_faces(),
+        "last_wave_at": round(last_wave, 3) if last_wave > 0 else 0.0,
+        "waving_recently": bool(last_wave > 0 and (now - last_wave) < 5.0),
+        "wave_method": str(WAVE_DETECTOR.method),
+        "wave_count": int(WAVE_DETECTOR.wave_count),
+    }
+
+
+# -----------------------------------------------------------------------------
 # Background Motion Detection & Sentry Engine
 # -----------------------------------------------------------------------------
 
@@ -651,6 +931,7 @@ class MotionGuardEngine:
             "recognized_faces": [],
             "last_event_time": None,
             "alert_active": False,
+            "last_wave_at": 0.0,
         }
 
     def start(self) -> None:
@@ -676,6 +957,9 @@ class MotionGuardEngine:
                     time.sleep(1.5)
                     continue
 
+                # Check for hand wave gesture (wave-to-wake telemetry)
+                detect_hand_wave(frame)
+
                 # Downscale for fast low-power frame differencing
                 small = cv2.resize(frame, (320, 240))
                 gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
@@ -692,14 +976,15 @@ class MotionGuardEngine:
                 thresh = cv2.threshold(frame_delta, 25, 255, cv2.THRESH_BINARY)[1]
                 thresh = cv2.dilate(thresh, None, iterations=2)
 
-                non_zero = np.count_nonzero(thresh)
+                non_zero = int(np.count_nonzero(thresh))
                 total_pixels = 320 * 240
-                motion_score = round(non_zero / total_pixels, 4)
+                motion_score = float(round(non_zero / total_pixels, 4))
                 sensitivity = float(cfg.get("motion_sensitivity", 0.04))
 
-                is_motion = motion_score >= sensitivity
+                is_motion = bool(motion_score >= sensitivity)
                 self.last_status["motion_score"] = motion_score
                 self.last_status["motion_detected"] = is_motion
+                self.last_status["last_wave_at"] = float(round(WAVE_DETECTOR.last_wave_at, 3)) if WAVE_DETECTOR.last_wave_at > 0 else 0.0
 
                 if is_motion:
                     now = time.time()

@@ -10,7 +10,7 @@ echo "=================================================="
 # Ensure Ollama local daemon is running
 if ! curl -s http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
   echo "[1/2] Starting local Ollama brain..."
-  OLLAMA_MAX_LOADED_MODELS=1 OLLAMA_KEEP_ALIVE=30m ./bin/ollama serve > ollama.log 2>&1 &
+  OLLAMA_MAX_LOADED_MODELS=2 OLLAMA_KEEP_ALIVE=30m ./bin/ollama serve > ollama.log 2>&1 &
   sleep 2
 fi
 

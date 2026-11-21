@@ -44,11 +44,21 @@ static const uint16_t COL_BMO_MOUTH_BG = TO_BE(0x1A67);  // Open Mouth Dark (#1b
 static const uint16_t COL_BMO_TONGUE   = TO_BE(0xF473);  // Coral Pink Tongue (#f08c9e)
 static const uint16_t COL_BMO_SWEAT    = TO_BE(0x3DFE);  // Tear/Sweat Cyan (#38bdf8)
 
+// Rocky V2 Face Palette (desk-robot 2.1 OLED aesthetic on 320x240 IPS LCD)
+static const uint16_t COL_ROCKY_BG     = TO_BE(0x0000);  // Deep OLED Black (#000000)
+static const uint16_t COL_ROCKY_EYE    = TO_BE(0xFFDF);  // Crisp Luminous Warm-White (#fffbf7)
+static const uint16_t COL_ROCKY_PUPIL  = TO_BE(0x0000);  // Obsidian Pupil (#000000)
+static const uint16_t COL_ROCKY_BLUSH  = TO_BE(0xFB90);  // Soft Coral Blush/Hearts (#fb7185)
+static const uint16_t COL_ROCKY_TEAR   = TO_BE(0x3DFE);  // Sky-Blue Tear (#38bdf8)
+static const uint16_t COL_ROCKY_FX     = TO_BE(0xFDE4);  // Warm Amber Accent (#fbbf24)
+static const uint16_t COL_ROCKY_DOTS   = TO_BE(0xCE9C);  // Soft Slate-White Dots/Zzz (#cbd5e1)
+
 enum FaceStyle {
     STYLE_BMO = 0,
-    STYLE_ROBOEYES = 1
+    STYLE_ROBOEYES = 1,
+    STYLE_ROCKY = 2
 };
-static volatile FaceStyle currentStyle = STYLE_BMO;
+static volatile FaceStyle currentStyle = STYLE_ROCKY;
 
 // Active Face State
 static SemaphoreHandle_t faceMutex = nullptr;
@@ -59,7 +69,7 @@ static volatile bool needsFullWipe = true;
 static volatile bool needsRedraw = true;
 
 static String displayMsg = "HELLO";
-static volatile bool msgMode = true;
+static volatile bool msgMode = false;
 
 // =========================================================================
 // Hardware SPI Engine for Sitronix ST7789 320x240 IPS LCD (HSPI @ 40MHz)
@@ -898,8 +908,7 @@ struct RoboEyesEngine {
             bufFillRoundRect((int16_t)sweatX, (int16_t)sweatY, (int16_t)sweatW, (int16_t)sweatH, 2, mainColor);
         }
 
-        // 6. Push Composite Frame directly to ST7789 in ONE continuous SPI burst! Zero flicker!
-        pushBuffer(0, 0, LCD_WIDTH, LCD_HEIGHT);
+        // 6. Framebuffer composed in PSRAM; pushed to ST7789 by tick() outside faceMutex.
     }
 };
 
@@ -1158,19 +1167,801 @@ public:
             bufFillEllipse(sx, sy, 5, 8, COL_BMO_SWEAT);
             bufFillTriangle(sx - 4, sy, sx + 4, sy, sx, sy - 10, COL_BMO_SWEAT);
         }
-
-        pushBuffer(0, 0, LCD_WIDTH, LCD_HEIGHT);
     }
 };
 
 static BMOFaceEngine bmoFace;
 
 // =========================================================================
+// Rocky V2 Face Engine (Native 320x240 Port of desk-robot-2.1)
+// =========================================================================
+// Exact mathematical port of desk-robot-2.1's EyeShape / EmotionLook /
+// inEye() / pupils + glints / flourishes / Zzz sleep engine, evaluated per
+// native 320x240 RGB565 pixel (128x64 virtual canvas mapped at SCALE=2.4x,
+// OX=6.4, OY=43.2) for razor-sharp curves and pupils with zero blocky scaling.
+
+enum RockyEmotion : uint8_t {
+    RE_NEUTRAL = 0,
+    RE_HAPPY,
+    RE_SAD,
+    RE_ANGRY,
+    RE_SURPRISED,
+    RE_SLEEPY,
+    RE_THINKING,
+    RE_CURIOUS,
+    RE_SKEPTICAL,
+    RE_EXCITED,
+    RE_LOVE,
+    RE_CONFUSED,
+    RE_WORRIED,
+    RE_COUNT
+};
+
+enum : uint16_t {
+    RFX_BLUSH    = 1 << 0,
+    RFX_TEAR     = 1 << 1,
+    RFX_DOTS     = 1 << 2,
+    RFX_POP      = 1 << 3,
+    RFX_STEAM    = 1 << 4,
+    RFX_SHAKE    = 1 << 5,
+    RFX_HEARTS   = 1 << 6,
+    RFX_QUESTION = 1 << 7,
+    RFX_SPARKLE  = 1 << 8,
+    RFX_BOUNCE   = 1 << 9,
+    RFX_WOBBLE   = 1 << 10
+};
+
+struct RockyFaceEngine {
+    static constexpr float VIRT_W = 128.0f;
+    static constexpr float VIRT_H = 64.0f;
+    static constexpr float SCALE = 2.4f;
+    static constexpr float INV_SCALE = 1.0f / SCALE;
+    static constexpr float OX = 6.4f;   // (320 - 128 * 2.4) / 2
+    static constexpr float OY = 43.2f;  // (240 - 64 * 2.4) / 2
+
+    struct EyeShape {
+        float w = 34.0f, h = 34.0f;
+        float rt = 12.0f, rb = 12.0f;
+        float st = 0.0f, sb = 0.0f;
+        float lid = 0.0f;
+        float cheek = 0.0f;
+        float dx = 0.0f, dy = 0.0f;
+    };
+
+    struct EmotionLook {
+        EyeShape l, r;
+        float gazeX = 0.0f, gazeY = 0.0f;
+        float pop = 0.12f;
+        float smile = 0.0f;
+        uint16_t fx = 0;
+    };
+
+    struct Geo {
+        float cx, w, left, right, top, bot, rt, rb, st, sb, lid, cheek;
+        int inner;  // +1: inner edge on right (left eye), -1: inner edge on left
+    };
+
+    struct Zed {
+        bool alive = false;
+        float x = 0.0f, y = 0.0f, age = 0.0f;
+    };
+
+    struct Heart {
+        bool alive = false;
+        float x = 0.0f, y = 0.0f, age = 0.0f;
+    };
+
+    // Pack configuration (rocky.json defaults)
+    float gap = 16.0f;
+    float baseY = 0.0f;
+    bool cyclops = false;
+    bool glint = true;
+    EmotionLook looks[RE_COUNT];
+    EyeShape asleepShape;
+
+    // Live animation state
+    RockyEmotion emotion = RE_NEUTRAL;
+    EyeShape curL, curR;
+    unsigned long emotionSinceMs = 0;
+
+    float blinkAmount = 1.0f;  // 0 = open, 1 = closed (boot starts shut, springs open)
+    bool blinkClosing = false;
+    unsigned long nextBlinkMs = 0;
+
+    float gazeX = 0.0f, gazeY = 0.0f;
+    float gazeTargetX = 0.0f, gazeTargetY = 0.0f;
+    unsigned long nextSaccadeMs = 0;
+
+    float pupilX = 0.0f, pupilY = 0.0f;
+    float pupilTargetX = 0.0f, pupilTargetY = 0.0f;
+    unsigned long nextPupilMs = 0;
+
+    float pop = 0.0f;
+    float squint = 0.0f;
+    unsigned long nextSquintMs = 0;
+    float tearY = -1.0f;
+    unsigned long nextTearMs = 0;
+    uint8_t thinkDots = 0;
+    unsigned long nextDotMs = 0;
+    int jitterX = 0;
+    Heart hearts[3];
+    unsigned long nextHeartMs = 0;
+    bool heartSide = false;
+
+    bool asleep = false;
+    float breath = 0.0f;
+    Zed zeds[3];
+    unsigned long nextZedMs = 0;
+    unsigned long nextTwitchMs = 0;
+    float twitch = 0.0f;
+
+    bool talking = false;
+    float mouthLevel = -1.0f;  // <0 uses procedural multi-harmonic speech envelope
+    float mouth = 0.0f;
+    float smile = 0.0f;
+
+    bool idle = true;
+    unsigned long lastFrameMs = 0;
+    const unsigned long frameIntervalMs = 30;  // ~33 FPS matching desk-robot-2.1 dynamics
+    uint32_t frame = 0;
+
+    static inline float approach(float cur, float target, float factor) {
+        return cur + (target - cur) * factor;
+    }
+
+    static inline EyeShape makeEye(float w, float h, float rt, float rb,
+                                   float st = 0.0f, float sb = 0.0f,
+                                   float lid = 0.0f, float cheek = 0.0f,
+                                   float dx = 0.0f, float dy = 0.0f) {
+        EyeShape e;
+        e.w = w; e.h = h; e.rt = rt; e.rb = rb;
+        e.st = st; e.sb = sb; e.lid = lid; e.cheek = cheek;
+        e.dx = dx; e.dy = dy;
+        return e;
+    }
+
+    static inline EmotionLook makeBoth(const EyeShape& e, uint16_t fx = 0,
+                                       float popVal = 0.12f,
+                                       float gx = 0.0f, float gy = 0.0f) {
+        EmotionLook l;
+        l.l = l.r = e;
+        l.fx = fx;
+        l.pop = popVal;
+        l.gazeX = gx;
+        l.gazeY = gy;
+        return l;
+    }
+
+    static inline void morphEye(EyeShape& c, const EyeShape& t, float f) {
+        c.w = approach(c.w, t.w, f);
+        c.h = approach(c.h, t.h, f);
+        c.rt = approach(c.rt, t.rt, f);
+        c.rb = approach(c.rb, t.rb, f);
+        c.st = approach(c.st, t.st, f);
+        c.sb = approach(c.sb, t.sb, f);
+        c.lid = approach(c.lid, t.lid, f);
+        c.cheek = approach(c.cheek, t.cheek, f);
+        c.dx = approach(c.dx, t.dx, f);
+        c.dy = approach(c.dy, t.dy, f);
+    }
+
+    static inline bool inEye(const Geo& g, float x, float y) {
+        if (x < g.left || x >= g.right || y < g.top || y >= g.bot) return false;
+        float halfW = g.w * 0.5f;
+        float hh = g.bot - g.top;
+        if (halfW <= 0.001f || hh <= 0.001f) return false;
+        float u = (x - g.cx) / halfW * (float)g.inner;  // -1 outer edge .. +1 inner edge
+        float topCut = g.st >= 0.0f ? g.st * (u + 1.0f) * 0.5f : -g.st * (1.0f - u) * 0.5f;
+        float botCut = g.sb >= 0.0f ? g.sb * (u + 1.0f) * 0.5f : -g.sb * (1.0f - u) * 0.5f;
+        float yy = y - topCut * (g.bot - y) / hh + botCut * (y - g.top) / hh;
+        if (yy < g.top + g.lid || yy >= g.bot) return false;
+        if (yy < g.top + g.rt) {
+            float qx = constrain(x, g.left + g.rt, g.right - g.rt);
+            float dx = x - qx, dy = yy - (g.top + g.rt);
+            if (dx * dx + dy * dy > g.rt * g.rt) return false;
+        }
+        if (yy > g.bot - g.rb) {
+            float qx = constrain(x, g.left + g.rb, g.right - g.rb);
+            float dx = x - qx, dy = yy - (g.bot - g.rb);
+            if (dx * dx + dy * dy > g.rb * g.rb) return false;
+        }
+        if (g.cheek > 0.5f) {
+            float rr = g.w;
+            float ccy = g.bot + rr - g.cheek;
+            float dx = x - g.cx, dy = y - ccy;
+            if (dx * dx + dy * dy < rr * rr) return false;
+        }
+        return true;
+    }
+
+    static inline int16_t vxToLcd(float vx) { return (int16_t)lroundf(OX + vx * SCALE); }
+    static inline int16_t vyToLcd(float vy) { return (int16_t)lroundf(OY + vy * SCALE); }
+    static inline int16_t vLen(float d) { return max((int16_t)1, (int16_t)lroundf(d * SCALE)); }
+
+    static inline void vLine(float x0, float y0, float x1, float y1, uint16_t col, int16_t thick = 3) {
+        bufDrawThickLine(vxToLcd(x0), vyToLcd(y0), vxToLcd(x1), vyToLcd(y1), thick, col);
+    }
+
+    static inline void vDisc(float cx, float cy, float r, uint16_t col) {
+        int16_t rad = vLen(r);
+        bufFillEllipse(vxToLcd(cx), vyToLcd(cy), rad, rad, col);
+    }
+
+    static inline void vRoundBox(float vx, float vy, float vw, float vh, float vr, uint16_t col) {
+        int16_t x0 = (int16_t)floorf(OX + vx * SCALE);
+        int16_t y0 = (int16_t)floorf(OY + vy * SCALE);
+        int16_t x1 = (int16_t)ceilf(OX + (vx + vw) * SCALE);
+        int16_t y1 = (int16_t)ceilf(OY + (vy + vh) * SCALE);
+        int16_t r = (int16_t)lroundf(vr * SCALE);
+        bufFillRoundRect(x0, y0, x1 - x0, y1 - y0, r, col);
+    }
+
+    static inline void vGlyph(const char* const* rows, int n, float vx, float vy, uint16_t col) {
+        for (int j = 0; j < n; ++j) {
+            int16_t py0 = (int16_t)floorf(OY + (vy + j) * SCALE);
+            int16_t py1 = (int16_t)floorf(OY + (vy + j + 1) * SCALE);
+            int16_t ph = max((int16_t)1, (int16_t)(py1 - py0));
+            for (int i = 0; rows[j][i]; ++i) {
+                if (rows[j][i] == '#') {
+                    int16_t px0 = (int16_t)floorf(OX + (vx + i) * SCALE);
+                    int16_t px1 = (int16_t)floorf(OX + (vx + i + 1) * SCALE);
+                    int16_t pw = max((int16_t)1, (int16_t)(px1 - px0));
+                    bufFillRect(px0, py0, pw, ph, col);
+                }
+            }
+        }
+    }
+
+    void init() {
+        gap = 16.0f;
+        baseY = 0.0f;
+        cyclops = false;
+        glint = true;
+
+        // Exact desk-robot-2.1 server/faces/rocky.json looks
+        looks[RE_NEUTRAL]   = makeBoth(makeEye(34, 34, 12, 12));
+        looks[RE_HAPPY]     = makeBoth(makeEye(36, 36, 12, 12, 0, 0, 0, 16), RFX_BLUSH);
+        looks[RE_SAD]       = makeBoth(makeEye(32, 26, 10, 10, -9, 0, 4), RFX_TEAR);
+        looks[RE_ANGRY]     = makeBoth(makeEye(34, 24, 8, 8, 10), RFX_STEAM | RFX_SHAKE);
+        looks[RE_SURPRISED] = makeBoth(makeEye(38, 44, 19, 19), RFX_POP, 0.30f);
+        looks[RE_SLEEPY]    = makeBoth(makeEye(34, 26, 10, 10, 0, 0, 14));
+        looks[RE_THINKING]  = makeBoth(makeEye(30, 30, 11, 11, 0, 0, 5), RFX_DOTS, 0.12f, 7.0f, -5.0f);
+        looks[RE_CURIOUS]   = makeBoth(makeEye(30, 30, 11, 11), 0, 0.15f, -5.0f, -3.0f);
+        looks[RE_CURIOUS].r = makeEye(38, 40, 15, 15, 0, 0, 0, 0, 0, -2);
+        looks[RE_SKEPTICAL] = makeBoth(makeEye(34, 38, 13, 12, -3), 0, 0.12f, 4.0f, 0.0f);
+        looks[RE_SKEPTICAL].r = makeEye(34, 34, 12, 12, 0, 0, 17);
+        looks[RE_EXCITED]   = makeBoth(makeEye(38, 40, 16, 16, 0, 0, 0, 10), RFX_SPARKLE | RFX_BOUNCE, 0.25f);
+        looks[RE_LOVE]      = makeBoth(makeEye(36, 34, 14, 14, 0, 0, 0, 12), RFX_HEARTS | RFX_BLUSH, 0.20f);
+        looks[RE_CONFUSED]  = makeBoth(makeEye(32, 36, 13, 12, -5), RFX_QUESTION | RFX_WOBBLE);
+        looks[RE_CONFUSED].r = makeEye(28, 24, 10, 10, 4, 0, 0, 0, 0, 4);
+        // Worried / alarmed: slanted outer brows (st=-8, lid=2) + gentle shake
+        looks[RE_WORRIED]   = makeBoth(makeEye(34, 32, 12, 12, -8, 0, 2), RFX_SHAKE, 0.18f);
+
+        asleepShape = makeEye(30, 3, 1, 1);
+
+        emotion = RE_NEUTRAL;
+        asleep = false;
+        curL = looks[RE_NEUTRAL].l;
+        curR = looks[RE_NEUTRAL].r;
+
+        // Wake-up sequence: start with eyes shut, spring smoothly open
+        blinkAmount = 1.0f;
+        blinkClosing = false;
+        pop = 0.25f;
+        unsigned long now = millis();
+        emotionSinceMs = now;
+        nextBlinkMs = now + 3000;
+        nextSaccadeMs = now + 1500;
+        nextPupilMs = now + 1000;
+        nextSquintMs = now + 9000;
+        lastFrameMs = 0;
+        frame = 0;
+    }
+
+    void setEmotion(RockyEmotion e) {
+        if (e >= RE_COUNT) return;
+        unsigned long now = millis();
+        if (e != emotion) {
+            pop = 1.0f;
+            emotionSinceMs = now;
+            tearY = -1.0f;
+            nextTearMs = now + 1500;
+            thinkDots = 0;
+            nextDotMs = now + 250;
+            for (Heart& h : hearts) h.alive = false;
+            nextHeartMs = now + 200;
+        }
+        emotion = e;
+        const EmotionLook& look = looks[e];
+        gazeTargetX = look.gazeX;
+        gazeTargetY = look.gazeY;
+    }
+
+    void setAsleep(bool on) {
+        if (on == asleep) return;
+        asleep = on;
+        unsigned long now = millis();
+        if (on) {
+            for (Zed& z : zeds) z.alive = false;
+            nextZedMs = now + 800;
+            nextTwitchMs = now + random(5000, 9000);
+            gazeTargetX = gazeTargetY = 0.0f;
+        } else {
+            pop = 1.0f;
+            blinkAmount = 0.0f;
+            blinkClosing = false;
+            const EmotionLook& look = looks[emotion];
+            gazeTargetX = look.gazeX;
+            gazeTargetY = look.gazeY;
+        }
+    }
+
+    void blink() { blinkClosing = true; }
+
+    void triggerPop() { pop = 1.0f; }
+
+    void toggleCyclops() {
+        cyclops = !cyclops;
+        pop = 0.6f;
+    }
+
+    void lookToward(float x, float y, unsigned long holdMs) {
+        pupilTargetX = constrain(x, -1.0f, 1.0f);
+        pupilTargetY = constrain(y, -1.0f, 1.0f);
+        gazeTargetX = pupilTargetX * 6.0f;
+        gazeTargetY = pupilTargetY * 3.0f;
+        unsigned long until = millis() + holdMs;
+        nextPupilMs = until;
+        nextSaccadeMs = until;
+    }
+
+    unsigned long talkingSinceMs = 0;
+    static constexpr unsigned long TALK_SAFETY_TIMEOUT_MS = 10000;
+
+    void setTalking(bool on, float level = -1.0f) {
+        talking = on;
+        if (on) {
+            talkingSinceMs = millis();
+        } else {
+            talkingSinceMs = 0;
+        }
+        mouthLevel = (level >= 0.0f) ? constrain(level, 0.0f, 1.0f) : -1.0f;
+    }
+
+    bool update(unsigned long nowMs) {
+        if (lastFrameMs != 0 && (nowMs - lastFrameMs < frameIntervalMs)) return false;
+        lastFrameMs = nowMs;
+        frame++;
+
+        const EmotionLook& look = looks[emotion];
+
+        // Morph eye shapes smoothly toward current emotion (or asleep slits)
+        float f = asleep ? 0.12f : 0.25f;
+        morphEye(curL, asleep ? asleepShape : look.l, f);
+        morphEye(curR, asleep ? asleepShape : look.r, f);
+        smile = approach(smile, asleep ? 0.0f : look.smile, f);
+
+        pop *= 0.82f;
+        squint *= 0.85f;
+
+        if (asleep) {
+            breath += 0.035f;
+            blinkAmount = 0.0f;
+            blinkClosing = false;
+            twitch *= 0.8f;
+            if (nowMs >= nextTwitchMs) {
+                twitch = 1.0f;
+                nextTwitchMs = nowMs + random(6000, 12000);
+            }
+            if (nowMs >= nextZedMs) {
+                for (Zed& z : zeds) {
+                    if (!z.alive) {
+                        z.alive = true;
+                        z.age = 0.0f;
+                        float startX = cyclops
+                            ? (VIRT_W * 0.5f + curL.w * 0.5f + 2.0f)
+                            : (VIRT_W * 0.5f + gap * 0.5f + curL.w + 2.0f);
+                        z.x = fminf(startX, 108.0f);
+                        z.y = VIRT_H * 0.5f - 6.0f;
+                        break;
+                    }
+                }
+                nextZedMs = nowMs + random(1100, 1700);
+            }
+            for (Zed& z : zeds) {
+                if (!z.alive) continue;
+                z.age += 0.012f;
+                z.y -= 0.32f;
+                z.x += 0.22f;
+                if (z.age >= 1.0f || z.y < -12.0f) z.alive = false;
+            }
+            gazeX = approach(gazeX, 0.0f, 0.2f);
+            gazeY = approach(gazeY, 0.0f, 0.2f);
+            mouth = approach(mouth, 0.0f, 0.3f);
+            jitterX = 0;
+            return true;
+        }
+
+        // Blink: snap shut fast, reopen slightly slower
+        if (blinkClosing) {
+            blinkAmount += 0.45f;
+            if (blinkAmount >= 1.0f) {
+                blinkAmount = 1.0f;
+                blinkClosing = false;
+            }
+        } else if (blinkAmount > 0.0f) {
+            blinkAmount = fmaxf(0.0f, blinkAmount - 0.28f);
+        }
+
+        if (idle) {
+            if (nowMs >= nextBlinkMs) {
+                blinkClosing = true;
+                nextBlinkMs = nowMs + random(2200, 6000);
+                if (random(100) < 20) nextBlinkMs = nowMs + 400;  // occasional double-blink
+            }
+            bool looksSomewhere = (look.gazeX != 0.0f || look.gazeY != 0.0f);
+            if (nowMs >= nextSaccadeMs && !looksSomewhere) {
+                gazeTargetX = (float)random(-8, 9);
+                gazeTargetY = (float)random(-4, 5);
+                if (random(100) < 40) gazeTargetX = gazeTargetY = 0.0f;
+                nextSaccadeMs = nowMs + random(1200, 4000);
+            }
+            if (nowMs >= nextPupilMs) {
+                if (random(100) < 35) {
+                    pupilTargetX = random(-25, 26) / 100.0f;
+                    pupilTargetY = random(-20, 21) / 100.0f;
+                } else {
+                    pupilTargetX = random(-90, 91) / 100.0f;
+                    pupilTargetY = random(-60, 61) / 100.0f;
+                }
+                nextPupilMs = nowMs + random(600, 2600);
+            }
+            if (nowMs >= nextSquintMs && emotion == RE_NEUTRAL) {
+                squint = 1.0f;
+                nextSquintMs = nowMs + random(8000, 16000);
+            }
+        }
+
+        // Flourishes
+        if (look.fx & RFX_TEAR) {
+            if (tearY < 0.0f && nowMs >= nextTearMs) tearY = 0.0f;
+            if (tearY >= 0.0f) {
+                tearY += 0.7f;
+                if (tearY > VIRT_H) {
+                    tearY = -1.0f;
+                    nextTearMs = nowMs + random(2500, 5000);
+                }
+            }
+        }
+        if ((look.fx & RFX_DOTS) && nowMs >= nextDotMs) {
+            thinkDots = (thinkDots + 1) % 4;
+            nextDotMs = nowMs + 420;
+        }
+        if ((look.fx & RFX_HEARTS) && nowMs >= nextHeartMs) {
+            for (Heart& h : hearts) {
+                if (!h.alive) {
+                    h.alive = true;
+                    h.age = 0.0f;
+                    heartSide = !heartSide;
+                    if (cyclops) {
+                        h.x = heartSide ? (VIRT_W * 0.5f + curL.w * 0.5f + 3.0f)
+                                        : (VIRT_W * 0.5f - curL.w * 0.5f - 10.0f);
+                    } else {
+                        h.x = heartSide ? (VIRT_W * 0.5f + gap * 0.5f + curR.w + 2.0f)
+                                        : (VIRT_W * 0.5f - gap * 0.5f - curL.w - 9.0f);
+                    }
+                    h.y = VIRT_H * 0.5f + 6.0f;
+                    break;
+                }
+            }
+            nextHeartMs = nowMs + random(600, 1000);
+        }
+        for (Heart& h : hearts) {
+            if (!h.alive) continue;
+            h.age += 0.015f;
+            h.y -= 0.45f;
+            if (h.age >= 1.0f || h.y < -6.0f) h.alive = false;
+        }
+        jitterX = ((look.fx & RFX_SHAKE) && (frame % 3 == 0)) ? (int)random(-1, 2) : 0;
+
+        // Safety watchdog: never leave mouth flapping forever if a speaking:false packet is lost
+        if (talking && talkingSinceMs > 0 && (nowMs - talkingSinceMs) > TALK_SAFETY_TIMEOUT_MS) {
+            talking = false;
+            talkingSinceMs = 0;
+            isSpeaking = false;
+        }
+
+        // Talking mouth: real audio RMS if supplied, else natural multi-harmonic speech envelope
+        float mouthGoal = 0.0f;
+        if (talking) {
+            if (mouthLevel >= 0.0f) {
+                mouthGoal = constrain(0.15f + mouthLevel * 4.0f, 0.15f, 1.0f);
+            } else {
+                float t = (float)nowMs * 0.001f;
+                float env = 0.45f + 0.34f * sinf(t * 15.0f)
+                                  + 0.22f * sinf(t * 26.0f + 0.9f)
+                                  + 0.18f * sinf(t * 6.2f);
+                mouthGoal = (env < 0.16f) ? 0.12f : constrain(env, 0.15f, 1.0f);
+            }
+        }
+        mouth = approach(mouth, mouthGoal, talking ? 0.5f : 0.3f);
+
+        gazeX = approach(gazeX, gazeTargetX, 0.35f);
+        gazeY = approach(gazeY, gazeTargetY, 0.35f);
+        pupilX = approach(pupilX, pupilTargetX, 0.5f);
+        pupilY = approach(pupilY, pupilTargetY, 0.5f);
+        return true;
+    }
+
+    void drawEye(const EyeShape& e, float cx, float cy, int inner, float hScale) {
+        if (!frameBuffer) return;
+        float w = e.w;
+        float h = e.h * hScale * (1.0f - blinkAmount);
+        if (h < 2.0f) h = 2.0f;
+
+        Geo g;
+        g.cx = cx - inner * e.dx;
+        float ecy = cy + e.dy;
+        g.w = w;
+        g.left = g.cx - w * 0.5f;
+        g.right = g.cx + w * 0.5f;
+        g.top = ecy - h * 0.5f;
+        g.bot = ecy + h * 0.5f;
+        g.rt = fmaxf(0.0f, fminf(e.rt, fminf(w, h) * 0.5f));
+        g.rb = fmaxf(0.0f, fminf(e.rb, fminf(w, h) * 0.5f));
+        g.st = e.st;
+        g.sb = e.sb;
+        // Scale lid & cheek smoothly with blink openness (identical to e.lid/e.cheek when open)
+        float openFrac = 1.0f - blinkAmount;
+        g.lid = e.lid * openFrac;
+        g.cheek = e.cheek * openFrac;
+        g.inner = inner;
+
+        // Native 320x240 LCD pixel evaluation for razor-sharp curves
+        int x0 = max(0, (int)floorf(OX + g.left * SCALE));
+        int x1 = min((int)LCD_WIDTH, (int)ceilf(OX + g.right * SCALE));
+        int y0 = max(0, (int)floorf(OY + g.top * SCALE));
+        int y1 = min((int)LCD_HEIGHT, (int)ceilf(OY + g.bot * SCALE));
+
+        for (int ly = y0; ly < y1; ++ly) {
+            float vy = (ly + 0.5f - OY) * INV_SCALE;
+            uint16_t* row = &frameBuffer[ly * LCD_WIDTH];
+            for (int lx = x0; lx < x1; ++lx) {
+                float vx = (lx + 0.5f - OX) * INV_SCALE;
+                if (inEye(g, vx, vy)) {
+                    row[lx] = COL_ROCKY_EYE;
+                }
+            }
+        }
+
+        // Dark obsidian pupil + white specular highlight glint, clipped by inEye()
+        if (glint && h > 12.0f && !asleep) {
+            float r = constrain(g.w * 0.14f, 3.0f, 6.0f);
+            int vy0 = (int)floorf(g.top), vy1 = (int)ceilf(g.bot);
+            int vx0 = (int)floorf(g.left), vx1 = (int)ceilf(g.right);
+            int top = -1, bot = -1;
+            for (int y = vy0; y < vy1; ++y) {
+                if (inEye(g, g.cx, y + 0.5f)) {
+                    if (top < 0) top = y;
+                    bot = y;
+                }
+            }
+            if (top < 0) return;
+            float vcy = (top + bot + 1) * 0.5f;
+            int left = -1, right = -1;
+            for (int x = vx0; x < vx1; ++x) {
+                if (inEye(g, x + 0.5f, vcy)) {
+                    if (left < 0) left = x;
+                    right = x;
+                }
+            }
+            if (left < 0) return;
+            float vcx = (left + right + 1) * 0.5f;
+            float roomX = fmaxf(0.0f, (right - left + 1) * 0.5f - r - 2.0f);
+            float roomY = fmaxf(0.0f, (bot - top + 1) * 0.5f - r - 1.5f);
+            float px = constrain(pupilX + gazeX / 12.0f, -1.0f, 1.0f);
+            float py = constrain(pupilY + gazeY / 8.0f, -1.0f, 1.0f);
+            float pcx = vcx + px * roomX;
+            float pcy = vcy + py * roomY;
+
+            // Render obsidian pupil at native LCD resolution
+            int px0 = max(0, (int)floorf(OX + (pcx - r) * SCALE));
+            int px1 = min((int)LCD_WIDTH, (int)ceilf(OX + (pcx + r) * SCALE));
+            int py0 = max(0, (int)floorf(OY + (pcy - r) * SCALE));
+            int py1 = min((int)LCD_HEIGHT, (int)ceilf(OY + (pcy + r) * SCALE));
+            float r2 = r * r;
+            for (int ly = py0; ly < py1; ++ly) {
+                float vy = (ly + 0.5f - OY) * INV_SCALE;
+                float dy = vy - pcy;
+                float dy2 = dy * dy;
+                uint16_t* row = &frameBuffer[ly * LCD_WIDTH];
+                for (int lx = px0; lx < px1; ++lx) {
+                    float vx = (lx + 0.5f - OX) * INV_SCALE;
+                    float dx = vx - pcx;
+                    if (dx * dx + dy2 <= r2 && inEye(g, vx, vy)) {
+                        row[lx] = COL_ROCKY_PUPIL;
+                    }
+                }
+            }
+
+            // Crisp white specular glint up-left inside pupil
+            if (r >= 4.0f) {
+                float gcx = pcx - r * 0.5f + 1.0f;
+                float gcy = pcy - r * 0.55f + 1.0f;
+                float gr = 1.15f;
+                if (inEye(g, gcx, gcy)) {
+                    int gx0 = max(0, (int)floorf(OX + (gcx - gr) * SCALE));
+                    int gx1 = min((int)LCD_WIDTH, (int)ceilf(OX + (gcx + gr) * SCALE));
+                    int gy0 = max(0, (int)floorf(OY + (gcy - gr) * SCALE));
+                    int gy1 = min((int)LCD_HEIGHT, (int)ceilf(OY + (gcy + gr) * SCALE));
+                    float gr2 = gr * gr;
+                    for (int ly = gy0; ly < gy1; ++ly) {
+                        float vy = (ly + 0.5f - OY) * INV_SCALE;
+                        float dy = vy - gcy;
+                        float dy2 = dy * dy;
+                        uint16_t* row = &frameBuffer[ly * LCD_WIDTH];
+                        for (int lx = gx0; lx < gx1; ++lx) {
+                            float vx = (lx + 0.5f - OX) * INV_SCALE;
+                            float dx = vx - gcx;
+                            if (dx * dx + dy2 <= gr2 && inEye(g, vx, vy)) {
+                                row[lx] = COL_WHITE;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    void drawMouth(float cx, float cy) {
+        if (mouth < 0.05f) return;
+        float my0 = cy + curL.h * 0.5f;
+        float mh = 2.0f + mouth * 9.0f;
+        float mw = 20.0f + mouth * 8.0f;
+        float my = my0 + 4.0f;
+        if (my + mh > VIRT_H - 1.0f) my = VIRT_H - 1.0f - mh;
+        vRoundBox(cx - mw * 0.5f, my, mw, mh, fminf(mh * 0.5f, 4.0f), COL_ROCKY_EYE);
+        if (mh > 6.0f) {
+            vRoundBox(cx - mw * 0.5f + 3.0f, my + 2.0f, mw - 6.0f, mh - 4.0f, 2.0f, COL_ROCKY_BG);
+        }
+    }
+
+    void drawFlourishes(float leftOuter, float rightOuter, float eyeTop, float eyeBottom) {
+        static const char* const kBang[] = {
+            "###", "###", "###", "###", "###", "###", "###", "...", "###", "###"
+        };
+        static const char* const kQuestion[] = {
+            ".#####.", "##...##", "##...##", ".....##", "....##.",
+            "...##..", "..##...", "..##...", ".......", "..##...", "..##..."
+        };
+        static const char* const kHeart[] = {
+            ".##.##.", "#######", "#######", ".#####.", "..###..", "...#..."
+        };
+
+        const EmotionLook& look = looks[emotion];
+        uint16_t fx = look.fx;
+        unsigned long since = millis() - emotionSinceMs;
+
+        if ((fx & RFX_POP) && since < 900) {
+            vGlyph(kBang, 10, 116.0f, 4.0f, COL_ROCKY_FX);
+        }
+        if (fx & RFX_BLUSH) {
+            for (int i = 0; i < 2; ++i) {
+                float lx = leftOuter - 8.0f + i * 3.0f;
+                float rx = rightOuter + 3.0f + i * 3.0f;
+                vLine(lx, eyeBottom + 1.0f, lx + 3.0f, eyeBottom - 3.0f, COL_ROCKY_BLUSH, 3);
+                vLine(rx, eyeBottom + 1.0f, rx + 3.0f, eyeBottom - 3.0f, COL_ROCKY_BLUSH, 3);
+            }
+        }
+        if ((fx & RFX_TEAR) && tearY >= 0.0f) {
+            float tx = rightOuter - 3.0f;
+            float ty = eyeBottom + tearY;
+            vDisc(tx, ty, 2.2f, COL_ROCKY_TEAR);
+            vLine(tx, ty - 5.0f, tx, ty - 2.0f, COL_ROCKY_TEAR, 3);
+        }
+        if (fx & RFX_DOTS) {
+            for (int i = 0; i < thinkDots; ++i) {
+                vDisc(VIRT_W - 26.0f + i * 8.0f, 9.0f, 2.2f, COL_ROCKY_DOTS);
+            }
+        }
+        if ((fx & RFX_STEAM) && ((frame / 6) % 2 == 0)) {
+            vLine(leftOuter - 4.0f, eyeTop - 4.0f, leftOuter - 2.0f, eyeTop - 9.0f, COL_ROCKY_FX, 3);
+            vLine(rightOuter + 4.0f, eyeTop - 4.0f, rightOuter + 2.0f, eyeTop - 9.0f, COL_ROCKY_FX, 3);
+        }
+        if (fx & RFX_HEARTS) {
+            for (const Heart& h : hearts) {
+                if (!h.alive || (h.age > 0.8f && (frame % 2 == 0))) continue;
+                vGlyph(kHeart, 6, h.x, h.y, COL_ROCKY_BLUSH);
+            }
+        }
+        if (fx & RFX_QUESTION) {
+            vGlyph(kQuestion, 11, 112.0f, 3.0f + sinf(frame * 0.15f) * 2.0f, COL_ROCKY_FX);
+        }
+        if (fx & RFX_SPARKLE) {
+            bool a = ((frame / 5) % 2 == 0);
+            float pts[4] = {
+                a ? leftOuter - 6.0f : leftOuter - 5.0f,
+                a ? eyeTop + 3.0f : eyeBottom - 5.0f,
+                a ? rightOuter + 6.0f : rightOuter + 5.0f,
+                a ? eyeBottom - 4.0f : eyeTop + 2.0f
+            };
+            for (int k = 0; k < 2; ++k) {
+                float x = pts[k * 2], y = pts[k * 2 + 1];
+                vLine(x - 2.2f, y, x + 2.2f, y, COL_ROCKY_FX, 3);
+                vLine(x, y - 2.2f, x, y + 2.2f, COL_ROCKY_FX, 3);
+            }
+        }
+    }
+
+    void drawZeds() {
+        for (const Zed& z : zeds) {
+            if (!z.alive) continue;
+            if (z.age > 0.8f && (frame % 2 == 0)) continue;
+            float s = z.age < 0.33f ? 4.0f : (z.age < 0.66f ? 6.0f : 8.0f);
+            float x = z.x;
+            float y = z.y - s;
+            if (x < 0.0f || x >= VIRT_W - 4.0f || y < 0.0f) continue;
+            int16_t thick = (s >= 8.0f) ? 4 : 3;
+            vLine(x, y, x + s, y, COL_ROCKY_DOTS, thick);
+            vLine(x + s, y, x, y + s, COL_ROCKY_DOTS, thick);
+            vLine(x, y + s, x + s, y + s, COL_ROCKY_DOTS, thick);
+        }
+    }
+
+    void render() {
+        if (!frameBuffer) return;
+        bufFillRect(0, 0, LCD_WIDTH, LCD_HEIGHT, COL_ROCKY_BG);
+
+        const EmotionLook& look = looks[emotion];
+        bool lively = !asleep;
+
+        float bob = asleep ? (sinf(breath) * 2.0f) : (-mouth * 2.0f);
+        if (lively && (look.fx & RFX_BOUNCE)) {
+            bob -= fabsf(sinf(frame * 0.18f)) * 3.0f;
+        }
+        float sway = (lively && (look.fx & RFX_WOBBLE)) ? (sinf(frame * 0.08f) * 3.0f) : 0.0f;
+        float cy = VIRT_H * 0.5f + baseY + gazeY + bob;
+        if (talking) cy -= 2.0f;
+        float gx = gazeX + (float)jitterX + sway;
+
+        float hScale = 1.0f + pop * look.pop;
+        hScale *= 1.0f - squint * 0.4f;
+        if (asleep) hScale += twitch * 2.5f;
+
+        float leftOuter, rightOuter;
+        if (cyclops) {
+            float cx = VIRT_W * 0.5f + gx;
+            drawEye(curL, cx, cy, 1, hScale);
+            leftOuter = cx - curL.dx - curL.w * 0.5f;
+            rightOuter = cx - curL.dx + curL.w * 0.5f;
+        } else {
+            float lcx = VIRT_W * 0.5f - gap * 0.5f - curL.w * 0.5f + gx;
+            float rcx = VIRT_W * 0.5f + gap * 0.5f + curR.w * 0.5f + gx;
+            drawEye(curL, lcx, cy, 1, hScale);
+            drawEye(curR, rcx, cy, -1, hScale);
+            leftOuter = lcx - curL.dx - curL.w * 0.5f;
+            rightOuter = rcx + curR.dx + curR.w * 0.5f;
+        }
+
+        float eyeTop = cy - curL.h * hScale * 0.5f;
+        float eyeBottom = cy + curL.h * hScale * 0.5f;
+        if (asleep) {
+            drawZeds();
+        } else {
+            drawFlourishes(leftOuter, rightOuter, eyeTop, eyeBottom);
+            drawMouth(VIRT_W * 0.5f + gazeX * 0.5f, cy);
+        }
+    }
+};
+
+static RockyFaceEngine rockyFace;
+
+// =========================================================================
 // Public Face Control API
 // =========================================================================
 
 static void init() {
-    Serial.println("[Face] Initializing Waveshare 2.0\" ST7789 (Zero-Flicker RoboEyes Engine)...");
+    Serial.println("[Face] Initializing Waveshare 2.0\" ST7789 (Rocky V2 / BMO / RoboEyes)...");
 
     pinMode(LCD_PIN_CS, OUTPUT);
     pinMode(LCD_PIN_DC, OUTPUT);
@@ -1221,11 +2012,16 @@ static void init() {
 
     roboEyes.init();
     bmoFace.init();
+    rockyFace.init();
     needsFullWipe = true;
     needsRedraw = true;
 
     // Initial boot screen composed in buffer
-    if (currentStyle == STYLE_BMO) {
+    if (currentStyle == STYLE_ROCKY) {
+        // Desk-robot-2.1 boot: no text banner — start with eyes shut and spring open smoothly
+        msgMode = false;
+        rockyFace.render();
+    } else if (currentStyle == STYLE_BMO) {
         bufFillRect(0, 0, LCD_WIDTH, LCD_HEIGHT, COL_BMO_BG);
         bufFillRect(0, 0, LCD_WIDTH, 4, COL_BMO_BORDER);
         bufFillRect(0, LCD_HEIGHT - 4, LCD_WIDTH, 4, COL_BMO_BORDER);
@@ -1245,6 +2041,7 @@ static void init() {
 
         bufDrawString(105, 38, "HELLO!", COL_BMO_INK, COL_BMO_BG, 4);
         bufDrawString(65, 185, "ADVENTURE TIME BMO", COL_BMO_INK, COL_BMO_BG, 2);
+        pushBuffer(0, 0, LCD_WIDTH, LCD_HEIGHT);
     } else {
         bufFillRect(0, 0, LCD_WIDTH, LCD_HEIGHT, COL_BLUE);
         bufFillRect(4, 4, LCD_WIDTH - 8, 4, COL_YELLOW);
@@ -1253,19 +2050,22 @@ static void init() {
         bufFillRect(LCD_WIDTH - 8, 4, 4, LCD_HEIGHT - 8, COL_YELLOW);
         bufDrawString(85, 75, "HELLO!", COL_WHITE, COL_BLUE, 5);
         bufDrawString(48, 150, "FLUXGARAGE ROBOEYES", COL_YELLOW, COL_BLUE, 2);
+        pushBuffer(0, 0, LCD_WIDTH, LCD_HEIGHT);
     }
-    pushBuffer(0, 0, LCD_WIDTH, LCD_HEIGHT);
 
-    Serial.println("[Face] ST7789 initialized. Boot screen displayed.");
+    Serial.println("[Face] ST7789 initialized.");
 }
 
 static void setFaceStyle(const String& styleStr) {
-    bool taken = (faceMutex && xSemaphoreTake(faceMutex, pdMS_TO_TICKS(50)) == pdTRUE);
+    bool taken = (faceMutex && xSemaphoreTake(faceMutex, pdMS_TO_TICKS(250)) == pdTRUE);
     if (!taken) return;
     msgMode = false;
     String s = styleStr;
     s.toLowerCase();
-    if (s == "bmo" || s == "rocky" || s == "adventure" || s == "mint") {
+    if (s == "rocky" || s == "desk" || s == "v2" || s == "rocky_v2") {
+        currentStyle = STYLE_ROCKY;
+        rockyFace.triggerPop();
+    } else if (s == "bmo" || s == "adventure" || s == "mint") {
         currentStyle = STYLE_BMO;
     } else if (s == "robo" || s == "roboeyes" || s == "cyan" || s == "marvin") {
         currentStyle = STYLE_ROBOEYES;
@@ -1276,7 +2076,7 @@ static void setFaceStyle(const String& styleStr) {
 }
 
 static void showMessage(const String& msg) {
-    bool taken = (faceMutex && xSemaphoreTake(faceMutex, pdMS_TO_TICKS(50)) == pdTRUE);
+    bool taken = (faceMutex && xSemaphoreTake(faceMutex, pdMS_TO_TICKS(250)) == pdTRUE);
     if (!taken) return;
     displayMsg = msg;
     msgMode = true;
@@ -1292,30 +2092,87 @@ static void setRoboMoodUnlocked(const String& moodStr) {
     bmoFace.curious = false;
     bmoFace.sad = false;
     bmoFace.surprised = false;
-    if (m == "bmo") {
+    if (m == "rocky" || m == "desk" || m == "v2" || m == "rocky_v2") {
+        currentStyle = STYLE_ROCKY;
+        rockyFace.triggerPop();
+        needsFullWipe = true;
+    } else if (m == "bmo") {
         currentStyle = STYLE_BMO;
         needsFullWipe = true;
     } else if (m == "robo" || m == "roboeyes") {
         currentStyle = STYLE_ROBOEYES;
         needsFullWipe = true;
-    } else if (m == "happy" || m == "smile" || m == "joy" || m == "excited") {
+    } else if (m == "asleep" || m == "sleep" || m == "zzz") {
+        rockyFace.setAsleep(true);
+        roboEyes.setMood(MOOD_TIRED);
+        bmoFace.mood = MOOD_TIRED;
+    } else if (m == "happy" || m == "smile" || m == "joy") {
+        rockyFace.setAsleep(false);
+        rockyFace.setEmotion(RE_HAPPY);
         roboEyes.setMood(MOOD_HAPPY);
         bmoFace.mood = MOOD_HAPPY;
-    } else if (m == "sad") {
+    } else if (m == "excited" || m == "thrilled") {
+        rockyFace.setAsleep(false);
+        rockyFace.setEmotion(RE_EXCITED);
+        roboEyes.setMood(MOOD_HAPPY);
+        bmoFace.mood = MOOD_HAPPY;
+    } else if (m == "love" || m == "heart" || m == "affection") {
+        rockyFace.setAsleep(false);
+        rockyFace.setEmotion(RE_LOVE);
+        roboEyes.setMood(MOOD_HAPPY);
+        bmoFace.mood = MOOD_HAPPY;
+    } else if (m == "sad" || m == "cry" || m == "crying") {
+        rockyFace.setAsleep(false);
+        rockyFace.setEmotion(RE_SAD);
         roboEyes.setMood(MOOD_TIRED);
         bmoFace.mood = MOOD_DEFAULT;
         bmoFace.sad = true;
-    } else if (m == "tired" || m == "sleepy" || m == "bored") {
+    } else if (m == "sleepy" || m == "tired" || m == "bored" || m == "drowsy") {
+        rockyFace.setAsleep(false);
+        rockyFace.setEmotion(RE_SLEEPY);
         roboEyes.setMood(MOOD_TIRED);
         bmoFace.mood = MOOD_TIRED;
-    } else if (m == "angry" || m == "mad" || m == "pained") {
+    } else if (m == "angry" || m == "mad" || m == "furious" || m == "pained") {
+        rockyFace.setAsleep(false);
+        rockyFace.setEmotion(RE_ANGRY);
         roboEyes.setMood(MOOD_ANGRY);
         bmoFace.mood = MOOD_ANGRY;
-    } else if (m == "curious" || m == "thinking" || m == "listening" || m == "focused") {
+    } else if (m == "thinking" || m == "ponder" || m == "focused" || m == "listening") {
+        rockyFace.setAsleep(false);
+        rockyFace.setEmotion(RE_THINKING);
         roboEyes.setMood(MOOD_DEFAULT);
         bmoFace.mood = MOOD_DEFAULT;
         bmoFace.curious = true;
-    } else if (m == "alarmed" || m == "shocked" || m == "surprised") {
+    } else if (m == "curious" || m == "inquisitive") {
+        rockyFace.setAsleep(false);
+        rockyFace.setEmotion(RE_CURIOUS);
+        roboEyes.setMood(MOOD_DEFAULT);
+        bmoFace.mood = MOOD_DEFAULT;
+        bmoFace.curious = true;
+    } else if (m == "skeptical" || m == "suspicious" || m == "doubtful") {
+        rockyFace.setAsleep(false);
+        rockyFace.setEmotion(RE_SKEPTICAL);
+        roboEyes.setMood(MOOD_DEFAULT);
+        bmoFace.mood = MOOD_DEFAULT;
+        bmoFace.curious = true;
+    } else if (m == "confused" || m == "puzzled") {
+        rockyFace.setAsleep(false);
+        rockyFace.setEmotion(RE_CONFUSED);
+        roboEyes.setMood(MOOD_DEFAULT);
+        roboEyes.anim_confused();
+        bmoFace.mood = MOOD_DEFAULT;
+        bmoFace.confused = true;
+        bmoFace.confusedStartTime = millis();
+    } else if (m == "surprised" || m == "shocked" || m == "amazed") {
+        rockyFace.setAsleep(false);
+        rockyFace.setEmotion(RE_SURPRISED);
+        roboEyes.setMood(MOOD_DEFAULT);
+        roboEyes.anim_confused();
+        bmoFace.mood = MOOD_DEFAULT;
+        bmoFace.surprised = true;
+    } else if (m == "worried" || m == "alarmed" || m == "nervous" || m == "anxious" || m == "scared") {
+        rockyFace.setAsleep(false);
+        rockyFace.setEmotion(RE_WORRIED);
         roboEyes.setMood(MOOD_DEFAULT);
         roboEyes.anim_confused();
         bmoFace.mood = MOOD_DEFAULT;
@@ -1323,6 +2180,8 @@ static void setRoboMoodUnlocked(const String& moodStr) {
         bmoFace.confused = true;
         bmoFace.confusedStartTime = millis();
     } else {
+        rockyFace.setAsleep(false);
+        rockyFace.setEmotion(RE_NEUTRAL);
         roboEyes.setMood(MOOD_DEFAULT);
         bmoFace.mood = MOOD_DEFAULT;
         bmoFace.laugh = false;
@@ -1332,51 +2191,81 @@ static void setRoboMoodUnlocked(const String& moodStr) {
 }
 
 static void setRoboMood(const String& moodStr) {
-    bool taken = (faceMutex && xSemaphoreTake(faceMutex, pdMS_TO_TICKS(50)) == pdTRUE);
+    bool taken = (faceMutex && xSemaphoreTake(faceMutex, pdMS_TO_TICKS(250)) == pdTRUE);
     if (!taken) return;
     setRoboMoodUnlocked(moodStr);
     xSemaphoreGive(faceMutex);
 }
 
 static void triggerRoboAnim(const String& animStr) {
-    bool taken = (faceMutex && xSemaphoreTake(faceMutex, pdMS_TO_TICKS(50)) == pdTRUE);
+    bool taken = (faceMutex && xSemaphoreTake(faceMutex, pdMS_TO_TICKS(250)) == pdTRUE);
     if (!taken) return;
     msgMode = false;
     String a = animStr;
     a.toLowerCase();
-    if (a == "laugh") { roboEyes.anim_laugh(); bmoFace.laugh = true; bmoFace.laughStartTime = millis(); }
-    else if (a == "confused") { roboEyes.anim_confused(); bmoFace.confused = true; bmoFace.confusedStartTime = millis(); }
-    else if (a == "blink") { roboEyes.blink(); bmoFace.triggerBlink(); }
-    else if (a == "sweat") { roboEyes.sweat = !roboEyes.sweat; bmoFace.sweat = !bmoFace.sweat; }
-    else if (a == "curious") { roboEyes.curious = !roboEyes.curious; bmoFace.curious = !bmoFace.curious; }
-    else if (a == "cyclops") roboEyes.cyclops = !roboEyes.cyclops;
-    else if (a == "eye_roll" || a == "eyeroll" || a == "roll") roboEyes.anim_eyeroll();
-    else if (a == "sigh") roboEyes.anim_sigh();
+    if (a == "laugh") {
+        roboEyes.anim_laugh();
+        bmoFace.laugh = true;
+        bmoFace.laughStartTime = millis();
+        rockyFace.setAsleep(false);
+        rockyFace.setEmotion(RE_EXCITED);
+        rockyFace.triggerPop();
+    } else if (a == "confused") {
+        roboEyes.anim_confused();
+        bmoFace.confused = true;
+        bmoFace.confusedStartTime = millis();
+        rockyFace.setAsleep(false);
+        rockyFace.setEmotion(RE_CONFUSED);
+    } else if (a == "blink") {
+        roboEyes.blink();
+        bmoFace.triggerBlink();
+        rockyFace.blink();
+    } else if (a == "sweat") {
+        roboEyes.sweat = !roboEyes.sweat;
+        bmoFace.sweat = !bmoFace.sweat;
+        rockyFace.setAsleep(false);
+        rockyFace.setEmotion(RE_WORRIED);
+    } else if (a == "curious") {
+        roboEyes.curious = !roboEyes.curious;
+        bmoFace.curious = !bmoFace.curious;
+        rockyFace.setAsleep(false);
+        rockyFace.setEmotion(RE_CURIOUS);
+    } else if (a == "cyclops") {
+        roboEyes.cyclops = !roboEyes.cyclops;
+        rockyFace.toggleCyclops();
+    } else if (a == "eye_roll" || a == "eyeroll" || a == "roll") {
+        roboEyes.anim_eyeroll();
+        rockyFace.lookToward(0.0f, -1.0f, 1200);
+    } else if (a == "sigh") {
+        roboEyes.anim_sigh();
+        rockyFace.setAsleep(false);
+        rockyFace.setEmotion(RE_SLEEPY);
+    }
     needsRedraw = true;
     xSemaphoreGive(faceMutex);
 }
 
 static void setRoboPosition(const String& posStr) {
-    bool taken = (faceMutex && xSemaphoreTake(faceMutex, pdMS_TO_TICKS(50)) == pdTRUE);
+    bool taken = (faceMutex && xSemaphoreTake(faceMutex, pdMS_TO_TICKS(250)) == pdTRUE);
     if (!taken) return;
     msgMode = false;
     String p = posStr;
     p.toUpperCase();
-    if (p == "N") { roboEyes.setPosition(POS_N); bmoFace.setGaze(0.0f, 0.7f); }
-    else if (p == "NE") { roboEyes.setPosition(POS_NE); bmoFace.setGaze(0.7f, 0.7f); }
-    else if (p == "E") { roboEyes.setPosition(POS_E); bmoFace.setGaze(0.7f, 0.0f); }
-    else if (p == "SE") { roboEyes.setPosition(POS_SE); bmoFace.setGaze(0.7f, -0.7f); }
-    else if (p == "S") { roboEyes.setPosition(POS_S); bmoFace.setGaze(0.0f, -0.7f); }
-    else if (p == "SW") { roboEyes.setPosition(POS_SW); bmoFace.setGaze(-0.7f, -0.7f); }
-    else if (p == "W") { roboEyes.setPosition(POS_W); bmoFace.setGaze(-0.7f, 0.0f); }
-    else if (p == "NW") { roboEyes.setPosition(POS_NW); bmoFace.setGaze(-0.7f, 0.7f); }
-    else { roboEyes.setPosition(POS_CENTER); bmoFace.setGaze(0.0f, 0.0f); }
+    if (p == "N")       { roboEyes.setPosition(POS_N);      bmoFace.setGaze(0.0f, 0.7f);   rockyFace.lookToward(0.0f, -0.8f, 4000); }
+    else if (p == "NE") { roboEyes.setPosition(POS_NE);     bmoFace.setGaze(0.7f, 0.7f);   rockyFace.lookToward(0.8f, -0.8f, 4000); }
+    else if (p == "E")  { roboEyes.setPosition(POS_E);      bmoFace.setGaze(0.7f, 0.0f);   rockyFace.lookToward(0.8f, 0.0f, 4000); }
+    else if (p == "SE") { roboEyes.setPosition(POS_SE);     bmoFace.setGaze(0.7f, -0.7f);  rockyFace.lookToward(0.8f, 0.8f, 4000); }
+    else if (p == "S")  { roboEyes.setPosition(POS_S);      bmoFace.setGaze(0.0f, -0.7f);  rockyFace.lookToward(0.0f, 0.8f, 4000); }
+    else if (p == "SW") { roboEyes.setPosition(POS_SW);     bmoFace.setGaze(-0.7f, -0.7f); rockyFace.lookToward(-0.8f, 0.8f, 4000); }
+    else if (p == "W")  { roboEyes.setPosition(POS_W);      bmoFace.setGaze(-0.7f, 0.0f);  rockyFace.lookToward(-0.8f, 0.0f, 4000); }
+    else if (p == "NW") { roboEyes.setPosition(POS_NW);     bmoFace.setGaze(-0.7f, 0.7f);  rockyFace.lookToward(-0.8f, -0.8f, 4000); }
+    else                { roboEyes.setPosition(POS_CENTER); bmoFace.setGaze(0.0f, 0.0f);   rockyFace.lookToward(0.0f, 0.0f, 1500); }
     needsRedraw = true;
     xSemaphoreGive(faceMutex);
 }
 
 static void setRoboColor(uint16_t col) {
-    bool taken = (faceMutex && xSemaphoreTake(faceMutex, pdMS_TO_TICKS(50)) == pdTRUE);
+    bool taken = (faceMutex && xSemaphoreTake(faceMutex, pdMS_TO_TICKS(250)) == pdTRUE);
     if (!taken) return;
     roboEyes.mainColor = col;
     roboEyes.hasChanged = true;
@@ -1388,8 +2277,9 @@ static void setRoboColor(uint16_t col) {
 static inline void setMood(const char* mood) { setRoboMood(String(mood)); }
 static inline void triggerSequence(const String& seq) { triggerRoboAnim(seq); }
 static inline void setState(const String& mood, float gx, float gy, bool speaking) {
-    bool taken = (faceMutex && xSemaphoreTake(faceMutex, pdMS_TO_TICKS(50)) == pdTRUE);
+    bool taken = (faceMutex && xSemaphoreTake(faceMutex, pdMS_TO_TICKS(250)) == pdTRUE);
     if (!taken) return;
+    bool gazeChanged = (fabsf(gx - gazeX) > 0.02f || fabsf(gy - gazeY) > 0.02f);
     gazeX = gx;
     gazeY = gy;
     isSpeaking = speaking;
@@ -1398,6 +2288,11 @@ static inline void setState(const String& mood, float gx, float gy, bool speakin
     roboEyes.setGaze(gx, gy);
     bmoFace.setGaze(gx, gy);
     bmoFace.isTalking = speaking;
+    rockyFace.setTalking(speaking);
+    // Preserve emotion's built-in gaze (e.g. thinking/curious/skeptical) unless gaze was explicitly steered
+    if (gazeChanged || (mood.isEmpty() && (fabsf(gx) > 0.05f || fabsf(gy) > 0.05f))) {
+        rockyFace.lookToward(gx, -gy, 2500);
+    }
     needsRedraw = true;
     xSemaphoreGive(faceMutex);
 }
@@ -1417,9 +2312,27 @@ static void tick() {
     bool taken = (faceMutex && xSemaphoreTake(faceMutex, pdMS_TO_TICKS(20)) == pdTRUE);
     if (!taken) return;
 
+    bool shouldPush = false;
+
     if (msgMode) {
         if (needsFullWipe) {
-            if (currentStyle == STYLE_BMO) {
+            if (currentStyle == STYLE_ROCKY) {
+                bufFillRect(0, 0, LCD_WIDTH, LCD_HEIGHT, COL_ROCKY_BG);
+                bufFillRect(4, 4, LCD_WIDTH - 8, 3, COL_ROCKY_FX);
+                bufFillRect(4, LCD_HEIGHT - 7, LCD_WIDTH - 8, 3, COL_ROCKY_FX);
+                bufFillRect(4, 4, 3, LCD_HEIGHT - 8, COL_ROCKY_FX);
+                bufFillRect(LCD_WIDTH - 7, 4, 3, LCD_HEIGHT - 8, COL_ROCKY_FX);
+
+                int len = displayMsg.length();
+                int scale = (len <= 6) ? 5 : (len <= 10 ? 3 : 2);
+                int totalW = len * (6 * scale) - scale;
+                int startX = max(10, (LCD_WIDTH - totalW) / 2);
+                bufDrawString(startX, 82, displayMsg.c_str(), COL_ROCKY_EYE, COL_ROCKY_BG, scale);
+                const char* sub = (displayMsg == "ASSEMBLY") ? "SERVOS HELD AT 90" : "ROCKY-S3";
+                int subLen = strlen(sub);
+                int subX = max(10, (LCD_WIDTH - (subLen * 12 - 2)) / 2);
+                bufDrawString(subX, 165, sub, COL_ROCKY_DOTS, COL_ROCKY_BG, 2);
+            } else if (currentStyle == STYLE_BMO) {
                 bufFillRect(0, 0, LCD_WIDTH, LCD_HEIGHT, COL_BMO_BG);
                 bufFillRect(0, 0, LCD_WIDTH, 4, COL_BMO_BORDER);
                 bufFillRect(0, LCD_HEIGHT - 4, LCD_WIDTH, 4, COL_BMO_BORDER);
@@ -1450,15 +2363,18 @@ static void tick() {
                 bufDrawString(startX, 80, displayMsg.c_str(), COL_WHITE, COL_BLUE, scale);
                 bufDrawString(60, 160, "FLUXGARAGE ROBOEYES", COL_YELLOW, COL_BLUE, 2);
             }
-            pushBuffer(0, 0, LCD_WIDTH, LCD_HEIGHT);
+            shouldPush = true;
             needsFullWipe = false;
         }
         xSemaphoreGive(faceMutex);
+        if (shouldPush) pushBuffer(0, 0, LCD_WIDTH, LCD_HEIGHT);
         return;
     }
 
     bool shouldRender = false;
-    if (currentStyle == STYLE_BMO) {
+    if (currentStyle == STYLE_ROCKY) {
+        shouldRender = rockyFace.update(now) || needsFullWipe;
+    } else if (currentStyle == STYLE_BMO) {
         shouldRender = bmoFace.update(now) || needsFullWipe;
     } else {
         shouldRender = roboEyes.update(now) || needsFullWipe;
@@ -1467,14 +2383,21 @@ static void tick() {
     needsFullWipe = false;
 
     if (shouldRender) {
-        if (currentStyle == STYLE_BMO) {
+        if (currentStyle == STYLE_ROCKY) {
+            rockyFace.render();
+        } else if (currentStyle == STYLE_BMO) {
             bmoFace.render(now, fullWipe);
         } else {
             roboEyes.render(fullWipe);
         }
+        shouldPush = true;
     }
 
+    // Release mutex BEFORE the 30-40ms SPI DMA transfer so /face HTTP commands never block or drop!
     xSemaphoreGive(faceMutex);
+    if (shouldPush) {
+        pushBuffer(0, 0, LCD_WIDTH, LCD_HEIGHT);
+    }
 }
 
 }  // namespace marvin_face

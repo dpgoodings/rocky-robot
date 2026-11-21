@@ -18,6 +18,7 @@
 #include <Update.h>
 #include "esp_http_server.h"
 #include "esp_timer.h"
+#include "esp_system.h"
 #include <esp_camera.h>
 #include <esp_log.h>
 #include <FS.h>
@@ -93,6 +94,57 @@ static bool extractJsonFloat(const String& body, const char* key, float& outVal)
     return false;
 }
 
+static bool extractJsonBool(const String& body, const char* key, bool& outVal) {
+    String pat = String("\"") + key + "\"";
+    int k = body.indexOf(pat);
+    if (k < 0) return false;
+    int col = body.indexOf(':', k + pat.length());
+    if (col < 0) return false;
+    int start = col + 1;
+    while (start < (int)body.length() && (body[start] == ' ' || body[start] == '\t' || body[start] == '"')) start++;
+    if (start >= (int)body.length()) return false;
+    String rest = body.substring(start, min((int)body.length(), start + 6));
+    rest.toLowerCase();
+    if (rest.startsWith("true") || rest.startsWith("1") || rest.startsWith("on")) {
+        outVal = true;
+        return true;
+    }
+    if (rest.startsWith("false") || rest.startsWith("0") || rest.startsWith("off")) {
+        outVal = false;
+        return true;
+    }
+    return false;
+}
+
+static const char* getResetReasonStr() {
+    switch (esp_reset_reason()) {
+        case ESP_RST_POWERON:   return "POWERON";
+        case ESP_RST_EXT:       return "EXT";
+        case ESP_RST_SW:        return "SW";
+        case ESP_RST_PANIC:     return "PANIC";
+        case ESP_RST_INT_WDT:   return "INT_WDT";
+        case ESP_RST_TASK_WDT:  return "TASK_WDT";
+        case ESP_RST_WDT:       return "WDT";
+        case ESP_RST_DEEPSLEEP: return "DEEPSLEEP";
+        case ESP_RST_BROWNOUT:  return "BROWNOUT";
+        case ESP_RST_SDIO:      return "SDIO";
+        default:                return "UNKNOWN";
+    }
+}
+
+static void applyAssemblyMode(bool on) {
+    #if ENABLE_PCA9685
+    marvin_motion::setAssemblyMode(on);
+    #endif
+    #if ENABLE_ST7789
+    if (on) {
+        marvin_face::showMessage("ASSEMBLY");
+    } else {
+        marvin_face::setState("neutral", 0.0f, 0.0f, false);
+    }
+    #endif
+}
+
 // MJPEG Stream constants
 #define PART_BOUNDARY "123456789000000000000987654321"
 static const char* _STREAM_CONTENT_TYPE = "multipart/x-mixed-replace;boundary=" PART_BOUNDARY;
@@ -108,7 +160,9 @@ void setup() {
 
     Serial.println("\n==========================================");
     Serial.printf("  %s — AI Robot Edge Controller\n", ROBOT_NAME);
+    Serial.printf("  Reset Reason: %s\n", getResetReasonStr());
     Serial.println("==========================================");
+    randomSeed(esp_random());
 
     // 1. Verify PSRAM
     initPSRAM();
@@ -229,36 +283,54 @@ void loop() {
             Serial.println("[Console] Re-initializing SD Card...");
             sdAvailable = initSDCard();
         } else if (cmd == "status") {
-            Serial.printf("Free Heap: %lu bytes | Free PSRAM: %lu bytes | Uptime: %lu s | SD: %s\n",
+            bool asmMode = false;
+            bool relaxed = false;
+            #if ENABLE_PCA9685
+            asmMode = marvin_motion::isAssemblyMode();
+            relaxed = marvin_motion::areServosRelaxed();
+            #endif
+            Serial.printf("Robot: %s | Reset: %s | Free Heap: %lu B | Free PSRAM: %lu B | Uptime: %lu s | Assembly: %s | Servos: %s | SD: %s\n",
+                          ROBOT_NAME, getResetReasonStr(),
                           (unsigned long)ESP.getFreeHeap(), (unsigned long)ESP.getFreePsram(),
-                          millis() / 1000, sdAvailable ? "Mounted" : "Not mounted");
-        } else if (cmd == "red" || cmd == "alarmed") {
-            Serial.println("[Console] Setting LCD color: RED (Alarmed)");
-            marvin_face::setState("red", 0.0f, 0.0f, false);
-        } else if (cmd == "green" || cmd == "happy") {
-            Serial.println("[Console] Setting LCD color: GREEN (Happy)");
-            marvin_face::setState("green", 0.0f, 0.0f, false);
-        } else if (cmd == "blue" || cmd == "sad") {
-            Serial.println("[Console] Setting LCD color: BLUE (Sad)");
-            marvin_face::setState("blue", 0.0f, 0.0f, false);
-        } else if (cmd == "yellow" || cmd == "eyeroll" || cmd == "eye_roll" || cmd == "roll") {
-            Serial.println("[Console] Setting LCD color: YELLOW (Eye Roll)");
-            marvin_face::triggerSequence("eye_roll");
-        } else if (cmd == "purple" || cmd == "magenta" || cmd == "glitch" || cmd == "twitch") {
-            Serial.println("[Console] Setting LCD color: PURPLE (Glitch)");
-            marvin_face::triggerSequence("glitch");
-        } else if (cmd == "cyan" || cmd == "scan" || cmd == "sentry") {
-            Serial.println("[Console] Setting LCD color: CYAN (Scan)");
-            marvin_face::triggerSequence("scan");
-        } else if (cmd == "orange" || cmd == "thinking") {
-            Serial.println("[Console] Setting LCD color: ORANGE (Thinking)");
-            marvin_face::setState("orange", 0.0f, 0.0f, false);
-        } else if (cmd == "white") {
-            Serial.println("[Console] Setting LCD color: WHITE");
-            marvin_face::setState("white", 0.0f, 0.0f, false);
-        } else if (cmd == "black" || cmd == "bored" || cmd == "reset") {
-            Serial.println("[Console] Setting LCD color: BLACK / MARVIN VISOR");
-            marvin_face::setState("bored", 0.0f, 0.0f, false);
+                          millis() / 1000, asmMode ? "ON" : "OFF", relaxed ? "RELAXED" : "POWERED",
+                          sdAvailable ? "Mounted" : "Not mounted");
+        } else if (cmd == "assembly on" || cmd == "assembly 1") {
+            applyAssemblyMode(true);
+            Serial.println("[Console] Assembly mode ON (servos centered at 90 deg and held powered).");
+        } else if (cmd == "assembly off" || cmd == "assembly 0") {
+            applyAssemblyMode(false);
+            Serial.println("[Console] Assembly mode OFF (auto-relaxation re-enabled).");
+        } else if (cmd == "assembly") {
+            #if ENABLE_PCA9685
+            Serial.printf("[Console] Assembly mode is %s (use 'assembly on' or 'assembly off')\n",
+                          marvin_motion::isAssemblyMode() ? "ON" : "OFF");
+            #endif
+        } else if (cmd == "dance" || cmd == "dance_groove" || cmd == "dance_robot" ||
+                   cmd == "dance_sprinkler" || cmd == "dance_disco") {
+            Serial.printf("[Console] Starting dance: %s\n", cmd.c_str());
+            #if ENABLE_PCA9685
+            marvin_motion::triggerAction(cmd);
+            #endif
+            #if ENABLE_ST7789
+            marvin_face::setState(cmd == "dance_disco" ? "love" : "excited", 0.0f, 0.0f, false);
+            #endif
+        } else if (cmd == "center" || cmd == "home") {
+            Serial.println("[Console] Centering head & joints to 90 deg...");
+            #if ENABLE_PCA9685
+            marvin_motion::triggerAction("center");
+            #endif
+        } else if (cmd == "nod" || cmd == "shake" || cmd == "curious_tilt" ||
+                   cmd == "happy_bounce" || cmd == "sad_droop" || cmd == "surprised_pop") {
+            Serial.printf("[Console] Micro-gesture: %s\n", cmd.c_str());
+            #if ENABLE_PCA9685
+            marvin_motion::triggerAction(cmd);
+            #endif
+        } else if (cmd == "neutral" || cmd == "happy" || cmd == "sad" || cmd == "angry" ||
+                   cmd == "surprised" || cmd == "sleepy" || cmd == "thinking" || cmd == "curious" ||
+                   cmd == "skeptical" || cmd == "excited" || cmd == "love" || cmd == "confused" ||
+                   cmd == "worried" || cmd == "asleep") {
+            Serial.printf("[Console] Setting Rocky face mood: %s\n", cmd.c_str());
+            marvin_face::setState(cmd, 0.0f, 0.0f, false);
         } else if (cmd == "hello" || cmd == "hi") {
             Serial.println("[Console] Writing HELLO on LCD...");
             marvin_face::showMessage("HELLO");
@@ -267,11 +339,10 @@ void loop() {
             txt.trim();
             Serial.printf("[Console] Writing '%s' on LCD...\n", txt.c_str());
             marvin_face::showMessage(txt);
-        } else if (cmd == "sigh") {
-            Serial.println("[Console] Triggering sigh on LCD...");
-            marvin_face::triggerSequence("sigh");
+        } else if (cmd == "blink") {
+            marvin_face::triggerSequence("blink");
         } else if (cmd == "help") {
-            Serial.println("Available serial commands: 'red', 'green', 'blue', 'yellow', 'purple', 'cyan', 'orange', 'white', 'black', 'eyeroll', 'glitch', 'scan', 'sigh', 'status', 'help'");
+            Serial.println("Rocky-S3 serial commands: status, assembly on|off, dance, dance_groove|robot|sprinkler|disco, center, nod, shake, curious_tilt, happy_bounce, sad_droop, surprised_pop, <emotion>, blink, text:<msg>, capture, help");
         }
     }
     delay(20);
@@ -417,82 +488,118 @@ static const char PROGMEM INDEX_HTML[] = R"rawliteral(
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Rocky-S3 Robot Console</title>
+    <title>Rocky-S3 Console</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0a0f1a; color: #f8fafc; margin: 0; padding: 20px; }
         .container { max-width: 900px; margin: 0 auto; }
-        h1 { color: #38bdf8; display: flex; align-items: center; gap: 10px; margin-bottom: 5px; }
-        .badge { background: #0369a1; padding: 4px 10px; border-radius: 6px; font-size: 14px; color: #e0f2fe; }
-        .stream-box { background: #1e293b; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align: center; margin: 20px 0; }
-        img.stream { width: 100%; max-height: 520px; object-fit: contain; display: block; background: #000; }
-        .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 20px 0; }
-        button { background: #2563eb; color: #fff; border: none; padding: 12px 18px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
-        button:hover { background: #1d4ed8; }
-        button.secondary { background: #334155; }
-        button.secondary:hover { background: #475569; }
-        .stats { background: #1e293b; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 13px; line-height: 1.6; color: #94a3b8; }
+        h1 { color: #fbbf24; display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-size: 24px; }
+        .badge { background: #1e293b; border: 1px solid #334155; padding: 4px 10px; border-radius: 6px; font-size: 13px; color: #94a3b8; }
+        .stream-box { background: #111827; border: 1px solid #1f2937; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align: center; margin: 16px 0; }
+        img.stream { width: 100%; max-height: 480px; object-fit: contain; display: block; background: #000; }
+        .section-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; margin: 18px 0 8px; font-weight: 700; }
+        .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 10px; margin: 10px 0; }
+        button { background: #2563eb; color: #fff; border: none; padding: 11px 14px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; transition: filter 0.15s, transform 0.1s; }
+        button:hover { filter: brightness(1.1); }
+        button:active { transform: scale(0.98); }
+        button.secondary { background: #1e293b; border: 1px solid #334155; color: #e2e8f0; }
+        button.assembly-on { background: #dc2626; border: 1px solid #f87171; color: #fff; }
+        .stats { background: #111827; border: 1px solid #1f2937; padding: 14px 16px; border-radius: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; line-height: 1.7; color: #94a3b8; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🤖 Rocky-S3 Robot Console <span class="badge">Async Edge Vision</span></h1>
-        <p style="color: #94a3b8; margin-top: 0;">Connected to local AI Brain at ~/rocky-voice</p>
-        
+        <h1>🪨 Rocky-S3 Console <span class="badge">ESP32-S3 Edge</span></h1>
+
         <div class="stream-box">
-            <img class="stream" id="stream-img" src="" alt="Live Video Stream (Port 81)">
+            <img class="stream" id="stream-img" src="" alt="Rocky Live Camera (Port 81)">
         </div>
 
+        <div class="section-label">Motion &amp; Hardware</div>
         <div class="controls">
-            <div style="grid-column: 1 / -1; display: flex; gap: 10px;">
-                <button style="flex: 1; background: #cdeee0; color: #142826; font-size: 15px; padding: 12px; font-weight: bold; border-radius: 8px; border: none; cursor: pointer;" onclick="setStyle('bmo')">🎮 Mimic BMO Face (Mint CRT)</button>
-                <button style="flex: 1; background: #080c12; color: #38bdf8; border: 1.5px solid #38bdf8; font-size: 15px; padding: 12px; font-weight: bold; border-radius: 8px; cursor: pointer;" onclick="setStyle('roboeyes')">🤖 RoboEyes (Cyber Cyan)</button>
-            </div>
-            <button style="grid-column: 1 / -1; background: #38bdf8; color: #000; font-size: 16px; padding: 12px; font-weight: bold;" onclick="sendText('HELLO')">👋 Write "HELLO" Banner</button>
-            <button style="background: #22c55e; color: #000;" onclick="setMood('happy')">😄 Happy (RoboEyes)</button>
-            <button style="background: #eab308; color: #000;" onclick="setMood('tired')">😴 Tired (RoboEyes)</button>
-            <button style="background: #ef4444;" onclick="setMood('angry')">😠 Angry (RoboEyes)</button>
-            <button style="background: #334155;" onclick="setMood('default')">😐 Neutral (Default)</button>
-            <button style="background: #8b5cf6;" onclick="triggerAnim('laugh')">😂 Laugh (anim_laugh)</button>
-            <button style="background: #ec4899;" onclick="triggerAnim('confused')">😵 Confused (anim_confused)</button>
-            <button style="background: #0ea5e9;" onclick="triggerAnim('sweat')">💧 Sweat Drop</button>
-            <button style="background: #f59e0b; color: #000;" onclick="triggerAnim('curious')">🧐 Curious Glance</button>
-            <button style="background: #14b8a6; color: #000;" onclick="triggerAnim('cyclops')">👁️ Cyclops Mode</button>
-            <button style="background: #6366f1;" onclick="triggerAnim('eye_roll')">🙄 Eye Roll (360°)</button>
-            <button style="background: #64748b;" onclick="triggerAnim('blink')">😉 Blink</button>
+            <button style="background: #f59e0b; color: #000;" onclick="sendAction('dance')">🕺 Dance!</button>
+            <button style="background: #0ea5e9; color: #000;" onclick="sendAction('center')">🎯 Center Head</button>
+            <button id="btn-assembly" class="secondary" onclick="toggleAssembly()">🔧 Assembly: OFF</button>
+            <button class="secondary" onclick="triggerAnim('blink')">😉 Blink</button>
             <button class="secondary" onclick="savePhoto()">📸 Save Photo</button>
             <button class="secondary" onclick="refreshStatus()">📊 Status</button>
         </div>
 
-        <div style="display: flex; gap: 8px; margin: 12px 0;">
-            <input id="custom-text" type="text" placeholder="Type custom text for LCD (e.g. HELLO, ROCKY)..." style="flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #fff; font-size: 15px;">
-            <button onclick="sendCustomText()" style="padding: 12px 20px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">Send to LCD</button>
+        <div class="section-label">Rocky Emotions (14)</div>
+        <div class="controls">
+            <button style="background: #334155;" onclick="setMood('neutral')">😐 Neutral</button>
+            <button style="background: #22c55e; color: #000;" onclick="setMood('happy')">😄 Happy</button>
+            <button style="background: #10b981; color: #000;" onclick="setMood('excited')">✨ Excited</button>
+            <button style="background: #ec4899;" onclick="setMood('love')">❤️ Love</button>
+            <button style="background: #0ea5e9; color: #000;" onclick="setMood('curious')">🧐 Curious</button>
+            <button style="background: #6366f1;" onclick="setMood('thinking')">🤔 Thinking</button>
+            <button style="background: #f59e0b; color: #000;" onclick="setMood('surprised')">😲 Surprised</button>
+            <button style="background: #8b5cf6;" onclick="setMood('confused')">❓ Confused</button>
+            <button style="background: #64748b;" onclick="setMood('skeptical')">🤨 Skeptical</button>
+            <button style="background: #f97316; color: #000;" onclick="setMood('worried')">😟 Worried</button>
+            <button style="background: #3b82f6;" onclick="setMood('sad')">😢 Sad</button>
+            <button style="background: #ef4444;" onclick="setMood('angry')">😠 Angry</button>
+            <button style="background: #eab308; color: #000;" onclick="setMood('sleepy')">😴 Sleepy</button>
+            <button style="background: #1e293b; border: 1px solid #475569;" onclick="setMood('asleep')">💤 Asleep</button>
         </div>
 
-        <div id="cmd-status" style="padding: 10px 14px; margin-bottom: 16px; border-radius: 8px; background: #1e293b; color: #38bdf8; font-weight: 600; font-size: 14px; text-align: center; min-height: 20px;">Ready for commands.</div>
+        <div style="display: flex; gap: 8px; margin: 14px 0;">
+            <input id="custom-text" type="text" placeholder="Type custom text for Rocky LCD..." style="flex: 1; padding: 11px 12px; border-radius: 8px; border: 1px solid #334155; background: #111827; color: #fff; font-size: 14px;">
+            <button onclick="sendCustomText()">Send to LCD</button>
+        </div>
+
+        <div id="cmd-status" style="padding: 10px 14px; margin-bottom: 14px; border-radius: 8px; background: #111827; border: 1px solid #1f2937; color: #fbbf24; font-weight: 600; font-size: 14px; text-align: center; min-height: 20px;">Rocky-S3 ready.</div>
 
         <div class="stats" id="stats-panel">Loading telemetry...</div>
     </div>
 
     <script>
         document.getElementById('stream-img').src = 'http://' + window.location.hostname + ':81/stream';
+        let assemblyOn = false;
 
-        async function sendGesture(act) {
+        function renderAssemblyBtn() {
+            const btn = document.getElementById('btn-assembly');
+            if (!btn) return;
+            btn.innerText = assemblyOn ? '🔧 Assembly: ON (90° Held)' : '🔧 Assembly: OFF';
+            btn.className = assemblyOn ? 'assembly-on' : 'secondary';
+        }
+
+        async function sendAction(act) {
             const st = document.getElementById('cmd-status');
-            if (st) st.innerText = '⏳ Sending action: ' + act + '...';
+            if (st) st.innerText = '⏳ Executing: ' + act + '...';
             try {
-                const res = await fetch('/gesture?action=' + encodeURIComponent(act), {
+                const res = await fetch('/action', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({action: act})
                 });
-                if (res.ok && st) st.innerText = '✅ Executed: ' + act.toUpperCase();
+                const data = await res.json();
+                if (res.ok && st) st.innerText = '✅ Executed: ' + (data.action || act).toUpperCase();
+            } catch (e) {
+                if (st) st.innerText = '❌ Failed: ' + e;
+            }
+        }
+        async function toggleAssembly() {
+            const next = !assemblyOn;
+            const st = document.getElementById('cmd-status');
+            if (st) st.innerText = '⏳ Setting Assembly Mode ' + (next ? 'ON' : 'OFF') + '...';
+            try {
+                const res = await fetch('/assembly', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({enabled: next})
+                });
+                const data = await res.json();
+                assemblyOn = !!data.assembly_mode;
+                renderAssemblyBtn();
+                if (st) st.innerText = assemblyOn ? '🔧 Assembly Mode ON — all servos held at 90°' : '✅ Assembly Mode OFF — auto-relaxation active';
+                refreshStatus();
             } catch (e) {
                 if (st) st.innerText = '❌ Failed: ' + e;
             }
         }
         async function setMood(mood) {
             const st = document.getElementById('cmd-status');
-            if (st) st.innerText = '⏳ Sending face: ' + mood + '...';
+            if (st) st.innerText = '⏳ Setting Rocky face: ' + mood + '...';
             try {
                 const res = await fetch('/face?mood=' + encodeURIComponent(mood), { method: 'GET' });
                 if (res.ok && st) st.innerText = '✅ Active on LCD: ' + mood.toUpperCase();
@@ -500,33 +607,21 @@ static const char PROGMEM INDEX_HTML[] = R"rawliteral(
                 if (st) st.innerText = '❌ Failed: ' + e;
             }
         }
-        async function setStyle(stName) {
-            const st = document.getElementById('cmd-status');
-            if (st) st.innerText = '⏳ Switching style: ' + stName + '...';
-            try {
-                await fetch('/face?style=' + encodeURIComponent(stName));
-                if (st) st.innerText = '✅ Active Style: ' + stName.toUpperCase();
-            } catch (e) {
-                if (st) st.innerText = '❌ Failed: ' + e;
-            }
-        }
         async function triggerAnim(anim) {
             const st = document.getElementById('cmd-status');
-            if (st) st.innerText = '⏳ Triggering anim: ' + anim + '...';
             try {
                 const res = await fetch('/face?anim=' + encodeURIComponent(anim), { method: 'GET' });
-                if (res.ok && st) st.innerText = '✅ Active on LCD: ' + anim.toUpperCase();
+                if (res.ok && st) st.innerText = '✅ Triggered: ' + anim.toUpperCase();
             } catch (e) {
                 if (st) st.innerText = '❌ Failed: ' + e;
             }
         }
         async function sendText(txt) {
             const st = document.getElementById('cmd-status');
-            if (st) st.innerText = '⏳ Writing "' + txt + '" on LCD...';
             try {
                 const res = await fetch('/face?text=' + encodeURIComponent(txt));
                 if (res.ok && st) st.innerText = '✅ Displaying "' + txt.toUpperCase() + '" on LCD';
-            } catch(e) {
+            } catch (e) {
                 if (st) st.innerText = '❌ Failed: ' + e;
             }
         }
@@ -534,15 +629,12 @@ static const char PROGMEM INDEX_HTML[] = R"rawliteral(
             const val = document.getElementById('custom-text').value.trim();
             if (val) sendText(val);
         }
-        async function setRes(val) {
-            await fetch(`/control?var=framesize&val=${val}`);
-        }
         async function savePhoto() {
             const st = document.getElementById('cmd-status');
             try {
                 const res = await fetch('/save', { method: 'POST' });
                 const data = await res.json();
-                if (st) st.innerText = data.file ? '📸 Photo captured: ' + data.file : 'Saved!';
+                if (st) st.innerText = data.file ? '📸 Photo captured: ' + data.file : (data.error || 'Saved!');
             } catch (e) {
                 if (st) st.innerText = '❌ Save failed: ' + e;
             }
@@ -551,14 +643,17 @@ static const char PROGMEM INDEX_HTML[] = R"rawliteral(
             try {
                 const res = await fetch('/status');
                 const data = await res.json();
-                document.getElementById('stats-panel').innerHTML = 
-                    `Uptime: ${data.uptime_sec}s | Heap Free: ${(data.free_heap/1024).toFixed(1)} KB | PSRAM Free: ${(data.free_psram/(1024*1024)).toFixed(2)} MB<br>` +
-                    `SD Card: ${data.sd_mounted ? 'Mounted (' + (data.sd_total_mb) + ' MB)' : 'Not Available'} | WiFi RSSI: ${data.wifi_rssi} dBm`;
+                assemblyOn = !!data.assembly_mode;
+                renderAssemblyBtn();
+                document.getElementById('stats-panel').innerHTML =
+                    `Robot: ${data.robot} | Uptime: ${data.uptime_sec}s | Reset: ${data.reset_reason || 'N/A'}<br>` +
+                    `Heap Free: ${(data.free_heap/1024).toFixed(1)} KB | PSRAM Free: ${(data.free_psram/(1024*1024)).toFixed(2)} MB | WiFi: ${data.wifi_rssi} dBm<br>` +
+                    `Assembly: ${data.assembly_mode ? 'ON (90° Held)' : 'OFF'} | Servos: ${data.servos_relaxed ? 'Relaxed (Quiet)' : 'Powered'} | SD: ${data.sd_mounted ? 'Mounted (' + data.sd_total_mb + ' MB)' : 'Disabled'}`;
             } catch (e) {
                 document.getElementById('stats-panel').innerText = 'Telemetry offline';
             }
         }
-        setInterval(refreshStatus, 8000);
+        setInterval(refreshStatus, 5000);
         refreshStatus();
     </script>
 </body>
@@ -650,17 +745,27 @@ static esp_err_t stream_handler(httpd_req_t *req) {
 }
 
 static esp_err_t status_handler(httpd_req_t *req) {
-    char json[320];
+    char json[448];
+    bool asmMode = false;
+    bool relaxed = false;
+    #if ENABLE_PCA9685
+    asmMode = marvin_motion::isAssemblyMode();
+    relaxed = marvin_motion::areServosRelaxed();
+    #endif
     snprintf(json, sizeof(json),
         "{\"robot\":\"%s\",\"uptime_sec\":%lu,\"free_heap\":%lu,\"free_psram\":%lu,"
-        "\"sd_mounted\":%s,\"sd_total_mb\":%llu,\"wifi_rssi\":%d}",
+        "\"sd_mounted\":%s,\"sd_total_mb\":%llu,\"wifi_rssi\":%d,"
+        "\"reset_reason\":\"%s\",\"assembly_mode\":%s,\"servos_relaxed\":%s}",
         ROBOT_NAME,
         millis() / 1000,
         (unsigned long)ESP.getFreeHeap(),
         (unsigned long)ESP.getFreePsram(),
         sdAvailable ? "true" : "false",
         sdAvailable ? (SD_MMC.totalBytes() / (1024 * 1024)) : 0,
-        WiFi.RSSI()
+        WiFi.RSSI(),
+        getResetReasonStr(),
+        asmMode ? "true" : "false",
+        relaxed ? "true" : "false"
     );
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
@@ -787,10 +892,25 @@ static esp_err_t action_handler(httpd_req_t *req) {
 
     float dur = 2200.0f;
     extractJsonFloat(body, "duration_ms", dur);
+    action.toLowerCase();
+    action.trim();
+    String executedName = action;
     if (!action.isEmpty()) {
         Serial.printf("[Action] Executing '%s' (%lu ms)\n", action.c_str(), (unsigned long)dur);
+        #if ENABLE_PCA9685
         marvin_motion::triggerAction(action, (unsigned long)dur);
-        if (action == "sigh" || action == "crouch" || action == "brood") {
+        if (action == "dance") {
+            executedName = String(marvin_motion::getActiveDanceName());
+        }
+        #endif
+        #if ENABLE_ST7789
+        if (action == "dance" || action == "dance_groove" || action == "dance_sprinkler") {
+            marvin_face::setState("happy", 0.0f, 0.0f, false);
+        } else if (action == "dance_disco") {
+            marvin_face::setState("love", 0.0f, 0.0f, false);
+        } else if (action == "dance_robot") {
+            marvin_face::setState("excited", 0.0f, 0.0f, false);
+        } else if (action == "sigh" || action == "crouch" || action == "brood") {
             marvin_face::triggerSequence("sigh");
         } else if (action == "eyeroll" || action == "eye_roll") {
             marvin_face::triggerSequence("eye_roll");
@@ -801,13 +921,69 @@ static esp_err_t action_handler(httpd_req_t *req) {
         } else if (action == "wave" || action == "fist_bump") {
             marvin_face::setState("happy", 0.0f, 0.0f, false);
         }
+        #endif
     }
     logMissionEvent(content);
 
+    char resp[128];
+    snprintf(resp, sizeof(resp), "{\"status\":\"executed\",\"action\":\"%s\"}", executedName.c_str());
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
     httpd_resp_set_hdr(req, "Connection", "keep-alive");
-    return httpd_resp_send(req, "{\"status\":\"executed\"}", HTTPD_RESP_USE_STRLEN);
+    return httpd_resp_send(req, resp, strlen(resp));
+}
+
+static esp_err_t assembly_handler(httpd_req_t *req) {
+    bool hasVal = false;
+    bool targetOn = false;
+
+    // 1. Check URL query string: /assembly?on=1|0 or /assembly?enabled=true|false
+    char qbuf[96] = {0};
+    if (httpd_req_get_url_query_str(req, qbuf, sizeof(qbuf)) == ESP_OK) {
+        char val[16] = {0};
+        if (httpd_query_key_value(qbuf, "on", val, sizeof(val)) == ESP_OK ||
+            httpd_query_key_value(qbuf, "enabled", val, sizeof(val)) == ESP_OK) {
+            String v(val);
+            v.toLowerCase();
+            targetOn = (v == "1" || v == "true" || v == "on");
+            hasVal = true;
+        }
+    }
+
+    // 2. Check POST JSON body: {"enabled":true|false} or {"on":1|0}
+    if (req->method == HTTP_POST && req->content_len > 0) {
+        char content[192] = {0};
+        size_t recv_size = min(req->content_len, sizeof(content) - 1);
+        int ret = httpd_req_recv(req, content, recv_size);
+        if (ret > 0) {
+            content[ret] = '\0';
+            String body(content);
+            if (extractJsonBool(body, "enabled", targetOn) || extractJsonBool(body, "on", targetOn)) {
+                hasVal = true;
+            }
+        }
+    }
+
+    if (hasVal) {
+        applyAssemblyMode(targetOn);
+    }
+
+    bool asmMode = false;
+    bool relaxed = false;
+    #if ENABLE_PCA9685
+    asmMode = marvin_motion::isAssemblyMode();
+    relaxed = marvin_motion::areServosRelaxed();
+    #endif
+
+    char json[128];
+    snprintf(json, sizeof(json),
+             "{\"status\":\"ok\",\"assembly_mode\":%s,\"servos_relaxed\":%s}",
+             asmMode ? "true" : "false",
+             relaxed ? "true" : "false");
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_set_hdr(req, "Connection", "keep-alive");
+    return httpd_resp_send(req, json, strlen(json));
 }
 
 static esp_err_t servo_handler(httpd_req_t *req) {
@@ -913,9 +1089,15 @@ static esp_err_t face_handler(httpd_req_t *req) {
             if (!st.isEmpty()) marvin_face::setFaceStyle(st);
             extractJsonFloat(body, "gx", gx);
             extractJsonFloat(body, "gy", gy);
+            bool speakingExplicit = false;
             if (body.indexOf("\"speaking\":true") >= 0 || body.indexOf("\"speaking\": true") >= 0) {
                 speaking = true;
+                speakingExplicit = true;
             } else if (body.indexOf("\"speaking\":false") >= 0 || body.indexOf("\"speaking\": false") >= 0) {
+                speaking = false;
+                speakingExplicit = true;
+            }
+            if (!speakingExplicit && (mood == "neutral" || mood == "default" || mood == "sleepy" || mood == "asleep" || mood == "listening" || mood == "thinking")) {
                 speaking = false;
             }
 
@@ -933,7 +1115,11 @@ static esp_err_t face_handler(httpd_req_t *req) {
         }
     }
 
-    // Direct mood to sequence conversion if mood is an action name
+    mood.toLowerCase();
+    seq.toLowerCase();
+
+    // Direct mood to sequence conversion ONLY for explicit motion/action names
+    // (keep emotion moods like confused, thinking, skeptical, worried, asleep, love intact)
     if (seq.isEmpty() && (mood == "eye_roll" || mood == "eyeroll" || mood == "roll" ||
                           mood == "glitch" || mood == "twitch" || mood == "sigh" ||
                           mood == "scan" || mood == "sentry")) {
@@ -1022,7 +1208,7 @@ void startCameraServer() {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = 80;
     config.ctrl_port = 32768;
-    config.max_uri_handlers = 18;
+    config.max_uri_handlers = 22;
     config.max_open_sockets = 12;
     config.backlog_conn = 5;
     config.recv_wait_timeout = 2;
@@ -1039,6 +1225,8 @@ void startCameraServer() {
     httpd_uri_t control_uri = { .uri = "/control", .method = HTTP_GET, .handler = control_handler, .user_ctx = NULL };
     httpd_uri_t action_uri = { .uri = "/action", .method = HTTP_POST, .handler = action_handler, .user_ctx = NULL };
     httpd_uri_t gesture_uri = { .uri = "/gesture", .method = HTTP_POST, .handler = action_handler, .user_ctx = NULL };
+    httpd_uri_t assembly_post_uri = { .uri = "/assembly", .method = HTTP_POST, .handler = assembly_handler, .user_ctx = NULL };
+    httpd_uri_t assembly_get_uri = { .uri = "/assembly", .method = HTTP_GET, .handler = assembly_handler, .user_ctx = NULL };
     httpd_uri_t servo_uri = { .uri = "/servo", .method = HTTP_POST, .handler = servo_handler, .user_ctx = NULL };
     httpd_uri_t face_post_uri = { .uri = "/face", .method = HTTP_POST, .handler = face_handler, .user_ctx = NULL };
     httpd_uri_t face_get_uri = { .uri = "/face", .method = HTTP_GET, .handler = face_handler, .user_ctx = NULL };
@@ -1056,13 +1244,15 @@ void startCameraServer() {
         httpd_register_uri_handler(camera_httpd, &control_uri);
         httpd_register_uri_handler(camera_httpd, &action_uri);
         httpd_register_uri_handler(camera_httpd, &gesture_uri);
+        httpd_register_uri_handler(camera_httpd, &assembly_post_uri);
+        httpd_register_uri_handler(camera_httpd, &assembly_get_uri);
         httpd_register_uri_handler(camera_httpd, &servo_uri);
         httpd_register_uri_handler(camera_httpd, &face_post_uri);
         httpd_register_uri_handler(camera_httpd, &face_get_uri);
         httpd_register_uri_handler(camera_httpd, &api_face_post_uri);
         httpd_register_uri_handler(camera_httpd, &api_face_get_uri);
         httpd_register_uri_handler(camera_httpd, &update_post_uri);
-        Serial.println("[Server] Command, Servo, Face & Telemetry Server active on Port 80.");
+        Serial.println("[Server] Command, Servo, Assembly, Face & Telemetry Server active on Port 80.");
     }
 
     // High-throughput isolated stream server on Port 81 (eliminates socket starvation on Port 80)

@@ -1,8 +1,8 @@
 #pragma once
 
 // Robot Identity & Mode
-#define ROBOT_NAME          "Marvin-S3"
-#define ROBOT_ROLE          "Bipedal Paranoid Android Assistant"
+#define ROBOT_NAME          "Rocky-S3"
+#define ROBOT_ROLE          "Eridian Desk Robot Assistant"
 
 // Hardware Subsystem Toggles
 #define ENABLE_SDMMC        0   // 0 = frees GPIO 38/39/40 for I2S audio (compact S3 CAM has no SD)

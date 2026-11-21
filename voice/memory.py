@@ -63,6 +63,28 @@ def init_db() -> None:
                 )
                 """
             )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS behavior_rules (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    rule TEXT NOT NULL UNIQUE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS feedback_flags (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_text TEXT NOT NULL,
+                    rocky_reply TEXT NOT NULL,
+                    note TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'saved',
+                    fix_output TEXT NOT NULL DEFAULT '',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
             conn.commit()
         finally:
             conn.close()
@@ -275,20 +297,172 @@ def extract_and_learn(user_text: str) -> list[str]:
 
 
 def build_memory_prompt_block(user_text: str) -> str:
-    """Builds a rich context block containing persistent facts & visual memories."""
+    """Builds a rich context block containing persistent facts, spoken rules & visual memories."""
     blocks = []
-    
+
+    rules_block = get_rules_prompt_block()
+    if rules_block:
+        blocks.append(rules_block)
+
     facts_summary = get_facts_summary()
     if facts_summary:
         blocks.append(f"Permanent knowledge about friend / user:\n{facts_summary}")
-        
+
     if PAST_VISION_QUERY_RE.search(user_text):
         vis = get_recent_visual_memories(limit=4)
         if vis:
             vis_lines = [f"- Observed: \"{v['description']}\" (recorded at {v['timestamp']})" for v in vis]
             blocks.append("Past optical camera memories:\n" + "\n".join(vis_lines))
-            
+
     if not blocks:
         return ""
-        
+
     return "\n[PERMANENT LONG-TERM MEMORY]\n" + "\n\n".join(blocks) + "\n"
+
+
+# -----------------------------------------------------------------------------
+# Spoken & Dashboard Behavior Rules (Instant live personality updates)
+# -----------------------------------------------------------------------------
+
+def add_rule(rule: str) -> dict[str, Any]:
+    """Saves a permanent behavioral rule taught to Rocky via voice or dashboard."""
+    clean = re.sub(r"\s+", " ", (rule or "").strip()).strip(".!? ")
+    if not clean:
+        raise ValueError("Rule text cannot be empty")
+    with _LOCK:
+        conn = get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT OR IGNORE INTO behavior_rules (rule) VALUES (?)",
+                (clean,),
+            )
+            conn.commit()
+            cur.execute("SELECT id, rule, created_at FROM behavior_rules WHERE rule = ?", (clean,))
+            row = cur.fetchone()
+            return dict(row) if row else {"id": 0, "rule": clean, "created_at": ""}
+        finally:
+            conn.close()
+
+
+def list_rules() -> list[dict[str, Any]]:
+    with _LOCK:
+        conn = get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT id, rule, created_at FROM behavior_rules ORDER BY id DESC")
+            return [dict(r) for r in cur.fetchall()]
+        finally:
+            conn.close()
+
+
+def delete_rule(rule_id: int) -> bool:
+    with _LOCK:
+        conn = get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM behavior_rules WHERE id = ?", (int(rule_id),))
+            conn.commit()
+            return cur.rowcount > 0
+        finally:
+            conn.close()
+
+
+def get_rules_prompt_block() -> str:
+    rules = list_rules()
+    if not rules:
+        return ""
+    lines = [f"- {r['rule']}" for r in reversed(rules)]
+    return "MANDATORY RULES TAUGHT BY DAVID (ALWAYS FOLLOW):\n" + "\n".join(lines)
+
+
+# -----------------------------------------------------------------------------
+# Feedback Flags & Auto-Fix Queue
+# -----------------------------------------------------------------------------
+
+def add_feedback_flag(user_text: str, rocky_reply: str, note: str) -> dict[str, Any]:
+    with _LOCK:
+        conn = get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                INSERT INTO feedback_flags (user_text, rocky_reply, note, status, fix_output)
+                VALUES (?, ?, ?, 'saved', '')
+                """,
+                ((user_text or "").strip(), (rocky_reply or "").strip(), (note or "").strip()),
+            )
+            conn.commit()
+            fid = cur.lastrowid
+            cur.execute(
+                "SELECT id, user_text, rocky_reply, note, status, fix_output, created_at FROM feedback_flags WHERE id = ?",
+                (fid,),
+            )
+            row = cur.fetchone()
+            return dict(row) if row else {"id": fid}
+        finally:
+            conn.close()
+
+
+def list_feedback_flags(limit: int = 25) -> list[dict[str, Any]]:
+    with _LOCK:
+        conn = get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT id, user_text, rocky_reply, note, status, fix_output, created_at
+                FROM feedback_flags ORDER BY id DESC LIMIT ?
+                """,
+                (int(limit),),
+            )
+            return [dict(r) for r in cur.fetchall()]
+        finally:
+            conn.close()
+
+
+def get_feedback_flag(flag_id: int) -> dict[str, Any] | None:
+    with _LOCK:
+        conn = get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id, user_text, rocky_reply, note, status, fix_output, created_at FROM feedback_flags WHERE id = ?",
+                (int(flag_id),),
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
+
+def update_feedback_flag(flag_id: int, status: str, fix_output: str = "") -> dict[str, Any] | None:
+    with _LOCK:
+        conn = get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE feedback_flags SET status = ?, fix_output = ? WHERE id = ?",
+                (status, fix_output, int(flag_id)),
+            )
+            conn.commit()
+            cur.execute(
+                "SELECT id, user_text, rocky_reply, note, status, fix_output, created_at FROM feedback_flags WHERE id = ?",
+                (int(flag_id),),
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
+
+def delete_feedback_flag(flag_id: int) -> bool:
+    with _LOCK:
+        conn = get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM feedback_flags WHERE id = ?", (int(flag_id),))
+            conn.commit()
+            return cur.rowcount > 0
+        finally:
+            conn.close()

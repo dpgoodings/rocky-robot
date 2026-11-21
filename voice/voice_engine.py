@@ -1,12 +1,10 @@
 """
-Generic Zero-PyTorch Multi-Character Voice Engine.
+Zero-PyTorch Rocky Voice Engine (Faster-Whisper STT + Piper TTS + ContentVec/RVC v2 INT8 ONNX).
 
 Features:
-  - Reads character voice configs dynamically from `character_registry.REGISTRY`
-  - Deduplicates shared Piper base TTS voices by file path (0 MB extra RAM when shared!)
-  - LRU-caps loaded RVC INT8 ONNX sessions (`ROCKY_MAX_LOADED_VOICES=3` default) so adding
-    dozens of voices on disk never increases runtime RAM on 8 GB Apple Silicon
-  - Supports both RVC v2 INT8 ONNX voice clones AND pure Piper-only voices (`rvc_onnx: null`)
+  - Loads ONLY Rocky's voice models on startup for fast boot and low RAM on Apple Silicon
+  - Preserves exact v3 cache key format for cached Rocky WAV clips in `voice/cache/`
+  - Supports both RVC v2 INT8 ONNX voice conversion and Piper-only / Praat PSOLA fallback
 """
 
 from __future__ import annotations
@@ -46,8 +44,8 @@ CONTENTVEC_ONNX = os.path.join(MODELS_DIR, "contentvec.int8.onnx")
 
 P_CORES = 4
 NOISE_SCALE = 0.66667
-MAX_LOADED_RVC = int(os.environ.get("ROCKY_MAX_LOADED_VOICES", "3"))
-MAX_LOADED_PIPER = int(os.environ.get("ROCKY_MAX_LOADED_PIPER", "3"))
+MAX_LOADED_RVC = int(os.environ.get("ROCKY_MAX_LOADED_VOICES", "2"))
+MAX_LOADED_PIPER = int(os.environ.get("ROCKY_MAX_LOADED_PIPER", "2"))
 
 
 def _make_ort_session(onnx_path: str) -> ort.InferenceSession:
@@ -81,20 +79,19 @@ class RockyVoiceEngine:
         cv = self._get_cv()
         _ = cv.run(None, {"source": np.zeros((1, 4000), dtype=np.float32)})
 
-        # Pre-load up to MAX_LOADED_RVC primary characters so startup stays bounded
-        for spec in REGISTRY.all_specs()[:MAX_LOADED_RVC]:
-            print(f"[VoiceEngine] Warming '{spec.id}' voice session...", flush=True)
-            if not spec.piper_onnx.startswith("macos:"):
-                self._get_piper_by_path(spec.piper_onnx)
-            if spec.rvc_onnx and os.path.exists(spec.rvc_onnx):
-                self._get_rvc_by_path(spec.rvc_onnx)
+        spec = REGISTRY.get("rocky")
+        print(f"[VoiceEngine] Warming '{spec.id}' voice session...", flush=True)
+        if not spec.piper_onnx.startswith("macos:"):
+            self._get_piper_by_path(spec.piper_onnx)
+        if spec.rvc_onnx and os.path.exists(spec.rvc_onnx):
+            self._get_rvc_by_path(spec.rvc_onnx)
 
         print(
-            f"[VoiceEngine] Generic Zero-PyTorch audio stack ready in {time.perf_counter() - t0:.2f}s!",
+            f"[VoiceEngine] Rocky Zero-PyTorch audio stack ready in {time.perf_counter() - t0:.2f}s!",
             flush=True,
         )
 
-    def get_defaults(self, character: str) -> tuple[int, float]:
+    def get_defaults(self, character: str = "rocky") -> tuple[int, float]:
         spec = REGISTRY.get(character)
         return int(spec.default_transpose), float(spec.default_speed)
 
@@ -203,7 +200,7 @@ class RockyVoiceEngine:
                         os.unlink(p)
 
     # ------------------------------------------------------------------
-    # 2. Base Neural TTS (Piper ONNX, shared by path)
+    # 2. Base Neural TTS (Piper ONNX)
     # ------------------------------------------------------------------
     def _synthesize_base_piper(
         self,
@@ -280,13 +277,10 @@ class RockyVoiceEngine:
         if transpose is None:
             transpose = spec.default_transpose
 
-        # Fast Piper-only mode when `rvc_onnx` is null / omitted!
         if not spec.rvc_onnx or not os.path.exists(spec.rvc_onnx):
             out = audio
             if transpose != 0 and len(out) > 256:
                 out = self._pitch_shift_parselmouth(out, orig_sr, transpose)
-            if getattr(spec, "audio_effect", None) == "tactical_radio":
-                out = self._apply_tactical_chassis_fx(out, orig_sr)
             return self._polish_audio(out, orig_sr), orig_sr
 
         out_sr = int(spec.sample_rate)
@@ -326,7 +320,7 @@ class RockyVoiceEngine:
 
     @staticmethod
     def _pitch_shift_parselmouth(audio: np.ndarray, sr: int, semitones: int) -> np.ndarray:
-        """Clean Praat PSOLA pitch shift (~8ms) for Piper-only characters without RVC."""
+        """Clean Praat PSOLA pitch shift (~8ms) fallback when RVC is absent."""
         try:
             snd = parselmouth.Sound(audio.astype(np.float64), sr)
             manip = parselmouth.praat.call(snd, "To Manipulation", 0.01, 60.0, 600.0)
@@ -392,31 +386,8 @@ class RockyVoiceEngine:
             y = y / peak * 0.92
         return y
 
-    @staticmethod
-    def _apply_tactical_chassis_fx(audio: np.ndarray, sr: int) -> np.ndarray:
-        """
-        Subtle metallic chassis resonator + crisp communications presence filter
-        matching TARS / GPTARS internal robot speaker acoustics.
-        """
-        if len(audio) < 512:
-            return audio
-        delay = int(sr * 0.0028)
-        delay2 = int(sr * 0.0055)
-        resonated = 0.82 * audio.copy()
-        if len(audio) > delay2:
-            resonated[delay:] += 0.20 * audio[:-delay]
-            resonated[delay2:] -= 0.10 * audio[:-delay2]
-        crisp = np.empty_like(resonated)
-        crisp[0] = resonated[0]
-        crisp[1:] = resonated[1:] - 0.20 * resonated[:-1]
-        blended = 0.70 * crisp + 0.30 * audio
-        peak = float(np.max(np.abs(blended)))
-        if peak > 1e-4:
-            blended = blended / peak * 0.92
-        return blended
-
     # ------------------------------------------------------------------
-    # 4. End-to-End Text -> Character WAV Bytes (LRU + Disk Cache)
+    # 4. End-to-End Text -> Rocky WAV Bytes (LRU + Disk Cache)
     # ------------------------------------------------------------------
     def synthesize_character_wav(
         self,
@@ -431,8 +402,8 @@ class RockyVoiceEngine:
         tr = int(spec.default_transpose) if transpose is None else int(transpose)
         sp = float(spec.default_speed) if speed is None else float(speed)
 
-        # Keep exact v3 hash format for existing cached Rocky & Marvin RVC clips!
-        rvc_tag = "" if (spec.rvc_onnx and spec.id in ("rocky", "marvin")) else f"|{os.path.basename(spec.rvc_onnx or spec.piper_onnx)}"
+        # Preserve exact v3 hash format for existing cached Rocky RVC clips!
+        rvc_tag = "" if (spec.rvc_onnx and spec.id == "rocky") else f"|{os.path.basename(spec.rvc_onnx or spec.piper_onnx)}"
         key = hashlib.sha1(
             f"v3|{char_id}{rvc_tag}|{tr}|{sp:.2f}|{text.strip()}".encode()
         ).hexdigest()
@@ -522,7 +493,7 @@ class RockyVoiceEngine:
             target_files = int(max_files * 0.7)
 
             if total_bytes > (max_mb * 1024 * 1024) or len(files) > max_files:
-                file_stats.sort(key=lambda x: x[0])  # oldest first
+                file_stats.sort(key=lambda x: x[0])
                 for _, sz, path in file_stats:
                     if total_bytes <= target_bytes and len(files) <= target_files:
                         break

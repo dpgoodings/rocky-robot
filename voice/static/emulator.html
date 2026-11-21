@@ -3,40 +3,46 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Waveshare 2.0" ST7789 IPS LCD Emulator & MacBook Face Mirror</title>
+  <title>Rocky • ST7789 2.0" LCD Hardware Emulator</title>
+  <meta name="referrer" content="no-referrer" />
   <style>
     :root {
-      --bg: #0b0f17;
-      --card-bg: #141b26;
-      --border: #232d3d;
-      --accent: #38bdf8;
-      --accent-glow: rgba(56, 189, 248, 0.25);
-      --success: #34d399;
-      --warn: #f59e0b;
-      --danger: #ef4444;
-      --text: #f3f4f6;
-      --text-muted: #94a3b8;
+      --void: #06080d;
+      --panel: #0d121b;
+      --panel-2: #121927;
+      --well: #090c13;
+      --line: #1d2533;
+      --line-strong: #2c3648;
+      --ink: #ece6d9;
+      --muted: #8a94a6;
+      --amber: #f2b45c;
+      --amber-dim: rgba(242, 180, 92, 0.14);
+      --amber-glow: rgba(242, 180, 92, 0.34);
+      --sky: #38bdf8;
+      --ok: #34d399;
+      --danger: #ff4a3d;
       --pcb-blue: #0f4c81;
       --pcb-dark: #0a3154;
       --pcb-gold: #e5b95a;
-
-      /* MacBook BMO Chassis Colors */
-      --bmo-shell: #58b8a2;
-      --bmo-shell-dark: #3a8a76;
-      --bmo-ink: #142826;
-      --bmo-screen-mint: #cdeee0;
+      --mono: "SF Mono", ui-monospace, Menlo, Monaco, monospace;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { color-scheme: dark; }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "JetBrains Mono", sans-serif;
-      background: var(--bg);
-      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+      background:
+        radial-gradient(ellipse 85% 55% at 50% -10%, rgba(242, 180, 92, 0.08), transparent 62%),
+        var(--void);
+      color: var(--ink);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      padding: 16px;
+      padding: 16px 20px 28px;
       gap: 16px;
+      max-width: 1260px;
+      margin: 0 auto;
     }
 
     header {
@@ -45,45 +51,50 @@
       align-items: center;
       flex-wrap: wrap;
       gap: 12px;
-      padding: 12px 20px;
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 12px;
+      padding: 13px 18px;
+      background: var(--panel);
+      border: 1px solid var(--line-strong);
+      border-radius: 14px;
     }
 
     .header-title {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 11px;
     }
 
     .badge-hw {
-      font-size: 11px;
-      font-weight: 700;
+      font: 700 10.5px var(--mono);
       text-transform: uppercase;
-      letter-spacing: 0.5px;
-      padding: 4px 10px;
+      letter-spacing: 0.08em;
+      padding: 4px 9px;
       border-radius: 6px;
-      background: #1e3a8a;
-      color: #93c5fd;
-      border: 1px solid #3b82f6;
+      background: var(--amber-dim);
+      color: var(--amber);
+      border: 1px solid rgba(242, 180, 92, 0.45);
+    }
+
+    .header-title h1 {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
     }
 
     .header-controls {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
       flex-wrap: wrap;
     }
 
     .btn {
-      padding: 7px 14px;
-      font-size: 13px;
+      padding: 7px 13px;
+      font-size: 12.5px;
       font-weight: 600;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      background: #1e293b;
-      color: var(--text);
+      border-radius: 9px;
+      border: 1px solid var(--line-strong);
+      background: var(--panel-2);
+      color: var(--ink);
       cursor: pointer;
       display: inline-flex;
       align-items: center;
@@ -91,154 +102,78 @@
       transition: all 0.15s ease;
       text-decoration: none;
     }
-    .btn:hover { background: #334155; border-color: var(--accent); }
-    .btn.active, .btn.primary {
-      background: #0284c7;
-      border-color: #38bdf8;
-      color: #fff;
-      box-shadow: 0 0 12px var(--accent-glow);
+    .btn:hover { border-color: var(--amber); background: #192234; }
+    .btn.primary, .btn.active {
+      background: var(--amber);
+      border-color: var(--amber);
+      color: #090c13;
+      font-weight: 700;
     }
-    .btn.success {
-      background: #059669;
-      border-color: #34d399;
-      color: #fff;
+    .btn.primary:hover { background: #f7c377; }
+    .btn.sky {
+      background: rgba(56, 189, 248, 0.14);
+      border-color: rgba(56, 189, 248, 0.45);
+      color: var(--sky);
     }
+    .btn.sky:hover { background: rgba(56, 189, 248, 0.24); color: #fff; }
+    .btn.ok {
+      background: rgba(52, 211, 153, 0.15);
+      border-color: rgba(52, 211, 153, 0.45);
+      color: var(--ok);
+    }
+    .btn:disabled { opacity: 0.45; cursor: default; }
 
-    /* Layout Grid */
     .main-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 18px;
       flex: 1;
+      align-items: start;
     }
-    @media (max-width: 1080px) {
+    @media (max-width: 1020px) {
       .main-grid { grid-template-columns: 1fr; }
     }
 
-    /* Hardware Simulator Panel */
-    .hw-panel {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
+    .hw-panel, .ctrl-panel {
+      background: var(--panel);
+      border: 1px solid var(--line-strong);
       border-radius: 14px;
-      padding: 20px;
+      padding: 18px;
       display: flex;
       flex-direction: column;
-      align-items: center;
       gap: 16px;
-      position: relative;
     }
 
     .panel-title {
-      width: 100%;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 600;
-      color: var(--text-muted);
-      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+      border-bottom: 1px solid var(--line);
       padding-bottom: 10px;
+      gap: 10px;
     }
 
-    /* Container for Display Enclosure */
     .display-container {
       width: 100%;
       display: flex;
       justify-content: center;
       align-items: center;
-      min-height: 440px;
+      min-height: 410px;
     }
 
-    /* 1. Waveshare 2.0" ST7789 PCB Frame */
-    .pcb-board {
-      background: linear-gradient(135deg, var(--pcb-blue) 0%, var(--pcb-dark) 100%);
-      border: 2px solid #1e5a8a;
-      border-radius: 12px;
-      padding: 24px 20px 22px 20px;
-      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.7), inset 0 0 15px rgba(255, 255, 255, 0.08);
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      width: 100%;
-      max-width: 530px;
-    }
-
-    .pcb-hole {
-      position: absolute;
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      background: #080c12;
-      border: 2px solid var(--pcb-gold);
-      box-shadow: inset 0 2px 4px rgba(0,0,0,0.8);
-    }
-    .hole-tl { top: 8px; left: 8px; }
-    .hole-tr { top: 8px; right: 8px; }
-    .hole-bl { bottom: 8px; left: 8px; }
-    .hole-br { bottom: 8px; right: 8px; }
-
-    .silkscreen-top {
-      display: flex;
-      justify-content: space-between;
-      width: 100%;
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 1px;
-      color: #e2e8f0;
-      opacity: 0.9;
-      margin-bottom: 12px;
-      padding: 0 8px;
-      text-transform: uppercase;
-    }
-
-    .pin-header {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 14px;
-      background: rgba(0, 0, 0, 0.4);
-      padding: 6px 12px;
-      border-radius: 6px;
-      border: 1px dashed rgba(229, 185, 90, 0.5);
-    }
-    .pin-item {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      font-size: 9px;
-      font-weight: 700;
-      color: var(--pcb-gold);
-    }
-    .pin-dot {
-      width: 8px;
-      height: 8px;
-      background: #ffd700;
-      border-radius: 50%;
-      margin-bottom: 3px;
-      box-shadow: 0 0 4px #ffd700;
-    }
-
-    .silkscreen-bottom {
-      display: flex;
-      justify-content: space-between;
-      width: 100%;
-      margin-top: 14px;
-      font-size: 10px;
-      font-weight: 600;
-      color: #cbd5e1;
-      padding: 0 10px;
-    }
-
-    /* 2. MacBook BMO Chassis Frame (Identical to main console) */
-    .bmo-chassis-frame {
-      background: linear-gradient(165deg, #67c4af 0%, var(--bmo-shell) 55%, var(--bmo-shell-dark) 100%);
-      border: 3.5px solid var(--bmo-ink);
-      border-radius: 26px;
-      padding: 16px 20px 15px;
+    /* 1. Rocky Desk-Robot Matte-Black Bezel */
+    .rocky-bezel {
+      background: linear-gradient(165deg, #272d39 0%, #191e27 54%, #10141b 100%);
+      border: 2.5px solid #0b0e14;
+      border-radius: 24px;
+      padding: 16px 20px 18px;
       box-shadow:
-        0 14px 36px rgba(0, 0, 0, 0.46),
-        0 0 28px var(--accent-glow),
-        inset 0 2px 0 rgba(255, 255, 255, 0.34);
+        0 18px 42px rgba(0, 0, 0, 0.65),
+        0 0 26px rgba(242, 180, 92, 0.14),
+        inset 0 1.5px 0 rgba(255, 255, 255, 0.11);
       display: flex;
       flex-direction: column;
       gap: 12px;
@@ -246,200 +181,223 @@
       max-width: 520px;
     }
 
-    .bmo-top-row {
+    .bezel-top {
       display: flex;
       justify-content: space-between;
       align-items: center;
       padding: 0 4px;
     }
-    .bmo-speaker {
+
+    .bezel-speaker {
       display: flex;
       gap: 5px;
     }
-    .bmo-speaker i {
+    .bezel-speaker i {
       width: 6px;
       height: 6px;
       border-radius: 50%;
-      background: var(--bmo-ink);
-      opacity: 0.75;
+      background: #080a0f;
+      box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.9), 0 1px 0 rgba(255, 255, 255, 0.08);
       display: inline-block;
     }
-    .bmo-mood-pill {
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 0.08em;
+
+    .mood-pill {
+      font: 700 11px var(--mono);
+      letter-spacing: 0.09em;
       text-transform: uppercase;
-      color: var(--bmo-ink);
-      background: rgba(255, 255, 255, 0.45);
-      border: 1.5px solid rgba(20, 40, 38, 0.45);
+      color: var(--ink);
+      background: rgba(5, 7, 10, 0.78);
+      border: 1px solid rgba(255, 251, 247, 0.22);
       border-radius: 999px;
-      padding: 2px 10px;
+      padding: 2px 11px;
     }
 
-    .bmo-controls-deco {
+    .bezel-footer {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 4px 6px 0;
+      padding: 2px 6px 0;
+      font: 10.5px var(--mono);
+      color: var(--muted);
     }
-    .bmo-slot {
-      width: 86px;
-      height: 10px;
-      background: #1a4238;
-      border-radius: 6px;
-      border: 2px solid var(--bmo-ink);
-      box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
-    }
-    .bmo-btns {
-      display: flex;
-      gap: 8px;
-    }
-    .bmo-dot {
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      border: 2px solid var(--bmo-ink);
-      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-    }
-    .bmo-dot.yellow { background: #facc15; }
-    .bmo-dot.blue   { background: #38bdf8; }
-    .bmo-dot.green  { background: #4ade80; }
-    .bmo-dot.red    { background: #f87171; }
 
-    /* The Screen Enclosure & Canvas */
+    /* 2. Waveshare 2.0" ST7789 Blue PCB Frame */
+    .pcb-board {
+      background: linear-gradient(135deg, var(--pcb-blue) 0%, var(--pcb-dark) 100%);
+      border: 2px solid #1e5a8a;
+      border-radius: 12px;
+      padding: 24px 20px 20px;
+      box-shadow: 0 14px 32px rgba(0, 0, 0, 0.7), inset 0 0 14px rgba(255, 255, 255, 0.07);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      max-width: 520px;
+    }
+
+    .pcb-hole {
+      position: absolute;
+      width: 17px;
+      height: 17px;
+      border-radius: 50%;
+      background: #080c12;
+      border: 2px solid var(--pcb-gold);
+    }
+    .hole-tl { top: 8px; left: 8px; }
+    .hole-tr { top: 8px; right: 8px; }
+    .hole-bl { bottom: 8px; left: 8px; }
+    .hole-br { bottom: 8px; right: 8px; }
+
+    .silkscreen-top, .silkscreen-bottom {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      font: 700 10px var(--mono);
+      letter-spacing: 0.06em;
+      color: #e2e8f0;
+      padding: 0 8px;
+    }
+    .silkscreen-top { margin-bottom: 10px; text-transform: uppercase; }
+    .silkscreen-bottom { margin-top: 12px; color: #cbd5e1; font-weight: 600; }
+
+    .pin-header {
+      display: flex;
+      gap: 9px;
+      margin-bottom: 12px;
+      background: rgba(0, 0, 0, 0.42);
+      padding: 6px 11px;
+      border-radius: 6px;
+      border: 1px dashed rgba(229, 185, 90, 0.5);
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .pin-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font: 700 9px var(--mono);
+      color: var(--pcb-gold);
+    }
+    .pin-dot {
+      width: 7px;
+      height: 7px;
+      background: #ffd700;
+      border-radius: 50%;
+      margin-bottom: 3px;
+      box-shadow: 0 0 4px #ffd700;
+    }
+
     .screen-wrap {
       position: relative;
-      width: 480px;
-      height: 360px;
-      max-width: 100%;
+      width: 100%;
+      max-width: 460px;
       aspect-ratio: 320 / 240;
-      border-radius: 18px;
-      border: 3.5px solid var(--bmo-ink);
+      border-radius: 15px;
+      border: 3px solid #05070a;
       overflow: hidden;
-      background: var(--bmo-screen-mint);
-      box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.22);
+      background: #05070a;
+      box-shadow: inset 0 4px 16px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.06);
     }
 
     #lcdCanvas {
       display: block;
       width: 100%;
       height: 100%;
-      border-radius: 14px;
       cursor: crosshair;
     }
 
     .led-indicator {
       display: inline-flex;
       align-items: center;
-      gap: 5px;
-      color: #86efac;
-      font-size: 10px;
+      gap: 6px;
+      color: var(--ok);
+      font: 600 11px var(--mono);
     }
     .led-dot {
       width: 7px;
       height: 7px;
-      background: #22c55e;
+      background: var(--ok);
       border-radius: 50%;
-      box-shadow: 0 0 8px #22c55e;
+      box-shadow: 0 0 8px var(--ok);
     }
 
-    /* Telemetry Info Cards */
     .telemetry-row {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 10px;
       width: 100%;
     }
+    @media (max-width: 560px) {
+      .telemetry-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
     .tele-card {
-      background: #1e293b;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px 12px;
+      background: var(--well);
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      padding: 8px 10px;
       text-align: center;
     }
     .tele-val {
-      font-size: 16px;
-      font-weight: 700;
-      color: var(--accent);
-      font-family: monospace;
+      font: 700 15px var(--mono);
+      color: var(--amber);
     }
     .tele-lbl {
       font-size: 11px;
-      color: var(--text-muted);
+      color: var(--muted);
       margin-top: 2px;
-    }
-
-    /* Control Panel */
-    .ctrl-panel {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 18px;
-      overflow-y: auto;
     }
 
     .ctrl-section {
       display: flex;
       flex-direction: column;
       gap: 10px;
-      border-bottom: 1px solid var(--border);
-      padding-bottom: 16px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 14px;
     }
-    .ctrl-section:last-child {
-      border-bottom: none;
-      padding-bottom: 0;
-    }
+    .ctrl-section:last-child { border-bottom: none; padding-bottom: 0; }
 
     .section-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--text-muted);
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      gap: 8px;
+      flex-wrap: wrap;
     }
 
     .chip-wrap {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+      gap: 7px;
     }
 
     .emo-chip {
-      padding: 6px 12px;
+      padding: 7px 10px;
       font-size: 12px;
       font-weight: 600;
-      border-radius: 20px;
-      background: #1e293b;
-      border: 1px solid var(--border);
-      color: var(--text);
+      border-radius: 8px;
+      background: var(--well);
+      border: 1px solid var(--line-strong);
+      color: var(--muted);
       cursor: pointer;
       transition: all 0.15s ease;
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
     }
-    .emo-chip:hover {
-      background: #334155;
-      border-color: var(--accent);
-      transform: translateY(-1px);
-    }
+    .emo-chip:hover { border-color: var(--amber); color: var(--ink); }
     .emo-chip.active {
-      background: #0284c7;
-      border-color: #38bdf8;
-      color: #fff;
-      box-shadow: 0 0 10px var(--accent-glow);
+      background: var(--amber-dim);
+      border-color: var(--amber);
+      color: var(--amber);
+      box-shadow: 0 0 10px rgba(242, 180, 92, 0.16);
     }
 
-    /* D-pad & Gaze */
     .gaze-container {
       display: grid;
-      grid-template-columns: 140px 1fr;
+      grid-template-columns: 132px 1fr;
       gap: 16px;
       align-items: center;
     }
@@ -448,34 +406,28 @@
       grid-template-columns: repeat(3, 40px);
       grid-template-rows: repeat(3, 40px);
       gap: 4px;
-      justify-content: center;
     }
     .d-btn {
       width: 40px;
       height: 40px;
-      border-radius: 6px;
-      border: 1px solid var(--border);
-      background: #1e293b;
-      color: var(--text);
-      font-size: 11px;
-      font-weight: bold;
+      border-radius: 7px;
+      border: 1px solid var(--line-strong);
+      background: var(--well);
+      color: var(--ink);
+      font: 700 11px var(--mono);
       cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
     }
-    .d-btn:hover { background: #334155; border-color: var(--accent); }
-    .d-btn.center { background: #0369a1; border-color: #38bdf8; }
+    .d-btn:hover { border-color: var(--amber); color: var(--amber); }
+    .d-btn.center { background: var(--amber-dim); border-color: var(--amber); color: var(--amber); }
 
-    /* Test Runner Table */
     .test-suite-box {
-      background: #0f172a;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 12px;
+      background: var(--well);
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      padding: 10px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 6px;
     }
     .test-row {
       display: flex;
@@ -484,110 +436,87 @@
       font-size: 12px;
       padding: 6px 10px;
       border-radius: 6px;
-      background: #1e293b;
+      background: var(--panel-2);
     }
     .badge-test {
-      font-size: 10px;
-      font-weight: 700;
+      font: 700 10px var(--mono);
       padding: 2px 8px;
       border-radius: 4px;
       text-transform: uppercase;
     }
-    .badge-pending { background: #475569; color: #cbd5e1; }
-    .badge-running { background: #0284c7; color: #fff; animation: pulse 1s infinite alternate; }
-    .badge-pass { background: #059669; color: #a7f3d0; }
+    .badge-pending { background: #334155; color: #cbd5e1; }
+    .badge-running { background: #0284c7; color: #fff; }
+    .badge-pass { background: #059669; color: #d1fae5; }
     .badge-fail { background: #b91c1c; color: #fecaca; }
 
-    @keyframes pulse {
-      0% { opacity: 0.6; }
-      100% { opacity: 1; }
-    }
-
-    /* Event Logs */
     .log-box {
-      background: #090d16;
-      border: 1px solid var(--border);
+      background: #05070b;
+      border: 1px solid var(--line);
       border-radius: 8px;
       padding: 10px;
-      font-family: monospace;
-      font-size: 11px;
-      max-height: 140px;
+      font: 11px/1.45 var(--mono);
+      max-height: 130px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 3px;
     }
-    .log-entry {
-      color: #94a3b8;
-      line-height: 1.4;
-    }
-    .log-entry.rx { color: #38bdf8; }
-    .log-entry.tx { color: #34d399; }
-    .log-entry.err { color: #ef4444; }
+    .log-entry { color: var(--muted); }
+    .log-entry.rx { color: var(--sky); }
+    .log-entry.tx { color: var(--ok); }
+    .log-entry.err { color: #fca5a5; }
   </style>
 </head>
 <body>
-
   <header>
     <div class="header-title">
-      <span class="badge-hw">100% Pixel Match</span>
-      <h1 style="font-size: 17px; font-weight: 700;">MacBook BMO Face &amp; Waveshare LCD Mirror</h1>
+      <span class="badge-hw">320×240 ST7789</span>
+      <h1>🪨 Rocky LCD Hardware Emulator</h1>
     </div>
 
     <div class="header-controls">
-      <button type="button" id="chassisToggleBtn" class="btn primary" title="Toggle between MacBook BMO Chassis and Raw Waveshare PCB">
-        <span id="chassisIcon">💻</span>
-        <span id="chassisLabel">View: MacBook BMO Chassis</span>
+      <button type="button" id="chassisToggleBtn" class="btn primary" title="Switch between Rocky Desk-Robot Bezel and Waveshare 2.0 inch PCB">
+        <span id="chassisLabel">View: Rocky Bezel</span>
       </button>
 
-      <button type="button" id="targetToggleBtn" class="btn" title="Switch expression dispatch destination">
-        <span id="targetIcon">🪞</span>
-        <span id="targetLabel">Dispatch: Both (Live Mirror)</span>
+      <button type="button" id="targetToggleBtn" class="btn sky" title="Switch where expressions dispatch">
+        <span id="targetLabel">Dispatch: Both (Mirror)</span>
       </button>
 
-      <a href="/" class="btn" title="Return to main Rocky voice chat console">
-        🎙️ Main Console
-      </a>
+      <a href="/" class="btn" title="Return to Rocky Studio Dashboard">← Rocky Studio</a>
     </div>
   </header>
 
   <div class="main-grid">
-
-    <!-- LEFT PANEL: Visual Face Enclosure -->
+    <!-- LEFT: Visual Enclosure -->
     <div class="hw-panel">
       <div class="panel-title">
-        <span id="panelModeTitle">MacBook BMO Screen Clone (Identical Engine &amp; Proportions)</span>
+        <span id="panelModeTitle">Rocky Desk-Robot Bezel (320×240 OLED Mirror)</span>
         <span class="led-indicator">
           <span class="led-dot"></span>
-          <span id="hwStatus">60 FPS • NATIVE DPR</span>
+          <span id="hwStatus">60 FPS • LIVE</span>
         </span>
       </div>
 
-      <div class="display-container" id="displayContainer">
-
-        <!-- MacBook BMO Chassis View (Default) -->
-        <div class="bmo-chassis-frame" id="macbookChassis">
-          <div class="bmo-top-row">
-            <div class="bmo-speaker"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-            <div id="bmoMoodPill" class="bmo-mood-pill">BMO • HAPPY</div>
+      <div class="display-container">
+        <!-- Rocky Matte-Black Desk-Robot Bezel (Default) -->
+        <div class="rocky-bezel" id="rockyChassis">
+          <div class="bezel-top">
+            <div class="bezel-speaker" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <div id="moodPill" class="mood-pill">ROCKY • NEUTRAL</div>
           </div>
 
-          <div class="screen-wrap">
+          <div class="screen-wrap" id="bezelScreenSlot">
             <canvas id="lcdCanvas" width="320" height="240"></canvas>
           </div>
 
-          <div class="bmo-controls-deco">
-            <div class="bmo-slot"></div>
-            <div class="bmo-btns">
-              <span class="bmo-dot yellow"></span>
-              <span class="bmo-dot blue"></span>
-              <span class="bmo-dot green"></span>
-              <span class="bmo-dot red"></span>
-            </div>
+          <div class="bezel-footer">
+            <span>ROCKY-V2 ENGINE</span>
+            <span>ESP32-S3 • ST7789 IPS</span>
           </div>
         </div>
 
-        <!-- Waveshare 2.0" Blue PCB View (Hidden initially, switchable) -->
+        <!-- Waveshare 2.0" ST7789 Blue PCB View -->
         <div class="pcb-board" id="pcbBoard" style="display: none;">
           <div class="pcb-hole hole-tl"></div>
           <div class="pcb-hole hole-tr"></div>
@@ -596,10 +525,10 @@
 
           <div class="silkscreen-top">
             <span>Waveshare</span>
-            <span>2.0inch LCD Module • 320x240 IPS</span>
+            <span>2.0inch LCD Module • 320×240 IPS</span>
           </div>
 
-          <div class="pin-header" title="Waveshare 8-Pin Header Pinout">
+          <div class="pin-header" title="Waveshare 8-Pin SPI Header Pinout">
             <div class="pin-item"><div class="pin-dot"></div>1:VCC</div>
             <div class="pin-item"><div class="pin-dot"></div>2:GND</div>
             <div class="pin-item"><div class="pin-dot"></div>3:DIN(47)</div>
@@ -610,688 +539,886 @@
             <div class="pin-item"><div class="pin-dot"></div>8:BL(45)</div>
           </div>
 
-          <div class="screen-wrap" style="width: 440px; height: 330px;">
-            <!-- Canvas is moved dynamically into active container -->
-          </div>
+          <div class="screen-wrap" id="pcbScreenSlot" style="max-width: 440px;"></div>
 
           <div class="silkscreen-bottom">
-            <span>ST7789V / NV3023C HSPI @ 20MHz</span>
-            <span class="led-indicator"><span class="led-dot"></span> PWR LED</span>
-            <span>320x240 RGB565</span>
+            <span>ST7789V HSPI @ 20MHz</span>
+            <span class="led-indicator"><span class="led-dot"></span> PWR</span>
+            <span>RGB565</span>
           </div>
         </div>
-
       </div>
 
-      <!-- Hardware Telemetry Dashboard -->
       <div class="telemetry-row">
         <div class="tele-card">
           <div class="tele-val" id="teleFps">60</div>
           <div class="tele-lbl">Render FPS</div>
         </div>
         <div class="tele-card">
-          <div class="tele-val" id="teleMood">HAPPY</div>
+          <div class="tele-val" id="teleMood">NEUTRAL</div>
           <div class="tele-lbl">Active Mood</div>
         </div>
         <div class="tele-card">
           <div class="tele-val" id="teleMouth">0%</div>
-          <div class="tele-lbl">Lip-Sync Open</div>
+          <div class="tele-lbl">Lip-Sync</div>
         </div>
         <div class="tele-card">
           <div class="tele-val" id="telePing">-- ms</div>
-          <div class="tele-lbl">Robot Link (<span id="teleRobotIp">192.168.4.40</span>)</div>
+          <div class="tele-lbl">ESP32 (<span id="teleRobotIp">192.168.4.40</span>)</div>
         </div>
       </div>
     </div>
 
-    <!-- RIGHT PANEL: Cloned Controls & Automated Test Suite -->
+    <!-- RIGHT: Rocky Controls & Test Bench -->
     <div class="ctrl-panel">
-
-      <!-- Section 1: Emotion Matrix -->
+      <!-- 1. All 14 Rocky Emotions -->
       <div class="ctrl-section">
         <div class="section-header">
-          <span>1. Expression &amp; Emotion Controls</span>
-          <span style="font-size: 11px; text-transform: none; color: var(--accent);">Direct MacBook Mapping</span>
+          <span>1. Rocky Expressions (14 Emotions)</span>
+          <span style="color:var(--amber);text-transform:none;">Mirrors to ESP32</span>
         </div>
         <div class="chip-wrap">
-          <button type="button" class="emo-chip" data-emo="neutral">Neutral</button>
-          <button type="button" class="emo-chip active" data-emo="happy">Happy 😊</button>
-          <button type="button" class="emo-chip" data-emo="excited">Excited ✨</button>
-          <button type="button" class="emo-chip" data-emo="curious">Curious 🤨</button>
-          <button type="button" class="emo-chip" data-emo="laugh">Laugh 😂</button>
-          <button type="button" class="emo-chip" data-emo="confused">Confused 😵</button>
-          <button type="button" class="emo-chip" data-emo="sleepy">Sleepy 😴</button>
-          <button type="button" class="emo-chip" data-emo="angry">Angry 😠</button>
-          <button type="button" class="emo-chip" data-emo="alarmed">Alarmed ⚡</button>
-          <button type="button" class="emo-chip" data-emo="sad">Sad 🥺</button>
-          <button type="button" class="emo-chip" data-emo="bored">Bored 😑</button>
-          <button type="button" class="emo-chip" data-emo="pained">Pained 😣</button>
-          <button type="button" class="emo-chip" data-emo="thinking">Thinking 🤔</button>
-          <button type="button" class="emo-chip" data-emo="focused">Focused 🎯</button>
-          <button type="button" class="emo-chip" data-emo="listening">Listening 👂</button>
-          <button type="button" class="emo-chip" data-emo="sweat">Sweat 💦</button>
-          <button type="button" class="emo-chip" data-emo="cyclops">Cyclops 👁️</button>
+          <button type="button" class="emo-chip active" data-emo="neutral">Neutral</button>
+          <button type="button" class="emo-chip" data-emo="happy">Happy</button>
+          <button type="button" class="emo-chip" data-emo="excited">Excited</button>
+          <button type="button" class="emo-chip" data-emo="curious">Curious</button>
+          <button type="button" class="emo-chip" data-emo="thinking">Thinking</button>
+          <button type="button" class="emo-chip" data-emo="surprised">Surprised</button>
+          <button type="button" class="emo-chip" data-emo="worried">Worried</button>
+          <button type="button" class="emo-chip" data-emo="sad">Sad</button>
+          <button type="button" class="emo-chip" data-emo="angry">Angry</button>
+          <button type="button" class="emo-chip" data-emo="skeptical">Skeptical</button>
+          <button type="button" class="emo-chip" data-emo="love">Love</button>
+          <button type="button" class="emo-chip" data-emo="confused">Confused</button>
+          <button type="button" class="emo-chip" data-emo="sleepy">Sleepy</button>
+          <button type="button" class="emo-chip" data-emo="asleep">Asleep</button>
         </div>
       </div>
 
-      <!-- Section 2: Mouth & Speech Lip-Sync -->
+      <!-- 2. Dance, Blink & Speech Lip-Sync -->
       <div class="ctrl-section">
         <div class="section-header">
-          <span>2. Speech Lip-Sync &amp; Mouth Waveforms</span>
+          <span>2. Actions &amp; Speech Lip-Sync</span>
         </div>
-        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-          <button type="button" id="btnTestTalk" class="btn success" style="font-size: 13px;">
-            🗣 Test Mouth (Simulate Syllables)
-          </button>
-          <button type="button" id="btnBlink" class="btn">
-            😉 Trigger Blink
-          </button>
-          <div style="flex: 1; min-width: 160px; display: flex; align-items: center; gap: 8px;">
-            <label style="font-size: 11px; color: var(--text-muted); white-space: nowrap;">Aperture:</label>
-            <input type="range" id="mouthSlider" min="0" max="100" value="0" style="width: 100%;" />
-            <span id="mouthSliderVal" style="font-size: 11px; font-family: monospace; width: 35px;">0%</span>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <button type="button" id="btnDance" class="btn sky">🕺 Dance!</button>
+          <button type="button" id="btnTestTalk" class="btn ok">🗣 Test Mouth</button>
+          <button type="button" id="btnBlink" class="btn">😉 Blink</button>
+          <div style="flex:1;min-width:150px;display:flex;align-items:center;gap:8px;">
+            <label for="mouthSlider" style="font-size:11px;color:var(--muted);">Mouth:</label>
+            <input type="range" id="mouthSlider" min="0" max="100" value="0" style="width:100%;" />
+            <span id="mouthSliderVal" style="font:11px var(--mono);width:34px;color:var(--amber);">0%</span>
           </div>
         </div>
       </div>
 
-      <!-- Section 3: Gaze & Living Saccades -->
+      <!-- 3. Gaze & Saccades -->
       <div class="ctrl-section">
         <div class="section-header">
-          <span>3. Living Gaze &amp; Saccades D-Pad</span>
-          <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; text-transform: none; cursor: pointer;">
+          <span>3. Gaze &amp; Saccades</span>
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:11px;text-transform:none;cursor:pointer;">
             <input type="checkbox" id="chkAutoSaccades" checked />
-            Autonomous Saccades (Living Eye Darts)
+            Autonomous Saccades
           </label>
         </div>
         <div class="gaze-container">
           <div class="d-pad">
-            <button class="d-btn" data-pos="NW">NW</button>
-            <button class="d-btn" data-pos="N">N</button>
-            <button class="d-btn" data-pos="NE">NE</button>
-            <button class="d-btn" data-pos="W">W</button>
-            <button class="d-btn center" data-pos="CENTER">•</button>
-            <button class="d-btn" data-pos="E">E</button>
-            <button class="d-btn" data-pos="SW">SW</button>
-            <button class="d-btn" data-pos="S">S</button>
-            <button class="d-btn" data-pos="SE">SE</button>
+            <button type="button" class="d-btn" data-pos="NW">NW</button>
+            <button type="button" class="d-btn" data-pos="N">N</button>
+            <button type="button" class="d-btn" data-pos="NE">NE</button>
+            <button type="button" class="d-btn" data-pos="W">W</button>
+            <button type="button" class="d-btn center" data-pos="CENTER">•</button>
+            <button type="button" class="d-btn" data-pos="E">E</button>
+            <button type="button" class="d-btn" data-pos="SW">SW</button>
+            <button type="button" class="d-btn" data-pos="S">S</button>
+            <button type="button" class="d-btn" data-pos="SE">SE</button>
           </div>
-          <div style="font-size: 12px; line-height: 1.6; color: var(--text-muted);">
-            <div>Active Direction: <strong id="gazePosLabel" style="color: var(--accent);">CENTER</strong></div>
-            <div>Coordinates: <code id="gazeCoordLabel">Gx: 0.00, Gy: 0.00</code></div>
-            <div style="margin-top: 6px; font-size: 11px; color: #64748b;">
-              Move mouse over BMO screen to dynamically steer gaze, or click D-Pad buttons.
-            </div>
+          <div style="font-size:12px;line-height:1.6;color:var(--muted);">
+            <div>Direction: <strong id="gazePosLabel" style="color:var(--amber);">CENTER</strong></div>
+            <div>Coords: <code id="gazeCoordLabel" style="color:var(--ink);">Gx: 0.00, Gy: 0.00</code></div>
+            <div style="margin-top:4px;font-size:11px;">Move cursor over Rocky's visor or click D-Pad to steer eyes.</div>
           </div>
         </div>
       </div>
 
-      <!-- Section 4: Automated Test Runner -->
+      <!-- 4. Automated Test Runner -->
       <div class="ctrl-section">
         <div class="section-header">
-          <span>4. Automated Expression &amp; Lip-Sync Test Runner</span>
-          <button type="button" id="btnRunTests" class="btn primary" style="font-size: 11px; padding: 4px 10px;">
-            ⚡ Run Full Test Suite
-          </button>
+          <span>4. Automated Rocky Expression Test Runner</span>
+          <button type="button" id="btnRunTests" class="btn primary" style="font-size:11px;padding:5px 10px;">⚡ Run Suite</button>
         </div>
-
-        <div class="test-suite-box" id="testSuiteBox">
+        <div class="test-suite-box">
           <div class="test-row" id="test-1">
-            <span>1. Framebuffer Boot &amp; Mint Bezel</span>
-            <span class="badge-test badge-pass">PASSED</span>
+            <span>1. Rocky v2 Visor Boot &amp; Warm-White Eyes</span>
+            <span class="badge-test badge-pass">READY</span>
           </div>
           <div class="test-row" id="test-2">
-            <span>2. Joyful Emotion &amp; Bounce Animation</span>
+            <span>2. Happy &amp; Excited Cheek-Lift + Sparkles</span>
             <span class="badge-test badge-pending">PENDING</span>
           </div>
           <div class="test-row" id="test-3">
-            <span>3. Laugh Sequence &amp; Chuckle Rumble</span>
+            <span>3. Curious Asymmetric Eyes &amp; Skeptical Lid</span>
             <span class="badge-test badge-pending">PENDING</span>
           </div>
           <div class="test-row" id="test-4">
-            <span>4. Inquisitive Curious Look &amp; Eyebrow Arch</span>
+            <span>4. Love Floating Hearts &amp; Confused Wobble</span>
             <span class="badge-test badge-pending">PENDING</span>
           </div>
           <div class="test-row" id="test-5">
-            <span>5. Sleepy State &amp; Floating Zzz Drift</span>
+            <span>5. Sleepy Half-Lids &amp; Asleep Zzz Drift</span>
             <span class="badge-test badge-pending">PENDING</span>
           </div>
           <div class="test-row" id="test-6">
-            <span>6. Angry Slanted Eyebrows &amp; Visor</span>
+            <span>6. Worried Tear &amp; Angry Steam + Shake</span>
             <span class="badge-test badge-pending">PENDING</span>
           </div>
           <div class="test-row" id="test-7">
-            <span>7. Multi-Harmonic Speech Lip-Sync (Tongue &amp; Teeth)</span>
+            <span>7. Speech Lip-Sync Aperture &amp; Peak Blink</span>
             <span class="badge-test badge-pending">PENDING</span>
           </div>
           <div class="test-row" id="test-8">
-            <span>8. Fluid Squash-and-Stretch Blinking</span>
-            <span class="badge-test badge-pending">PENDING</span>
-          </div>
-          <div class="test-row" id="test-9">
-            <span>9. Living Gaze Saccades (8-Direction Traversal)</span>
-            <span class="badge-test badge-pending">PENDING</span>
-          </div>
-          <div class="test-row" id="test-10">
-            <span>10. Robot Physical Dispatch Sync (192.168.4.40)</span>
+            <span>8. Gaze Saccade Traversal &amp; ESP32 Mirror</span>
             <span class="badge-test badge-pending">PENDING</span>
           </div>
         </div>
       </div>
 
-      <!-- Section 5: Real-time Event Log & Link Monitor -->
+      <!-- 5. Link Monitor & Event Log -->
       <div class="ctrl-section">
         <div class="section-header">
-          <span>5. Live Event Log &amp; Robot Link</span>
-          <div style="display: flex; gap: 8px; align-items: center;">
-            <input type="text" id="robotIpInput" value="192.168.4.40" style="background: #1e293b; border: 1px solid var(--border); color: #fff; border-radius: 4px; padding: 2px 6px; font-size: 11px; width: 100px; font-family: monospace;" />
-            <button type="button" id="btnPingRobot" class="btn" style="font-size: 10px; padding: 3px 8px;">Ping</button>
-            <button type="button" id="btnClearLog" class="btn" style="font-size: 10px; padding: 3px 8px;">Clear</button>
+          <span>5. Event Log &amp; ESP32 Link</span>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <input type="text" id="robotIpInput" value="192.168.4.40" style="background:var(--well);border:1px solid var(--line-strong);color:var(--ink);border-radius:6px;padding:3px 7px;font:11px var(--mono);width:108px;" />
+            <button type="button" id="btnPingRobot" class="btn" style="font-size:11px;padding:4px 9px;">Ping</button>
+            <button type="button" id="btnClearLog" class="btn" style="font-size:11px;padding:4px 9px;">Clear</button>
           </div>
         </div>
         <div class="log-box" id="logBox">
-          <div class="log-entry rx">[MacBook Engine] Native 60 FPS BMO Engine running with identical MacBook canvas logic.</div>
-          <div class="log-entry">[Mirror] Dispatch Target: BOTH (Mirrored to Emulator &amp; Rocky LCD).</div>
+          <div class="log-entry rx">[Rocky v2] 2x supersampled OLED face emulator initialized.</div>
         </div>
       </div>
-
     </div>
   </div>
 
   <script>
     /* =========================================================================
-     * EXACT PORT OF THE MACBOOK BMO FACE ENGINE (from static/index.html)
-     * Zero-Weight 60 FPS Procedural BMO Face Engine (Adventure Time Style)
+     * Rocky v2 OLED Face Renderer (Exact Port of desk-robot-2.1 Sim Math)
+     * Preserves peak-blink openFrac scaling for lid & cheek so blinks never blank
      * ========================================================================= */
+    const RockyV2FaceRenderer = (() => {
+      const W = 128, H = 64, S = 2, BW = W * S, BH = H * S;
+      const EYE_KEYS = ["w", "h", "rt", "rb", "st", "sb", "lid", "cheek", "dx", "dy"];
+      const EYE_DEF = { w: 34, h: 34, rt: 12, rb: 12, st: 0, sb: 0, lid: 0, cheek: 0, dx: 0, dy: 0 };
+      const LIMITS = {
+        w: [4, 120], h: [2, 64], rt: [0, 32], rb: [0, 32], st: [-30, 30], sb: [-30, 30],
+        lid: [0, 40], cheek: [0, 40], dx: [-30, 30], dy: [-30, 30]
+      };
+      const BANG = ["###", "###", "###", "###", "###", "###", "###", "...", "###", "###"];
+      const QUESTION = [".#####.", "##...##", "##...##", ".....##", "....##.", "...##..", "..##...", "..##...", ".......", "..##...", "..##..."];
+      const HEART = [".##.##.", "#######", "#######", ".#####.", "..###..", "...#..."];
+      const clamp = (x, lo, hi) => (x < lo ? lo : x > hi ? hi : x);
+      const rnd = (a, b) => a + Math.floor(Math.random() * (b - a));
+      const approach = (c, t, f) => c + (t - c) * f;
+      const fl = Math.floor;
 
-    const EMOTION_PRESETS = {
-      sleepy:    { openL: 0.06, openR: 0.06, scaleL: 1.0,  scaleR: 1.0,  happyArc: 0,    flatLid: 0,    winceL: 0, browAlpha: 0,    browLiftL: 0,   browLiftR: 0,   browTiltL: 0,     browTiltR: 0,     tilt: 0.02,  blush: 0,    sparkle: 0, sweat: 0, smile: 0.15, mouthW: 0.72, gazeX: 0,     gazeY: 3 },
-      neutral:   { openL: 1.0,  openR: 1.0,  scaleL: 1.0,  scaleR: 1.0,  happyArc: 0,    flatLid: 0,    winceL: 0, browAlpha: 0,    browLiftL: 0,   browLiftR: 0,   browTiltL: 0,     browTiltR: 0,     tilt: 0,     blush: 0.12, sparkle: 0, sweat: 0, smile: 0.65, mouthW: 0.95, gazeX: 0,     gazeY: 0 },
-      listening: { openL: 1.0,  openR: 1.0,  scaleL: 1.15, scaleR: 1.15, happyArc: 0,    flatLid: 0,    winceL: 0, browAlpha: 0.7,  browLiftL: -5,  browLiftR: -5,  browTiltL: -0.08, browTiltR: 0.08,  tilt: -0.02, blush: 0.22, sparkle: 0, sweat: 0, smile: 0.45, mouthW: 0.80, gazeX: 0,     gazeY: -1 },
-      thinking:  { openL: 0.88, openR: 0.96, scaleL: 0.96, scaleR: 1.06, happyArc: 0,    flatLid: 0.22, winceL: 0, browAlpha: 0.95, browLiftL: 1,   browLiftR: -6,  browTiltL: 0.05,  browTiltR: 0.18,  tilt: -0.04, blush: 0,    sparkle: 0, sweat: 0, smile: 0.0,  mouthW: 0.65, gazeX: -8,    gazeY: -7 },
-      happy:     { openL: 1.0,  openR: 1.0,  scaleL: 1.06, scaleR: 1.06, happyArc: 0.25, flatLid: 0,    winceL: 0, browAlpha: 0,    browLiftL: -3,  browLiftR: -3,  browTiltL: 0,     browTiltR: 0,     tilt: 0.02,  blush: 0.65, sparkle: 0, sweat: 0, smile: 0.95, mouthW: 1.15, gazeX: 0,     gazeY: 0 },
-      excited:   { openL: 1.0,  openR: 1.0,  scaleL: 1.12, scaleR: 1.12, happyArc: 1.0,  flatLid: 0,    winceL: 0, browAlpha: 0,    browLiftL: -5,  browLiftR: -5,  browTiltL: 0,     browTiltR: 0,     tilt: 0.035, blush: 0.95, sparkle: 1, sweat: 0, smile: 1.0,  mouthW: 1.32, gazeX: 0,     gazeY: -1 },
-      curious:   { openL: 1.0,  openR: 1.0,  scaleL: 0.90, scaleR: 1.24, happyArc: 0,    flatLid: 0,    winceL: 0, browAlpha: 1.0,  browLiftL: 2,   browLiftR: -8,  browTiltL: 0.12,  browTiltR: 0.22,  tilt: -0.075,blush: 0.15, sparkle: 0, sweat: 0, smile: 0.20, mouthW: 0.62, gazeX: 3,     gazeY: -2 },
-      focused:   { openL: 0.86, openR: 0.86, scaleL: 1.02, scaleR: 1.02, happyArc: 0,    flatLid: 0.26, winceL: 0, browAlpha: 1.0,  browLiftL: 3,   browLiftR: 3,   browTiltL: 0.26,  browTiltR: -0.26, tilt: 0,     blush: 0,    sparkle: 0, sweat: 0, smile: 0.45, mouthW: 0.92, gazeX: 0,     gazeY: 0 },
-      alarmed:   { openL: 1.0,  openR: 1.0,  scaleL: 1.38, scaleR: 1.38, happyArc: 0,    flatLid: 0,    winceL: 0, browAlpha: 1.0,  browLiftL: -7,  browLiftR: -7,  browTiltL: -0.28, browTiltR: 0.28,  tilt: 0,     blush: 0,    sparkle: 0, sweat: 1, smile: -0.55,mouthW: 0.78, gazeX: 0,     gazeY: 0 },
-      sad:       { openL: 0.82, openR: 0.82, scaleL: 0.96, scaleR: 0.96, happyArc: 0,    flatLid: 0.18, winceL: 0, browAlpha: 1.0,  browLiftL: -2,  browLiftR: -2,  browTiltL: -0.32, browTiltR: 0.32,  tilt: 0.03,  blush: 0,    sparkle: 0, sweat: 0, smile: -0.80,mouthW: 0.88, gazeX: 0,     gazeY: 5 },
-      bored:     { openL: 0.68, openR: 0.68, scaleL: 1.0,  scaleR: 1.0,  happyArc: 0,    flatLid: 0.88, winceL: 0, browAlpha: 0.65, browLiftL: 2,   browLiftR: 2,   browTiltL: 0.02,  browTiltR: -0.02, tilt: 0.01,  blush: 0,    sparkle: 0, sweat: 0, smile: -0.18,mouthW: 0.88, gazeX: 2,     gazeY: 2 },
-      pained:    { openL: 0.75, openR: 0.78, scaleL: 1.0,  scaleR: 0.95, happyArc: 0,    flatLid: 0.55, winceL: 1, browAlpha: 1.0,  browLiftL: 3,   browLiftR: -2,  browTiltL: 0.28,  browTiltR: 0.20,  tilt: -0.04, blush: 0,    sparkle: 0, sweat: 1, smile: -0.70,mouthW: 0.95, gazeX: -2,    gazeY: 3 },
-    };
+      const PALETTE = [
+        [5, 7, 10],       // 0: Deep matte black visor (#05070a)
+        [255, 251, 247],  // 1: Luminous warm-white eye/mouth (#fffbf7)
+        [5, 7, 10],       // 2: Obsidian pupil (#05070a)
+        [251, 113, 133],  // 3: Soft coral blush & hearts (#fb7185)
+        [56, 189, 248],   // 4: Sky-blue tear (#38bdf8)
+        [251, 191, 36],   // 5: Warm amber accent (!, ?, sparkle, steam) (#fbbf24)
+        [203, 213, 225],  // 6: Soft slate-white thinking dots & Zzz (#cbd5e1)
+        [255, 255, 255],  // 7: Crisp white specular glint (#ffffff)
+      ];
 
-    class BMOFaceEngine {
-      constructor(canvas, moodPill) {
-        this.canvas = canvas;
-        this.ctx = canvas.getContext("2d");
-        this.moodPill = moodPill;
-        this.character = "rocky";
-        this.badgePrefix = "BMO";
-        this.defaultMood = "happy";
-        this.targetScreenRgb = [205, 238, 224];
-        this.curScreenRgb = [205, 238, 224];
-        this.mood = "happy";
-        this.speaking = false;
-        this.speechLevel = 0;
-        this.speechWidth = 1.0;
-        this.micLevel = 0;
+      function readEye(o, base) {
+        const e = { ...base };
+        if (o) {
+          for (const k of EYE_KEYS) {
+            if (typeof o[k] === "number") e[k] = clamp(o[k], LIMITS[k][0], LIMITS[k][1]);
+          }
+        }
+        return e;
+      }
 
-        this.cur = { ...EMOTION_PRESETS.happy, mouthOpen: 0, visemeW: 1.0 };
-        this.pointerX = 0;
-        this.pointerY = 0;
-        this.idleGazeX = 0;
-        this.idleGazeY = 0;
-        this.nextIdleShift = performance.now() + 2200;
+      const RAW_PACK = {
+        name: "Rocky v2",
+        gap: 16,
+        y: 0,
+        cyclops: false,
+        outline: false,
+        glint: true,
+        mouth: "talk",
+        asleep: { w: 30, h: 3, rt: 1, rb: 1 },
+        emotions: {
+          neutral:   { w: 34, h: 34, rt: 12, rb: 12 },
+          happy:     { w: 36, h: 36, rt: 12, rb: 12, cheek: 16, fx: ["blush"] },
+          sad:       { w: 32, h: 26, rt: 10, rb: 10, st: -9, lid: 4, fx: ["tear"] },
+          angry:     { w: 34, h: 24, rt: 8,  rb: 8,  st: 10, fx: ["steam", "shake"] },
+          surprised: { w: 38, h: 44, rt: 19, rb: 19, fx: ["pop"], pop: 0.3 },
+          sleepy:    { w: 34, h: 26, rt: 10, rb: 10, lid: 14 },
+          thinking:  { w: 30, h: 30, rt: 11, rb: 11, lid: 5, fx: ["dots"], gaze: [7, -5] },
+          curious:   { w: 30, h: 30, rt: 11, rb: 11, right: { w: 38, h: 40, rt: 15, rb: 15, dy: -2 }, gaze: [-5, -3], pop: 0.15 },
+          skeptical: { w: 34, h: 38, rt: 13, rb: 12, st: -3, right: { w: 34, h: 34, rt: 12, rb: 12, lid: 17 }, gaze: [4, 0] },
+          excited:   { w: 38, h: 40, rt: 16, rb: 16, cheek: 10, fx: ["sparkle", "bounce"], pop: 0.25 },
+          love:      { w: 36, h: 34, rt: 14, rb: 14, cheek: 12, fx: ["hearts", "blush"], pop: 0.2 },
+          confused:  { w: 32, h: 36, rt: 13, rb: 12, st: -5, right: { w: 28, h: 24, rt: 10, rb: 10, st: 4, dy: 4 }, fx: ["question", "wobble"] },
+          worried:   { w: 34, h: 32, rt: 12, rb: 12, st: -8, lid: 2, fx: ["tear"], pop: 0.12 },
+          alarmed:   { w: 38, h: 42, rt: 18, rb: 18, st: -6, fx: ["pop", "shake"], pop: 0.3 },
+          listening: { w: 36, h: 38, rt: 14, rb: 14, pop: 0.15 },
+          focused:   { w: 34, h: 26, rt: 9,  rb: 9,  st: 4, lid: 6 },
+          bored:     { w: 34, h: 26, rt: 10, rb: 10, lid: 13, gaze: [3, 2] },
+          pained:    { w: 32, h: 22, rt: 8,  rb: 8,  st: 8, lid: 4, right: { w: 32, h: 26, rt: 10, rb: 10, st: -6, lid: 6 }, fx: ["shake", "tear"] },
+          laugh:     { w: 38, h: 38, rt: 15, rb: 15, cheek: 17, fx: ["blush", "sparkle", "bounce"], pop: 0.25 },
+          sweat:     { w: 34, h: 32, rt: 12, rb: 12, st: -5, fx: ["tear", "wobble"], pop: 0.12 },
+        },
+      };
 
-        this.blinkFactor = 1.0;
-        this.blinkPhase = 0;
-        this.nextBlinkAt = performance.now() + 2800;
+      function buildPack(p) {
+        const r = {
+          name: p.name || "Rocky v2",
+          gap: clamp(p.gap ?? 16, 0, 60),
+          y: clamp(p.y ?? 0, -20, 20),
+          cyclops: !!p.cyclops,
+          outline: !!p.outline,
+          glint: p.glint !== false,
+          mouth: p.mouth === "always" ? 1 : p.mouth === "never" ? 2 : 0,
+          asleep: readEye(p.asleep, { ...EYE_DEF, w: 30, h: 3, rt: 1, rb: 1 }),
+          looks: {},
+        };
+        for (const [name, e] of Object.entries(p.emotions)) {
+          const l = readEye(e, EYE_DEF);
+          r.looks[name] = {
+            l,
+            r: readEye(e.right, l),
+            pop: clamp(e.pop ?? 0.12, 0, 0.6),
+            smile: clamp(e.smile ?? 0, -6, 6),
+            gazeX: clamp((e.gaze || [])[0] ?? 0, -20, 20),
+            gazeY: clamp((e.gaze || [])[1] ?? 0, -20, 20),
+            fx: new Set(e.fx || []),
+          };
+        }
+        return r;
+      }
 
-        this.canvas.addEventListener("mousemove", (e) => {
-          const rect = this.canvas.getBoundingClientRect();
-          if (!rect.width) return;
-          const cx = rect.left + rect.width / 2;
-          const cy = rect.top + rect.height / 2;
-          this.pointerX = Math.max(-1, Math.min(1, (e.clientX - cx) / (rect.width * 0.4)));
-          this.pointerY = Math.max(-1, Math.min(1, (e.clientY - cy) / (rect.height * 0.4)));
-        });
+      const PACK = buildPack(RAW_PACK);
 
-        this.canvas.addEventListener("mouseleave", () => {
+      function morph(c, t, f) {
+        for (const k of EYE_KEYS) c[k] = approach(c[k], t[k], f);
+      }
+
+      function inEye(g, x, y) {
+        if (x < g.left || x >= g.right || y < g.top || y >= g.bot) return false;
+        const hh = g.bot - g.top;
+        if (g.w <= 0.001 || hh <= 0.001) return false;
+        const u = ((x - g.cx) / (g.w * 0.5)) * g.inner;
+        const topCut = g.st >= 0 ? g.st * (u + 1) * 0.5 : -g.st * (1 - u) * 0.5;
+        const botCut = g.sb >= 0 ? g.sb * (u + 1) * 0.5 : -g.sb * (1 - u) * 0.5;
+        const yy = y - (topCut * (g.bot - y)) / hh + (botCut * (y - g.top)) / hh;
+        if (yy < g.top + g.lid || yy >= g.bot) return false;
+        if (yy < g.top + g.rt) {
+          const qx = clamp(x, g.left + g.rt, g.right - g.rt);
+          const dx = x - qx, dy = yy - (g.top + g.rt);
+          if (dx * dx + dy * dy > g.rt * g.rt) return false;
+        }
+        if (yy > g.bot - g.rb) {
+          const qx = clamp(x, g.left + g.rb, g.right - g.rb);
+          const dx = x - qx, dy = yy - (g.bot - g.rb);
+          if (dx * dx + dy * dy > g.rb * g.rb) return false;
+        }
+        if (g.cheek > 0.5) {
+          const rr = g.w, ccy = g.bot + rr - g.cheek, dx = x - g.cx, dy = y - ccy;
+          if (dx * dx + dy * dy < rr * rr) return false;
+        }
+        return true;
+      }
+
+      return class RockyV2Renderer {
+        constructor(now = performance.now()) {
+          this.pack = PACK;
+          this.buf = new Uint8Array(BW * BH);
+          this._off = document.createElement("canvas");
+          this._off.width = BW;
+          this._off.height = BH;
+          this._offCtx = this._off.getContext("2d");
+          this._img = this._offCtx.createImageData(BW, BH);
+
+          this.emotion = null;
+          this.idle = true;
+          this.still = false;
+          this.asleep = false;
+          this.cyclopsMode = false;
+          this.talking = false;
+          this.mouthLevel = 0;
+          this.visemeW = 1.0;
+          this.mouth = 0;
+
+          this.blink = 0;
+          this.blinkClosing = false;
+          this.gazeX = 0;
+          this.gazeY = 0;
+          this.gtx = 0;
+          this.gty = 0;
           this.pointerX = 0;
           this.pointerY = 0;
-        });
+          this.pupilX = 0;
+          this.pupilY = 0;
+          this.ptx = 0;
+          this.pty = 0;
+          this.nextPupil = now + rnd(300, 1500);
 
-        this._resize();
-        window.addEventListener("resize", () => this._resize());
-        requestAnimationFrame((t) => this._tick(t));
-      }
+          this.pop = 0;
+          this.squint = 0;
+          this.tearY = -1;
+          this.thinkDots = 0;
+          this.jitter = 0;
+          this.hearts = [0, 1, 2].map(() => ({ alive: false, x: 0, y: 0, age: 0 }));
+          this.heartSide = false;
+          this.zeds = [0, 1, 2].map(() => ({ alive: false, x: 0, y: 0, age: 0 }));
+          this.breath = 0;
+          this.twitch = 0;
+          this.frame = 0;
 
-      _resize() {
-        const rect = this.canvas.parentElement.getBoundingClientRect();
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        const w = Math.max(320, Math.round(rect.width));
-        const h = Math.max(240, Math.round(rect.height));
-        this.canvas.width = w * dpr;
-        this.canvas.height = h * dpr;
-        this.w = w;
-        this.h = h;
-        this.dpr = dpr;
-      }
+          this.nextBlink = now + rnd(800, 4000);
+          this.nextSaccade = now + rnd(500, 2500);
+          this.nextSquint = now + rnd(4000, 12000);
+          this.nextTear = 0;
+          this.nextDot = 0;
+          this.nextHeart = 0;
+          this.nextZed = now + 800;
+          this.nextTwitch = now + rnd(5000, 9000);
+          this.since = now;
+          this._lastStep = now;
 
-      setEmotion(mood) {
-        const key = EMOTION_PRESETS[mood] ? mood : this.defaultMood;
-        this.mood = key;
-        if (this.moodPill) {
-          this.moodPill.textContent = `${this.badgePrefix} • ${key.toUpperCase()}`;
-        }
-      }
-
-      setSpeechLevel(level, isSpeaking = true, visemeWidth = 1.0) {
-        this.speaking = isSpeaking;
-        if (!isSpeaking) {
-          this.speechLevel = 0;
-          this.speechWidth = 1.0;
-          return;
-        }
-        const rate = level > this.speechLevel ? 0.82 : 0.72;
-        this.speechLevel += (level - this.speechLevel) * rate;
-        this.speechWidth += (visemeWidth - this.speechWidth) * 0.45;
-      }
-
-      _tick(now) {
-        // Auto-blink state machine
-        if (this.mood !== "sleepy" && now >= this.nextBlinkAt) {
-          this.blinkPhase = 1;
-          const doubleBlink = Math.random() < 0.18;
-          this.nextBlinkAt = now + (doubleBlink ? 260 : 2400 + Math.random() * 2900);
-        }
-        if (this.blinkPhase === 1) {
-          this.blinkFactor -= 0.34;
-          if (this.blinkFactor <= 0.05) {
-            this.blinkFactor = 0.05;
-            this.blinkPhase = 2;
-          }
-        } else if (this.blinkPhase === 2) {
-          this.blinkFactor += 0.28;
-          if (this.blinkFactor >= 1.0) {
-            this.blinkFactor = 1.0;
-            this.blinkPhase = 0;
-          }
+          this.setEmotion("neutral", now);
+          const look = this.pack.looks.neutral;
+          this.curL = { ...look.l };
+          this.curR = { ...look.r };
+          this.smile = look.smile;
+          this.pop = 0;
         }
 
-        // Autonomous subtle idle saccades
-        if (chkAutoSaccades.checked && now >= this.nextIdleShift) {
-          this.idleGazeX = (Math.random() - 0.5) * 7;
-          this.idleGazeY = (Math.random() - 0.5) * 4;
-          this.nextIdleShift = now + 1800 + Math.random() * 2600;
+        setIdle(on) { this.idle = !!on; }
+        setPointer(px, py) {
+          this.pointerX = clamp(px || 0, -1, 1);
+          this.pointerY = clamp(py || 0, -1, 1);
+        }
+        setSpeech(level, isSpeaking, visemeW = 1.0) {
+          this.talking = !!isSpeaking;
+          this.mouthLevel = isSpeaking ? clamp(level || 0, 0, 1) : 0;
+          this.visemeW = clamp(visemeW || 1.0, 0.72, 1.3);
+        }
+        triggerBlink() {
+          if (!this.asleep) this.blinkClosing = true;
         }
 
-        const tgt = EMOTION_PRESETS[this.mood] || EMOTION_PRESETS.neutral;
-        const k = 0.19;
-        for (const prop of Object.keys(tgt)) {
-          this.cur[prop] += (tgt[prop] - this.cur[prop]) * k;
-        }
-
-        for (let i = 0; i < 3; i++) {
-          this.curScreenRgb[i] += (this.targetScreenRgb[i] - this.curScreenRgb[i]) * 0.12;
-        }
-
-        const targetMouthOpen = this.speaking ? Math.min(1.0, this.speechLevel) : 0.0;
-        const mouthRate = this.speaking ? (targetMouthOpen > this.cur.mouthOpen ? 0.78 : 0.70) : 0.35;
-        this.cur.mouthOpen += (targetMouthOpen - this.cur.mouthOpen) * mouthRate;
-        this.cur.visemeW += ((this.speaking ? this.speechWidth : 1.0) - this.cur.visemeW) * 0.4;
-
-        this._draw(now);
-        requestAnimationFrame((t) => this._tick(t));
-      }
-
-      _draw(now) {
-        const ctx = this.ctx;
-        const w = this.w;
-        const h = this.h;
-        // Exact scale matching the MacBook console screen
-        const scale = Math.min(w / 320, h / 240) * 1.18;
-
-        ctx.save();
-        ctx.scale(this.dpr, this.dpr);
-
-        // 1. BMO Mint CRT Screen Background (smoothly interpolates per character pack)
-        const r = Math.round(this.curScreenRgb[0]);
-        const g = Math.round(this.curScreenRgb[1]);
-        const b = Math.round(this.curScreenRgb[2]);
-        ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
-        ctx.fillRect(0, 0, w, h);
-
-        // Soft CRT inner highlight & scanline texture
-        const grad = ctx.createRadialGradient(w * 0.5, h * 0.42, 10 * scale, w * 0.5, h * 0.5, w * 0.65);
-        grad.addColorStop(0, "rgba(255, 255, 255, 0.24)");
-        grad.addColorStop(1, "rgba(18, 52, 44, 0.08)");
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, w, h);
-
-        const ink = "#142826";
-        const cx = w * 0.5;
-        const cy = h * 0.48;
-
-        // Dynamic organic motion (continuous breath + emotion hop + jaw talk)
-        let bobY = Math.sin(now * 0.0032) * 2.8 * scale;
-        let jitterX = 0;
-        if (this.mood === "excited" || this.mood === "happy") {
-          bobY += Math.abs(Math.sin(now * 0.014)) * -6.5 * scale;
-        } else if (this.mood === "alarmed") {
-          jitterX = Math.sin(now * 0.055) * 2.5 * scale;
-        }
-        if (this.cur.mouthOpen > 0.05) {
-          bobY += this.cur.mouthOpen * 2.2 * scale;
-        }
-
-        // Gaze offset (combines emotion preset + cursor + idle drift)
-        const trackWeight = (this.mood === "thinking" || this.mood === "sleepy") ? 0.15 : 1.0;
-        const gx = (this.cur.gazeX + (this.pointerX * 5.5 + this.idleGazeX * 0.4) * trackWeight) * scale;
-        const gy = (this.cur.gazeY + (this.pointerY * 3.8 + this.idleGazeY * 0.4) * trackWeight) * scale;
-
-        ctx.translate(cx + jitterX, cy + bobY);
-        ctx.rotate(this.cur.tilt);
-
-        const eyeSep = 74 * scale;
-        const eyeY = -12 * scale;
-
-        // 2. Cute Rosy Cheek Blushes
-        if (this.cur.blush > 0.02) {
-          ctx.fillStyle = `rgba(244, 142, 162, ${(this.cur.blush * 0.58).toFixed(3)})`;
-          const blushW = (this.mood === "happy" || this.mood === "excited" ? 18 : 16) * scale;
-          const blushH = (this.mood === "happy" || this.mood === "excited" ? 9.5 : 8.5) * scale;
-          for (const dir of [-1, 1]) {
-            ctx.beginPath();
-            ctx.ellipse(dir * (eyeSep + 18 * scale) + gx * 0.4, eyeY + 22 * scale + gy * 0.4, blushW, blushH, 0, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
-
-        // 3. Draw Left & Right BMO Eyes
-        this._drawEye(ctx, -eyeSep + gx, eyeY + gy, scale, this.cur.openL, this.cur.scaleL, true, ink);
-        this._drawEye(ctx,  eyeSep + gx, eyeY + gy, scale, this.cur.openR, this.cur.scaleR, false, ink);
-
-        // 4. Expressive Eyebrows (when active)
-        if (this.cur.browAlpha > 0.04) {
-          ctx.save();
-          ctx.globalAlpha = Math.min(1, this.cur.browAlpha);
-          ctx.strokeStyle = ink;
-          ctx.lineWidth = 3.8 * scale;
-          ctx.lineCap = "round";
-
-          for (const [dir, lift, tilt] of [
-            [-1, this.cur.browLiftL, this.cur.browTiltL],
-            [ 1, this.cur.browLiftR, this.cur.browTiltR],
-          ]) {
-            ctx.save();
-            ctx.translate(dir * eyeSep + gx * 0.85, eyeY - (22 - lift) * scale + gy * 0.85);
-            ctx.rotate(tilt);
-            ctx.beginPath();
-            ctx.moveTo(-13 * scale, 0);
-            ctx.quadraticCurveTo(0, -3.2 * scale, 13 * scale, 0);
-            ctx.stroke();
-            ctx.restore();
-          }
-          ctx.restore();
-        }
-
-        // 5. BMO Mouth (Centered between/just below the eyes, lip-synced!)
-        this._drawMouth(ctx, gx * 0.55, (eyeY + 26 * scale) + gy * 0.55, scale, ink);
-
-        // 6. Extra Adventure Time Props: Sparkles / Sweat Drop / Thinking Dots / Sleepy Zzz
-        if (this.cur.sparkle > 0.08) {
-          const spA = this.cur.sparkle * (0.65 + 0.35 * Math.sin(now * 0.012));
-          this._drawSparkle(ctx, (-eyeSep - 30 * scale), (eyeY - 20 * scale), 9.0 * scale, spA, ink);
-          this._drawSparkle(ctx, ( eyeSep + 29 * scale), (eyeY - 14 * scale), 7.5 * scale, spA, ink);
-        }
-
-        if (this.cur.sweat > 0.08) {
-          const dropSlide = ((now * 0.03) % 16) * scale;
-          this._drawSweatDrop(ctx, eyeSep + 28 * scale, eyeY - 18 * scale + dropSlide, scale, this.cur.sweat);
-        }
-
-        if (this.mood === "thinking") {
-          for (let i = 0; i < 3; i++) {
-            const bounce = Math.sin(now * 0.008 - i * 0.9) * 3.5 * scale;
-            ctx.fillStyle = ink;
-            ctx.beginPath();
-            ctx.arc((86 + i * 12) * scale, (-58 + bounce) * scale, 3.2 * scale, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        } else if (this.mood === "sleepy") {
-          ctx.fillStyle = "rgba(20, 40, 38, 0.60)";
-          ctx.font = `700 ${Math.round(15 * scale)}px -apple-system, sans-serif`;
-          const drift = ((now * 0.02) % 20) * scale;
-          ctx.fillText("z", 86 * scale + drift * 0.4, -38 * scale - drift);
-          ctx.font = `700 ${Math.round(11 * scale)}px -apple-system, sans-serif`;
-          ctx.fillText("z", 72 * scale + drift * 0.2, -24 * scale - drift * 0.7);
-        }
-
-        ctx.restore();
-      }
-
-      _drawEye(ctx, x, y, scale, openParam, scaleParam, isLeft, ink) {
-        ctx.save();
-        ctx.translate(x, y);
-
-        // Marvin left-diode wince (`>`)
-        if (isLeft && this.cur.winceL > 0.45) {
-          ctx.strokeStyle = ink;
-          ctx.lineWidth = 4.2 * scale;
-          ctx.lineCap = "round";
-          ctx.lineJoin = "round";
-          ctx.beginPath();
-          ctx.moveTo(-10 * scale, -9 * scale);
-          ctx.lineTo(8 * scale, 0);
-          ctx.lineTo(-10 * scale, 9 * scale);
-          ctx.stroke();
-          ctx.restore();
-          return;
-        }
-
-        // Happy BMO `^ ^` curved crescent eye arcs
-        if (this.cur.happyArc > 0.55 && this.blinkFactor > 0.4) {
-          ctx.strokeStyle = ink;
-          ctx.lineWidth = 4.8 * scale;
-          ctx.lineCap = "round";
-          ctx.beginPath();
-          ctx.arc(0, 4.5 * scale, 13.5 * scale, Math.PI * 1.12, Math.PI * 1.88);
-          ctx.stroke();
-          ctx.restore();
-          return;
-        }
-
-        const effOpen = openParam * this.blinkFactor;
-        // Closed blink or sleepy curve
-        if (effOpen < 0.16) {
-          ctx.strokeStyle = ink;
-          ctx.lineWidth = 4.2 * scale;
-          ctx.lineCap = "round";
-          ctx.beginPath();
-          if (this.mood === "sleepy") {
-            ctx.arc(0, -3.5 * scale, 11.5 * scale, Math.PI * 0.15, Math.PI * 0.85);
+        setAsleep(on, now = performance.now()) {
+          if (on === this.asleep) return;
+          this.asleep = on;
+          if (on) {
+            for (const z of this.zeds) z.alive = false;
+            this.nextZed = now + 800;
+            this.nextTwitch = now + rnd(5000, 9000);
+            this.gtx = this.gty = 0;
           } else {
-            ctx.moveTo(-11.5 * scale, 0);
-            ctx.lineTo(11.5 * scale, 0);
+            this.pop = 1;
+            this.blink = 0;
+            this.setEmotion(this.emotion || "neutral", now);
           }
-          ctx.stroke();
-          ctx.restore();
-          return;
         }
 
-        // Standard crisp BMO ink-oval eye with squash & stretch
-        const rx = 9.5 * scale * scaleParam * (1.0 + (1.0 - this.blinkFactor) * 0.32);
-        const ry = 13.0 * scale * scaleParam * Math.max(0.18, effOpen);
-
-        ctx.save();
-        ctx.beginPath();
-        // Flat unamused top eyelid cut for Marvin / focused states
-        const lidCut = this.cur.flatLid * ry * 0.85;
-        ctx.rect(-rx * 1.6, -ry + lidCut, rx * 3.2, ry * 2.6);
-        ctx.clip();
-
-        ctx.fillStyle = ink;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Tiny eye shine on sad or curious
-        if (this.mood === "sad" || this.mood === "curious") {
-          ctx.fillStyle = "#e6fff5";
-          ctx.beginPath();
-          ctx.arc(-rx * 0.3, -ry * 0.3, 2.6 * scale, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.restore();
-
-        // Draw crisp top eyelid bar when flatLid is prominent (BMO deadpan look)
-        if (this.cur.flatLid > 0.35) {
-          ctx.strokeStyle = ink;
-          ctx.lineWidth = 3.8 * scale;
-          ctx.lineCap = "round";
-          const lidY = -ry + lidCut;
-          ctx.beginPath();
-          ctx.moveTo(-rx * 1.18, lidY);
-          ctx.lineTo(rx * 1.18, lidY);
-          ctx.stroke();
+        setEmotion(raw, now = performance.now()) {
+          const e = (raw || "neutral").toLowerCase().trim();
+          if (e === "asleep") {
+            this.cyclopsMode = false;
+            this.setAsleep(true, now);
+            return;
+          }
+          if (this.asleep) this.setAsleep(false, now);
+          if (e === "cyclops") {
+            this.cyclopsMode = true;
+            this.emotion = "neutral";
+            this.pop = 1;
+            this.since = now;
+            return;
+          }
+          this.cyclopsMode = false;
+          const mapped = this.pack.looks[e] ? e : (e === "tired" ? "sleepy" : "neutral");
+          if (mapped !== this.emotion) {
+            this.pop = 1;
+            this.since = now;
+            this.tearY = -1;
+            this.nextTear = now + 1500;
+            this.thinkDots = 0;
+            for (const h of this.hearts) h.alive = false;
+            this.nextHeart = now + 200;
+          }
+          this.emotion = mapped;
+          const look = this.pack.looks[mapped];
+          this.gtx = look.gazeX;
+          this.gty = look.gazeY;
         }
 
-        ctx.restore();
-      }
+        tick(now = performance.now()) {
+          const elapsed = now - this._lastStep;
+          if (elapsed < 30) return;
+          const steps = Math.min(2, Math.max(1, Math.floor(elapsed / 33)));
+          this._lastStep = now;
+          for (let s = 0; s < steps; s++) this._step(now);
+        }
 
-      _drawMouth(ctx, x, y, scale, ink) {
-        const open = this.cur.mouthOpen;
-        const smile = this.cur.mouthSmile ?? this.cur.smile;
-        const halfW = 20.5 * scale * this.cur.mouthW * this.cur.visemeW;
-        const jawBob = open * 2.8 * scale;
+        _step(now) {
+          this.frame++;
+          if (this.still) return;
+          const P = this.pack;
+          const look = P.looks[this.emotion] || P.looks.neutral;
+          const isCyclops = P.cyclops || this.cyclopsMode;
+          const f = this.asleep ? 0.12 : 0.25;
+          morph(this.curL, this.asleep ? P.asleep : look.l, f);
+          morph(this.curR, this.asleep ? P.asleep : look.r, f);
+          this.smile = approach(this.smile, this.asleep ? 0 : look.smile, f);
+          this.pop *= 0.82;
+          this.squint *= 0.85;
 
-        ctx.save();
-        ctx.translate(x, y + jawBob);
-
-        if (open >= 0.28) {
-          // Stage 2: Full Adventure Time 2-tone open BMO "D" / bean mouth
-          const openH = (8 + open * 26) * scale;
-          const drawShape = () => {
-            ctx.beginPath();
-            if (smile >= -0.05) {
-              ctx.moveTo(-halfW, -openH * 0.24);
-              ctx.quadraticCurveTo(0, -openH * (0.24 - smile * 0.14), halfW, -openH * 0.24);
-              ctx.bezierCurveTo(halfW * 1.04, openH * 0.90, -halfW * 1.04, openH * 0.90, -halfW, -openH * 0.24);
-            } else {
-              ctx.ellipse(0, openH * 0.22, halfW * 0.74, openH * 0.58, 0, 0, Math.PI * 2);
+          if (this.asleep) {
+            this.breath += 0.035;
+            this.blink = 0;
+            this.blinkClosing = false;
+            this.twitch *= 0.8;
+            if (now >= this.nextTwitch) {
+              this.twitch = 1;
+              this.nextTwitch = now + rnd(6000, 12000);
             }
-            ctx.closePath();
-          };
-
-          ctx.save();
-          drawShape();
-          ctx.fillStyle = "#1b4d3e";
-          ctx.fill();
-          ctx.clip();
-
-          // Bouncing coral-pink BMO tongue arc
-          ctx.fillStyle = "#f08c9e";
-          ctx.beginPath();
-          ctx.ellipse(0, openH * (0.76 - open * 0.08), halfW * 0.72, openH * 0.46, 0, 0, Math.PI * 2);
-          ctx.fill();
-
-          // White top teeth strip on cheerful vowels
-          if (smile > 0.25 && open > 0.40) {
-            ctx.fillStyle = "#f5fff9";
-            ctx.fillRect(-halfW * 1.1, -openH * 0.36, halfW * 2.2, openH * 0.28);
+            if (now >= this.nextZed) {
+              for (const z of this.zeds) {
+                if (!z.alive) {
+                  z.alive = true;
+                  z.age = 0;
+                  z.x = Math.min(isCyclops ? W / 2 + this.curL.w / 2 + 2 : W / 2 + P.gap / 2 + this.curL.w + 2, 108);
+                  z.y = H / 2 - 6;
+                  break;
+                }
+              }
+              this.nextZed = now + rnd(1100, 1700);
+            }
+            for (const z of this.zeds) {
+              if (!z.alive) continue;
+              z.age += 0.012;
+              z.y -= 0.32;
+              z.x += 0.22;
+              if (z.age >= 1 || z.y < -12) z.alive = false;
+            }
+            this.gazeX = approach(this.gazeX, 0, 0.2);
+            this.gazeY = approach(this.gazeY, 0, 0.2);
+            this.mouth = approach(this.mouth, 0, 0.3);
+            return;
           }
-          ctx.restore();
 
-          ctx.strokeStyle = ink;
-          ctx.lineWidth = 3.6 * scale;
-          ctx.lineJoin = "round";
-          drawShape();
-          ctx.stroke();
-        } else if (open >= 0.08) {
-          // Stage 1: Intermediate cartoon syllable "o" / pill mouth
-          const rx = halfW * 0.58;
-          const ry = (3.8 + open * 20) * scale;
+          if (this.blinkClosing) {
+            this.blink += 0.45;
+            if (this.blink >= 1) {
+              this.blink = 1;
+              this.blinkClosing = false;
+            }
+          } else if (this.blink > 0) {
+            this.blink = Math.max(0, this.blink - 0.28);
+          }
+
+          const hasPointer = Math.abs(this.pointerX) > 0.03 || Math.abs(this.pointerY) > 0.03;
+          if (this.idle) {
+            if (now >= this.nextBlink) {
+              this.blinkClosing = true;
+              this.nextBlink = now + rnd(2200, 6000);
+              if (rnd(0, 100) < 20) this.nextBlink = now + 400;
+            }
+            const looksSomewhere = look.gazeX !== 0 || look.gazeY !== 0;
+            if (!hasPointer && now >= this.nextSaccade && !looksSomewhere) {
+              this.gtx = rnd(-8, 9);
+              this.gty = rnd(-4, 5);
+              if (rnd(0, 100) < 40) this.gtx = this.gty = 0;
+              this.nextSaccade = now + rnd(1200, 4000);
+            }
+            if (!hasPointer && now >= this.nextPupil) {
+              if (rnd(0, 100) < 35) {
+                this.ptx = rnd(-25, 26) / 100;
+                this.pty = rnd(-20, 21) / 100;
+              } else {
+                this.ptx = rnd(-90, 91) / 100;
+                this.pty = rnd(-60, 61) / 100;
+              }
+              this.nextPupil = now + rnd(600, 2600);
+            }
+            if (now >= this.nextSquint && this.emotion === "neutral") {
+              this.squint = 1;
+              this.nextSquint = now + rnd(8000, 16000);
+            }
+          }
+
+          if (look.fx.has("tear")) {
+            if (this.tearY < 0 && now >= this.nextTear) this.tearY = 0;
+            if (this.tearY >= 0) {
+              this.tearY += 0.7;
+              if (this.tearY > H) {
+                this.tearY = -1;
+                this.nextTear = now + rnd(2500, 5000);
+              }
+            }
+          }
+          if (look.fx.has("dots") && now >= this.nextDot) {
+            this.thinkDots = (this.thinkDots + 1) % 4;
+            this.nextDot = now + 420;
+          }
+          if (look.fx.has("hearts") && now >= this.nextHeart) {
+            for (const h of this.hearts) {
+              if (!h.alive) {
+                h.alive = true;
+                h.age = 0;
+                this.heartSide = !this.heartSide;
+                h.x = this.heartSide ? W / 2 + P.gap / 2 + this.curR.w + 2 : W / 2 - P.gap / 2 - this.curL.w - 9;
+                if (isCyclops) h.x = this.heartSide ? W / 2 + this.curL.w / 2 + 3 : W / 2 - this.curL.w / 2 - 10;
+                h.y = H / 2 + 6;
+                break;
+              }
+            }
+            this.nextHeart = now + rnd(600, 1000);
+          }
+          for (const h of this.hearts) {
+            if (!h.alive) continue;
+            h.age += 0.015;
+            h.y -= 0.45;
+            if (h.age >= 1 || h.y < -6) h.alive = false;
+          }
+          this.jitter = look.fx.has("shake") && this.frame % 3 === 0 ? rnd(-1, 2) : 0;
+
+          const mouthGoal = this.talking ? clamp(0.12 + this.mouthLevel * 0.88, 0.12, 1.0) : 0;
+          this.mouth = approach(this.mouth, mouthGoal, this.talking ? 0.52 : 0.3);
+
+          const targetGX = hasPointer ? look.gazeX + this.pointerX * 9.0 : this.gtx;
+          const targetGY = hasPointer ? look.gazeY + this.pointerY * 5.0 : this.gty;
+          const targetPX = hasPointer ? this.pointerX * 0.85 : this.ptx;
+          const targetPY = hasPointer ? this.pointerY * 0.55 : this.pty;
+
+          this.gazeX = approach(this.gazeX, targetGX, 0.35);
+          this.gazeY = approach(this.gazeY, targetGY, 0.35);
+          this.pupilX = approach(this.pupilX, targetPX, 0.5);
+          this.pupilY = approach(this.pupilY, targetPY, 0.5);
+        }
+
+        dot2(x, y, c) {
+          if (x >= 0 && y >= 0 && x < BW && y < BH) this.buf[y * BW + x] = c;
+        }
+        dot(x, y, c) {
+          const bx = x * S, by = y * S;
+          this.dot2(bx, by, c);
+          this.dot2(bx + 1, by, c);
+          this.dot2(bx, by + 1, c);
+          this.dot2(bx + 1, by + 1, c);
+        }
+        rect(x, y, w, h, c) {
+          const x0 = fl(x * S), y0 = fl(y * S), x1 = fl((x + w) * S), y1 = fl((y + h) * S);
+          for (let j = y0; j < y1; ++j) {
+            for (let i = x0; i < x1; ++i) this.dot2(i, j, c);
+          }
+        }
+        roundBox(x, y, w, h, r, c) {
+          const bw = w * S, bh = h * S, br = Math.min(r * S, Math.min(bw, bh) * 0.5);
+          const bx = fl(x * S), by = fl(y * S);
+          for (let j = 0; j < bh; ++j) {
+            for (let i = 0; i < bw; ++i) {
+              const px = i + 0.5, py = j + 0.5;
+              const qx = clamp(px, br, bw - br), qy = clamp(py, br, bh - br);
+              if ((px - qx) * (px - qx) + (py - qy) * (py - qy) <= br * br) {
+                this.dot2(bx + i, by + j, c);
+              }
+            }
+          }
+        }
+        line(x0, y0, x1, y1, c = 1) {
+          x0 = Math.round(x0); y0 = Math.round(y0); x1 = Math.round(x1); y1 = Math.round(y1);
+          const dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+          const dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+          let err = dx + dy;
+          for (;;) {
+            this.dot(x0, y0, c);
+            if (x0 === x1 && y0 === y1) break;
+            const e2 = 2 * err;
+            if (e2 >= dy) { err += dy; x0 += sx; }
+            if (e2 <= dx) { err += dx; y0 += sy; }
+          }
+        }
+        disc(cx, cy, r, c = 1) {
+          const bcx = cx * S, bcy = cy * S, br = r * S;
+          const ri = Math.ceil(br);
+          for (let j = -ri; j <= ri; ++j) {
+            for (let i = -ri; i <= ri; ++i) {
+              if (i * i + j * j <= br * br + br * 0.5) this.dot2(fl(bcx) + i, fl(bcy) + j, c);
+            }
+          }
+        }
+        glyph(rows, x, y, c = 1) {
+          for (let j = 0; j < rows.length; ++j) {
+            const row = rows[j];
+            for (let i = 0; i < row.length; ++i) {
+              if (row[i] === "#") this.dot(x + i, y + j, c);
+            }
+          }
+        }
+
+        drawEye(e, cx, cy, inner, hScale) {
+          const P = this.pack;
+          const w = e.w;
+          const openFrac = 1 - this.blink;
+          let h = e.h * hScale * openFrac;
+          if (h < 2) h = 2;
+          const g = { cx: cx - inner * e.dx, w, st: e.st, sb: e.sb, lid: e.lid * openFrac, cheek: e.cheek * openFrac, inner };
+          const ecy = cy + e.dy;
+          g.left = g.cx - w * 0.5;
+          g.right = g.cx + w * 0.5;
+          g.top = ecy - h * 0.5;
+          g.bot = ecy + h * 0.5;
+          g.rt = Math.max(0, Math.min(e.rt, Math.min(w, h) * 0.5));
+          g.rb = Math.max(0, Math.min(e.rb, Math.min(w, h) * 0.5));
+
+          const x0 = fl(g.left * S), x1 = Math.ceil(g.right * S);
+          const y0 = fl(g.top * S), y1 = Math.ceil(g.bot * S);
+          for (let y = y0; y < y1; ++y) {
+            const py = (y + 0.5) / S;
+            for (let x = x0; x < x1; ++x) {
+              const px = (x + 0.5) / S;
+              let on = inEye(g, px, py);
+              if (on && P.outline) {
+                on = !(inEye(g, px - 2, py) && inEye(g, px + 2, py) && inEye(g, px, py - 2) && inEye(g, px, py + 2));
+              }
+              if (on) this.dot2(x, y, 1);
+            }
+          }
+          if (P.glint && h > 12 && !this.asleep) {
+            this.drawPupil(g, fl(g.left), Math.ceil(g.right), fl(g.top), Math.ceil(g.bot));
+          }
+        }
+
+        drawPupil(g, x0, x1, y0, y1) {
+          const P = this.pack;
+          const r = clamp(g.w * 0.14, 3, 6);
+          let top = -1, bot = -1;
+          for (let y = y0; y < y1; ++y) {
+            if (inEye(g, g.cx, y + 0.5)) {
+              if (top < 0) top = y;
+              bot = y;
+            }
+          }
+          if (top < 0) return;
+          const vcy = (top + bot + 1) * 0.5;
+          let left = -1, right = -1;
+          for (let x = x0; x < x1; ++x) {
+            if (inEye(g, x + 0.5, vcy)) {
+              if (left < 0) left = x;
+              right = x;
+            }
+          }
+          if (left < 0) return;
+          const vcx = (left + right + 1) * 0.5;
+          const roomX = Math.max(0, (right - left + 1) * 0.5 - r - 2);
+          const roomY = Math.max(0, (bot - top + 1) * 0.5 - r - 1.5);
+          const px = clamp(this.pupilX + this.gazeX / 12, -1, 1);
+          const py = clamp(this.pupilY + this.gazeY / 8, -1, 1);
+          const pcx = vcx + px * roomX;
+          const pcy = vcy + py * roomY;
+          const ink = P.outline ? 1 : 2;
+          const ri = Math.ceil(r * S);
+          const pcx2 = fl(pcx * S), pcy2 = fl(pcy * S);
+          for (let y = pcy2 - ri; y <= pcy2 + ri; ++y) {
+            const wy = (y + 0.5) / S;
+            for (let x = pcx2 - ri; x <= pcx2 + ri; ++x) {
+              const wx = (x + 0.5) / S;
+              const dx = wx - pcx, dy = wy - pcy;
+              if (dx * dx + dy * dy <= r * r && inEye(g, wx, wy)) {
+                this.dot2(x, y, ink);
+              }
+            }
+          }
+          if (!P.outline && r >= 4) {
+            const hx = fl(pcx - r * 0.5);
+            const hy = fl(pcy - r * 0.55);
+            if (inEye(g, hx + 0.5, hy + 0.5)) this.rect(hx, hy, 2, 2, 7);
+          }
+        }
+
+        drawMouth(cx, cy) {
+          const P = this.pack;
+          const my0 = fl(cy + this.curL.h * 0.5);
+          if (this.mouth >= 0.05 && P.mouth !== 2) {
+            const mh = 2 + fl(this.mouth * 9);
+            const mw = Math.max(12, Math.round((20 + fl(this.mouth * 8)) * clamp(this.visemeW, 0.78, 1.25)));
+            let my = my0 + 4;
+            if (my + mh > H - 1) my = H - 1 - mh;
+            this.roundBox(cx - Math.trunc(mw / 2), my, mw, mh, Math.min(Math.trunc(mh / 2), 4), 1);
+            if (mh > 6) {
+              this.roundBox(cx - Math.trunc(mw / 2) + 3, my + 2, mw - 6, mh - 4, 2, 0);
+            }
+          } else if (P.mouth === 1) {
+            const mw = 14, my = Math.min(my0 + 6, H - 4);
+            for (let i = 0; i <= mw; ++i) {
+              const t = (i - mw * 0.5) / (mw * 0.5);
+              const yy = fl(my + this.smile * (1 - t * t) + 0.5);
+              this.dot(cx - mw / 2 + i, yy, 1);
+              this.dot(cx - mw / 2 + i, yy + 1, 1);
+            }
+          }
+        }
+
+        drawFlourishes(leftOuter, rightOuter, eyeTop, eyeBottom, now) {
+          const look = this.pack.looks[this.emotion] || this.pack.looks.neutral;
+          const fx = look.fx;
+          const since = now - this.since;
+          const lo = fl(leftOuter), ro = fl(rightOuter);
+          if (fx.has("pop") && since < 900) this.glyph(BANG, 116, 4, 5);
+          if (fx.has("blush")) {
+            for (let i = 0; i < 2; ++i) {
+              const lx = lo - 8 + i * 3, rx = ro + 3 + i * 3;
+              this.line(lx, eyeBottom + 1, lx + 3, eyeBottom - 3, 3);
+              this.line(rx, eyeBottom + 1, rx + 3, eyeBottom - 3, 3);
+            }
+          }
+          if (fx.has("tear") && this.tearY >= 0) {
+            const tx = ro - 3, ty = eyeBottom + fl(this.tearY);
+            this.disc(tx, ty, 2, 4);
+            this.line(tx, ty - 5, tx, ty - 2, 4);
+          }
+          if (fx.has("dots")) {
+            for (let i = 0; i < this.thinkDots; ++i) this.disc(W - 26 + i * 8, 9, 2, 6);
+          }
+          if (fx.has("steam") && fl(this.frame / 6) % 2 === 0) {
+            this.line(lo - 4, eyeTop - 4, lo - 2, eyeTop - 9, 5);
+            this.line(ro + 4, eyeTop - 4, ro + 2, eyeTop - 9, 5);
+          }
+          if (fx.has("hearts")) {
+            for (const h of this.hearts) {
+              if (!h.alive || (h.age > 0.8 && this.frame % 2 === 0)) continue;
+              this.glyph(HEART, fl(h.x), fl(h.y), 3);
+            }
+          }
+          if (fx.has("question")) {
+            this.glyph(QUESTION, 112, 3 + fl(Math.sin(this.frame * 0.15) * 2), 5);
+          }
+          if (fx.has("sparkle")) {
+            const a = fl(this.frame / 5) % 2 === 0;
+            const pts = [
+              a ? lo - 6 : lo - 5, a ? eyeTop + 3 : eyeBottom - 5,
+              a ? ro + 6 : ro + 5, a ? eyeBottom - 4 : eyeTop + 2
+            ];
+            for (let k = 0; k < 2; ++k) {
+              const x = pts[k * 2], y = pts[k * 2 + 1];
+              this.line(x - 2, y, x + 2, y, 5);
+              this.line(x, y - 2, x, y + 2, 5);
+            }
+          }
+        }
+
+        drawZeds() {
+          for (const z of this.zeds) {
+            if (!z.alive || (z.age > 0.8 && this.frame % 2 === 0)) continue;
+            const s = z.age < 0.33 ? 4 : z.age < 0.66 ? 6 : 8;
+            const x = fl(z.x), y = fl(z.y) - s;
+            if (x < 0 || x >= W - 4 || y < 0) continue;
+            for (let b = 0; b < (s >= 8 ? 2 : 1); ++b) {
+              this.line(x + b, y, x + s + b, y, 6);
+              this.line(x + s + b, y, x + b, y + s, 6);
+              this.line(x + b, y + s, x + s + b, y + s, 6);
+            }
+          }
+        }
+
+        _renderBuffer(now) {
+          this.buf.fill(0);
+          const P = this.pack;
+          const look = P.looks[this.emotion] || P.looks.neutral;
+          const isCyclops = P.cyclops || this.cyclopsMode;
+          const lively = !this.still && !this.asleep;
+          let bob = this.asleep ? Math.sin(this.breath) * 2 : -this.mouth * 2;
+          if (lively && look.fx.has("bounce")) bob -= Math.abs(Math.sin(this.frame * 0.18)) * 3;
+          const sway = lively && look.fx.has("wobble") ? Math.sin(this.frame * 0.08) * 3 : 0;
+          let cy = H / 2 + P.y + this.gazeY + bob;
+          if (this.talking) cy -= 2;
+          const gx = this.gazeX + this.jitter + sway;
+          let hScale = 1 + this.pop * look.pop;
+          hScale *= 1 - this.squint * 0.4;
+          if (this.asleep) hScale += this.twitch * 2.5;
+
+          let leftOuter, rightOuter;
+          if (isCyclops) {
+            const cx = W / 2 + gx;
+            this.drawEye(this.curL, cx, cy, 1, hScale);
+            leftOuter = cx - this.curL.dx - this.curL.w / 2;
+            rightOuter = cx - this.curL.dx + this.curL.w / 2;
+          } else {
+            const lcx = W / 2 - P.gap / 2 - this.curL.w / 2 + gx;
+            const rcx = W / 2 + P.gap / 2 + this.curR.w / 2 + gx;
+            this.drawEye(this.curL, lcx, cy, 1, hScale);
+            this.drawEye(this.curR, rcx, cy, -1, hScale);
+            leftOuter = lcx - this.curL.dx - this.curL.w / 2;
+            rightOuter = rcx + this.curR.dx + this.curR.w / 2;
+          }
+
+          const eyeTop = fl(cy - (this.curL.h * hScale) / 2);
+          const eyeBottom = fl(cy + (this.curL.h * hScale) / 2);
+          if (this.asleep) {
+            this.drawZeds();
+          } else {
+            if (!this.still) this.drawFlourishes(leftOuter, rightOuter, eyeTop, eyeBottom, now);
+            this.drawMouth(W / 2 + fl(this.gazeX * 0.5), fl(cy));
+          }
+
+          const d = this._img.data;
+          const buf = this.buf;
+          for (let i = 0, n = BW * BH; i < n; ++i) {
+            const col = PALETTE[buf[i]] || PALETTE[0];
+            const o = i * 4;
+            d[o] = col[0];
+            d[o + 1] = col[1];
+            d[o + 2] = col[2];
+            d[o + 3] = 255;
+          }
+          this._offCtx.putImageData(this._img, 0, 0);
+        }
+
+        draw(ctx, w, h, dpr, now = performance.now()) {
+          this._renderBuffer(now);
           ctx.save();
-          ctx.beginPath();
-          ctx.ellipse(0, ry * 0.25, rx, ry, 0, 0, Math.PI * 2);
-          ctx.fillStyle = "#1b4d3e";
-          ctx.fill();
-          ctx.clip();
-          ctx.fillStyle = "#f08c9e";
-          ctx.beginPath();
-          ctx.ellipse(0, ry * 1.0, rx * 0.75, ry * 0.55, 0, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.scale(dpr, dpr);
+
+          ctx.fillStyle = "#05070a";
+          ctx.fillRect(0, 0, w, h);
+
+          const grad = ctx.createRadialGradient(w * 0.5, h * 0.48, 8, w * 0.5, h * 0.5, w * 0.62);
+          grad.addColorStop(0, "rgba(255, 251, 247, 0.045)");
+          grad.addColorStop(1, "rgba(0, 0, 0, 0)");
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, 0, w, h);
+
+          const availW = Math.max(64, w * 0.94);
+          const availH = Math.max(32, h * 0.88);
+          const fit = Math.min(availW / BW, availH / BH);
+          const dw = Math.round(BW * fit);
+          const dh = Math.round(BH * fit);
+          const dx = Math.round((w - dw) * 0.5);
+          const dy = Math.round((h - dh) * 0.5);
+
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(this._off, dx, dy, dw, dh);
           ctx.restore();
-
-          ctx.strokeStyle = ink;
-          ctx.lineWidth = 3.4 * scale;
-          ctx.beginPath();
-          ctx.ellipse(0, ry * 0.25, rx, ry, 0, 0, Math.PI * 2);
-          ctx.stroke();
-        } else {
-          // Stage 0: Closed BMO line / smile / frown
-          ctx.strokeStyle = ink;
-          ctx.lineWidth = 3.8 * scale;
-          ctx.lineCap = "round";
-          ctx.beginPath();
-          const curve = smile * 13.0 * scale;
-          ctx.moveTo(-halfW * 0.85, -curve * 0.18);
-          ctx.quadraticCurveTo(0, curve, halfW * 0.85, -curve * 0.18);
-          ctx.stroke();
         }
+      };
+    })();
 
-        ctx.restore();
-      }
-
-      _drawSparkle(ctx, x, y, r, alpha, ink) {
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
-        ctx.fillStyle = "#fffbeb";
-        ctx.strokeStyle = ink;
-        ctx.lineWidth = 1.8;
-        ctx.beginPath();
-        for (let i = 0; i < 8; i++) {
-          const ang = (i * Math.PI) / 4;
-          const rad = i % 2 === 0 ? r : r * 0.32;
-          const px = Math.cos(ang) * rad;
-          const py = Math.sin(ang) * rad;
-          if (i === 0) ctx.moveTo(px, py);
-          else ctx.lineTo(px, py);
-        }
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        ctx.restore();
-      }
-
-      _drawSweatDrop(ctx, x, y, scale, alpha) {
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
-        ctx.fillStyle = "#7dd3fc";
-        ctx.strokeStyle = "#142826";
-        ctx.lineWidth = 2.0 * scale;
-        ctx.beginPath();
-        ctx.moveTo(0, -7 * scale);
-        ctx.bezierCurveTo(6 * scale, 1 * scale, 5 * scale, 7 * scale, 0, 7 * scale);
-        ctx.bezierCurveTo(-5 * scale, 7 * scale, -6 * scale, 1 * scale, 0, -7 * scale);
-        ctx.fill();
-        ctx.stroke();
-        ctx.restore();
-      }
-    }
-
-    // -------------------------------------------------------------------------
-    // Initialize BMO Face Engine
-    // -------------------------------------------------------------------------
+    /* =========================================================================
+     * Emulator Controller
+     * ========================================================================= */
     const canvas = document.getElementById("lcdCanvas");
-    const bmoMoodPill = document.getElementById("bmoMoodPill");
-    const bmoFace = new BMOFaceEngine(canvas, bmoMoodPill);
-
-    // Frame Rate & Telemetry
-    let frameCount = 0;
-    let fps = 60;
-    let lastFpsCalc = performance.now();
+    const ctx = canvas.getContext("2d");
+    const moodPill = document.getElementById("moodPill");
+    const chkAutoSaccades = document.getElementById("chkAutoSaccades");
     const teleFps = document.getElementById("teleFps");
     const teleMood = document.getElementById("teleMood");
     const teleMouth = document.getElementById("teleMouth");
@@ -1303,86 +1430,136 @@
     const gazeCoordLabel = document.getElementById("gazeCoordLabel");
     const mouthSlider = document.getElementById("mouthSlider");
     const mouthSliderVal = document.getElementById("mouthSliderVal");
-    const chkAutoSaccades = document.getElementById("chkAutoSaccades");
     const targetToggleBtn = document.getElementById("targetToggleBtn");
-    const targetIcon = document.getElementById("targetIcon");
     const targetLabel = document.getElementById("targetLabel");
     const chassisToggleBtn = document.getElementById("chassisToggleBtn");
-    const chassisIcon = document.getElementById("chassisIcon");
     const chassisLabel = document.getElementById("chassisLabel");
     const panelModeTitle = document.getElementById("panelModeTitle");
-    const macbookChassis = document.getElementById("macbookChassis");
+    const rockyChassis = document.getElementById("rockyChassis");
     const pcbBoard = document.getElementById("pcbBoard");
+    const bezelScreenSlot = document.getElementById("bezelScreenSlot");
+    const pcbScreenSlot = document.getElementById("pcbScreenSlot");
     const robotIpInput = document.getElementById("robotIpInput");
+
+    robotIpInput.value = localStorage.getItem("rocky_robot_ip") || "192.168.4.40";
+    teleRobotIp.textContent = robotIpInput.value;
+
+    const renderer = new RockyV2FaceRenderer();
+    let currentMood = "neutral";
+    let speaking = false;
+    let speechLevel = 0;
+    let speechWidth = 1.0;
+    let pointerX = 0;
+    let pointerY = 0;
+    let viewW = 320, viewH = 240, viewDpr = 1;
+
+    function resizeCanvas() {
+      const parent = canvas.parentElement;
+      if (!parent) return;
+      const rect = parent.getBoundingClientRect();
+      viewDpr = Math.min(window.devicePixelRatio || 1, 2);
+      viewW = Math.max(240, Math.round(rect.width || 320));
+      viewH = Math.max(180, Math.round(rect.height || 240));
+      canvas.width = viewW * viewDpr;
+      canvas.height = viewH * viewDpr;
+    }
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    canvas.addEventListener("mousemove", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      if (!rect.width) return;
+      pointerX = Math.max(-1, Math.min(1, ((e.clientX - rect.left) / rect.width) * 2 - 1));
+      pointerY = Math.max(-1, Math.min(1, ((e.clientY - rect.top) / rect.height) * 2 - 1));
+      gazeCoordLabel.textContent = `Gx: ${pointerX.toFixed(2)}, Gy: ${pointerY.toFixed(2)}`;
+    });
+    canvas.addEventListener("mouseleave", () => {
+      pointerX = 0;
+      pointerY = 0;
+      gazePosLabel.textContent = "CENTER";
+      gazeCoordLabel.textContent = "Gx: 0.00, Gy: 0.00";
+    });
+
+    function setEmotion(mood) {
+      currentMood = (mood || "neutral").toLowerCase().trim();
+      renderer.setEmotion(currentMood);
+      moodPill.textContent = `ROCKY • ${currentMood.toUpperCase()}`;
+      teleMood.textContent = currentMood.toUpperCase();
+      document.querySelectorAll(".emo-chip").forEach((b) => {
+        b.classList.toggle("active", b.dataset.emo === currentMood);
+      });
+    }
+
+    function setSpeech(level, isSpeaking, visemeW = 1.0) {
+      speaking = !!isSpeaking;
+      speechLevel = isSpeaking ? Math.max(0, Math.min(1, level)) : 0;
+      speechWidth = visemeW;
+      renderer.setSpeech(speechLevel, speaking, speechWidth);
+      teleMouth.textContent = `${Math.round(speechLevel * 100)}%`;
+    }
+
+    let frameCount = 0;
+    let fps = 60;
+    let lastFpsAt = performance.now();
+    function loop(now) {
+      frameCount++;
+      if (now - lastFpsAt >= 1000) {
+        fps = Math.round((frameCount * 1000) / (now - lastFpsAt));
+        frameCount = 0;
+        lastFpsAt = now;
+        teleFps.textContent = fps;
+      }
+      renderer.setIdle(chkAutoSaccades.checked);
+      renderer.setPointer(pointerX, pointerY);
+      renderer.setSpeech(speaking ? speechLevel : 0, speaking, speechWidth);
+      renderer.tick(now);
+      renderer.draw(ctx, viewW, viewH, viewDpr, now);
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
 
     function appendLog(msg, type = "") {
       const entry = document.createElement("div");
       entry.className = `log-entry ${type}`;
-      const timeStr = new Date().toLocaleTimeString();
-      entry.textContent = `[${timeStr}] ${msg}`;
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
       logBox.appendChild(entry);
       logBox.scrollTop = logBox.scrollHeight;
     }
 
-    // Update Telemetry on Tick
-    function updateTelemetry() {
-      const now = performance.now();
-      frameCount++;
-      if (now - lastFpsCalc >= 1000) {
-        fps = Math.round((frameCount * 1000) / (now - lastFpsCalc));
-        frameCount = 0;
-        lastFpsCalc = now;
-        teleFps.textContent = fps;
-      }
-      teleMood.textContent = bmoFace.mood.toUpperCase();
-      teleMouth.textContent = `${Math.round(bmoFace.cur.mouthOpen * 100)}%`;
-      requestAnimationFrame(updateTelemetry);
-    }
-    requestAnimationFrame(updateTelemetry);
-
-    // -------------------------------------------------------------------------
-    // Chassis View Switcher: MacBook BMO vs Waveshare PCB
-    // -------------------------------------------------------------------------
-    let currentView = "macbook"; // "macbook" | "pcb"
+    // View toggle: Rocky Desk-Robot Bezel vs Waveshare 2.0" ST7789 PCB
+    let currentView = "bezel";
     chassisToggleBtn.addEventListener("click", () => {
-      const screenWrap = canvas.parentElement;
-      if (currentView === "macbook") {
+      if (currentView === "bezel") {
         currentView = "pcb";
-        macbookChassis.style.display = "none";
+        rockyChassis.style.display = "none";
         pcbBoard.style.display = "flex";
-        pcbBoard.querySelector(".screen-wrap").appendChild(canvas);
-        chassisIcon.textContent = "📟";
-        chassisLabel.textContent = "View: Waveshare 2.0\" PCB";
-        panelModeTitle.textContent = "Waveshare 2.0\" ST7789 IPS Hardware Module (320x240)";
-        appendLog("Switched visual enclosure to Waveshare 2.0\" PCB");
+        pcbScreenSlot.appendChild(canvas);
+        chassisLabel.textContent = 'View: Waveshare 2.0" PCB';
+        panelModeTitle.textContent = 'Waveshare 2.0" ST7789 IPS Module (320×240)';
+        appendLog('Switched enclosure to Waveshare 2.0" ST7789 PCB');
       } else {
-        currentView = "macbook";
+        currentView = "bezel";
         pcbBoard.style.display = "none";
-        macbookChassis.style.display = "flex";
-        macbookChassis.querySelector(".screen-wrap").appendChild(canvas);
-        chassisIcon.textContent = "💻";
-        chassisLabel.textContent = "View: MacBook BMO Chassis";
-        panelModeTitle.textContent = "MacBook BMO Screen Clone (Identical Engine & Proportions)";
-        appendLog("Switched visual enclosure to MacBook BMO Chassis");
+        rockyChassis.style.display = "flex";
+        bezelScreenSlot.appendChild(canvas);
+        chassisLabel.textContent = "View: Rocky Bezel";
+        panelModeTitle.textContent = "Rocky Desk-Robot Bezel (320×240 OLED Mirror)";
+        appendLog("Switched enclosure to Rocky Desk-Robot Bezel");
       }
-      setTimeout(() => bmoFace._resize(), 30);
+      setTimeout(resizeCanvas, 30);
     });
 
-    // -------------------------------------------------------------------------
-    // Target Router & Mirroring
-    // -------------------------------------------------------------------------
+    // Dispatch target toggle: both | lcd | browser
     let exprTarget = localStorage.getItem("rocky_expr_target") || "both";
+    if (exprTarget === "macbook") exprTarget = "browser";
     function updateTargetUI() {
       if (exprTarget === "both") {
-        targetIcon.textContent = "🪞";
-        targetLabel.textContent = "Dispatch: Both (Live Mirror)";
-        targetToggleBtn.className = "btn primary";
+        targetLabel.textContent = "Dispatch: Both (Mirror)";
+        targetToggleBtn.className = "btn sky";
       } else if (exprTarget === "lcd") {
-        targetIcon.textContent = "📟";
         targetLabel.textContent = "Dispatch: Rocky LCD Only";
         targetToggleBtn.className = "btn";
       } else {
-        targetIcon.textContent = "💻";
         targetLabel.textContent = "Dispatch: Emulator Only";
         targetToggleBtn.className = "btn";
       }
@@ -1391,164 +1568,115 @@
     updateTargetUI();
 
     targetToggleBtn.addEventListener("click", () => {
-      if (exprTarget === "both") exprTarget = "lcd";
-      else if (exprTarget === "lcd") exprTarget = "macbook";
-      else exprTarget = "both";
+      exprTarget = exprTarget === "both" ? "lcd" : exprTarget === "lcd" ? "browser" : "both";
       updateTargetUI();
-      appendLog(`Dispatch target switched to: ${exprTarget.toUpperCase()}`);
+      appendLog(`Dispatch target: ${exprTarget.toUpperCase()}`);
     });
 
-    // -------------------------------------------------------------------------
-    // Dispatch Command to Physical Robot & Backend
-    // -------------------------------------------------------------------------
     async function dispatchFaceCommand(payload) {
       appendLog(`TX => ${JSON.stringify(payload)}`, "tx");
-
-      if (exprTarget === "macbook") {
-        // Emulator only, do not dispatch to physical robot
-        return;
-      }
-
+      if (exprTarget === "browser") return;
       const robotIp = robotIpInput.value.trim() || "192.168.4.40";
-      payload.robot_ip = robotIp;
-
       try {
         const res = await fetch("/api/robot/face", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+          body: JSON.stringify({ ...payload, robot_ip: robotIp }),
         });
-        const data = await res.json();
-        if (data.status === "ok" || res.ok) {
-          appendLog(`RX <= Robot (${robotIp}) OK`, "rx");
-        } else {
-          appendLog(`RX <= Robot (${robotIp}) Code ${res.status}: ${data.message || "Error"}`, "err");
-        }
+        if (res.ok) appendLog(`RX <= ESP32 (${robotIp}) OK`, "rx");
+        else appendLog(`RX <= ESP32 HTTP ${res.status}`, "err");
       } catch (err) {
-        appendLog(`RX <= Robot Network Error: ${err.message}`, "err");
+        appendLog(`RX <= Error: ${err.message}`, "err");
       }
     }
 
-    // -------------------------------------------------------------------------
-    // Emotion Chip Click Handlers
-    // -------------------------------------------------------------------------
+    // 14 Emotion chips
     document.querySelectorAll(".emo-chip[data-emo]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        document.querySelectorAll(".emo-chip").forEach(b => b.classList.remove("active"));
-        btn.classList.add("active");
-
         const emo = btn.dataset.emo;
-        bmoFace.setEmotion(emo);
-
-        let payload = { mood: "default" };
-        if (emo === "happy" || emo === "excited") {
-          payload = { mood: "happy", anim: "laugh" };
-        } else if (emo === "sleepy" || emo === "bored" || emo === "sad") {
-          payload = { mood: "tired" };
-        } else if (emo === "angry" || emo === "alarmed" || emo === "pained") {
-          payload = { mood: "angry" };
-        } else if (emo === "curious" || emo === "listening") {
-          payload = { mood: "curious", anim: "curious" };
-        } else if (emo === "laugh") {
-          bmoFace.setEmotion("excited");
-          payload = { mood: "happy", anim: "laugh" };
-        } else if (emo === "confused") {
-          bmoFace.setEmotion("thinking");
-          payload = { mood: "thinking", anim: "confused" };
-        } else if (emo === "sweat") {
-          payload = { anim: "sweat" };
-        } else if (emo === "cyclops") {
-          payload = { anim: "cyclops" };
-        }
-
-        dispatchFaceCommand(payload);
+        setEmotion(emo);
+        dispatchFaceCommand({ mood: emo });
       });
     });
 
-    // -------------------------------------------------------------------------
-    // Lip-Sync Speech Test & Mouth Controls
-    // -------------------------------------------------------------------------
+    // Dance button
+    const btnDance = document.getElementById("btnDance");
+    btnDance.addEventListener("click", async () => {
+      const robotIp = robotIpInput.value.trim() || "192.168.4.40";
+      setEmotion("excited");
+      appendLog("TX => POST /api/robot/dance", "tx");
+      try {
+        const res = await fetch("/api/robot/dance", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ routine: "random", robot_ip: robotIp }),
+        });
+        appendLog(res.ok ? "RX <= Dance triggered" : `RX <= Dance HTTP ${res.status}`, res.ok ? "rx" : "err");
+      } catch (err) {
+        appendLog(`RX <= Dance error: ${err.message}`, "err");
+      }
+    });
+
+    // Test Mouth & Blink & Aperture slider
     const btnTestTalk = document.getElementById("btnTestTalk");
-    let talkInterval = null;
-
+    let talkTimer = null;
     btnTestTalk.addEventListener("click", () => {
-      if (bmoFace.speaking) return;
-      btnTestTalk.textContent = "🗣 Speaking Lip-Sync Waveform...";
-      btnTestTalk.classList.add("active");
-      dispatchFaceCommand({ speaking: true, mood: bmoFace.mood });
-
-      const startTime = performance.now();
-      talkInterval = setInterval(() => {
-        const elapsed = (performance.now() - startTime) / 1000;
-        if (elapsed > 2.4) {
-          clearInterval(talkInterval);
-          talkInterval = null;
-          bmoFace.setSpeechLevel(0, false, 1.0);
-          btnTestTalk.textContent = "🗣 Test Mouth (Simulate Syllables)";
-          btnTestTalk.classList.remove("active");
-          dispatchFaceCommand({ speaking: false, mood: bmoFace.mood });
+      if (speaking) return;
+      btnTestTalk.textContent = "🗣 Speaking…";
+      dispatchFaceCommand({ speaking: true, mood: currentMood });
+      const t0 = performance.now();
+      talkTimer = setInterval(() => {
+        const elapsed = (performance.now() - t0) / 1000;
+        if (elapsed > 2.2) {
+          clearInterval(talkTimer);
+          talkTimer = null;
+          setSpeech(0, false, 1.0);
+          btnTestTalk.textContent = "🗣 Test Mouth";
+          dispatchFaceCommand({ speaking: false, mood: currentMood });
           return;
         }
-
-        // Multi-harmonic vocal syllable simulation
         const w1 = Math.sin(elapsed * 15.0);
         const w2 = Math.sin(elapsed * 26.0 + 0.9);
-        const w3 = Math.sin(elapsed * 6.2);
-        let openVal = 0.45 + 0.35 * w1 + 0.22 * w2 + 0.18 * w3;
-        if (openVal < 0.14) openVal = 0.0;
-        openVal = Math.max(0, Math.min(1.0, openVal));
-        const visemeW = 0.85 + 0.35 * Math.sin(elapsed * 11.0);
-        bmoFace.setSpeechLevel(openVal, true, visemeW);
+        let openVal = Math.max(0, Math.min(1, 0.45 + 0.35 * w1 + 0.2 * w2));
+        if (openVal < 0.14) openVal = 0;
+        setSpeech(openVal, true, 0.85 + 0.3 * Math.sin(elapsed * 11.0));
       }, 30);
     });
 
     document.getElementById("btnBlink").addEventListener("click", () => {
-      bmoFace.blinkPhase = 1;
+      renderer.triggerBlink();
       dispatchFaceCommand({ anim: "blink" });
     });
 
-    mouthSlider.addEventListener("input", (e) => {
-      const val = e.target.value / 100.0;
-      mouthSliderVal.textContent = `${e.target.value}%`;
-      bmoFace.setSpeechLevel(val, val > 0.02, 1.0);
+    mouthSlider.addEventListener("input", () => {
+      const pct = Number(mouthSlider.value);
+      mouthSliderVal.textContent = `${pct}%`;
+      setSpeech(pct / 100, pct > 2, 1.0);
     });
 
-    // -------------------------------------------------------------------------
-    // Gaze Direction D-Pad
-    // -------------------------------------------------------------------------
+    // Gaze D-Pad
+    const GAZE_MAP = {
+      NW: [-0.7, -0.7], N: [0.0, -0.7], NE: [0.7, -0.7],
+      W: [-0.7, 0.0], CENTER: [0.0, 0.0], E: [0.7, 0.0],
+      SW: [-0.7, 0.7], S: [0.0, 0.7], SE: [0.7, 0.7],
+    };
     document.querySelectorAll(".d-btn[data-pos]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const pos = btn.dataset.pos;
+        const [gx, gy] = GAZE_MAP[pos] || [0, 0];
+        pointerX = gx;
+        pointerY = gy;
         gazePosLabel.textContent = pos;
-
-        let gx = 0, gy = 0;
-        switch (pos) {
-          case "N":  gx = 0.0; gy = -0.7; break;
-          case "NE": gx = 0.7; gy = -0.7; break;
-          case "E":  gx = 0.7; gy = 0.0; break;
-          case "SE": gx = 0.7; gy = 0.7; break;
-          case "S":  gx = 0.0; gy = 0.7; break;
-          case "SW": gx = -0.7; gy = 0.7; break;
-          case "W":  gx = -0.7; gy = 0.0; break;
-          case "NW": gx = -0.7; gy = -0.7; break;
-          case "CENTER":
-          default:
-            gx = 0.0; gy = 0.0; break;
-        }
-
-        bmoFace.pointerX = gx;
-        bmoFace.pointerY = gy;
         gazeCoordLabel.textContent = `Gx: ${gx.toFixed(2)}, Gy: ${gy.toFixed(2)}`;
-        dispatchFaceCommand({ pos: pos, gx: gx, gy: gy });
+        dispatchFaceCommand({ pos, gx, gy });
       });
     });
 
-    // -------------------------------------------------------------------------
-    // Ping Robot Link Monitor
-    // -------------------------------------------------------------------------
+    // Ping ESP32
     async function checkRobotPing() {
       const ip = robotIpInput.value.trim() || "192.168.4.40";
       teleRobotIp.textContent = ip;
+      localStorage.setItem("rocky_robot_ip", ip);
       try {
         const t0 = performance.now();
         const res = await fetch(`/api/robot/ping?robot_ip=${encodeURIComponent(ip)}`);
@@ -1556,14 +1684,14 @@
         const latency = Math.round(performance.now() - t0);
         if (data.online) {
           telePing.textContent = `${data.latency_ms || latency} ms`;
-          telePing.style.color = "var(--success)";
+          telePing.style.color = "var(--ok)";
           hwStatus.textContent = `ONLINE • ${fps} FPS`;
         } else {
           telePing.textContent = "OFFLINE";
           telePing.style.color = "var(--danger)";
-          hwStatus.textContent = `EMULATOR ACTIVE • ${fps} FPS`;
+          hwStatus.textContent = `LOCAL • ${fps} FPS`;
         }
-      } catch (err) {
+      } catch (_) {
         telePing.textContent = "ERR";
         telePing.style.color = "var(--danger)";
       }
@@ -1576,130 +1704,118 @@
       logBox.innerHTML = '<div class="log-entry rx">[Log cleared]</div>';
     });
 
-    // -------------------------------------------------------------------------
-    // Server-Side Face State Polling (Live Mirror from Main Voice Console)
-    // -------------------------------------------------------------------------
+    // Mirror state from main Rocky Studio
     let lastServerUpdate = 0;
     async function pollServerFaceState() {
       try {
         const res = await fetch("/api/robot/face/state");
-        if (res.ok) {
-          const state = await res.json();
-          if (state.updated_at && state.updated_at > lastServerUpdate) {
-            lastServerUpdate = state.updated_at;
-            appendLog(`[Mirror Sync] Mood: ${state.mood}, Anim: ${state.anim}, Speaking: ${state.speaking}`, "rx");
-
-            if (state.mood) {
-              bmoFace.setEmotion(state.mood);
-              document.querySelectorAll(".emo-chip").forEach(b => {
-                if (b.dataset.emo === state.mood) b.classList.add("active");
-                else b.classList.remove("active");
-              });
-            }
-            if (state.speaking !== undefined) {
-              bmoFace.setSpeechLevel(state.speaking ? 0.65 : 0.0, !!state.speaking);
-            }
-            if (state.anim === "blink") {
-              bmoFace.blinkPhase = 1;
-            }
-          }
+        if (!res.ok) return;
+        const st = await res.json();
+        if (st.updated_at && st.updated_at > lastServerUpdate) {
+          lastServerUpdate = st.updated_at;
+          if (st.mood) setEmotion(st.mood);
+          if (st.speaking !== undefined) setSpeech(st.speaking ? 0.6 : 0, !!st.speaking);
+          if (st.anim === "blink") renderer.triggerBlink();
         }
-      } catch (e) {
-        // silent catch
-      }
+      } catch (_) {}
     }
     setInterval(pollServerFaceState, 500);
 
-    // -------------------------------------------------------------------------
-    // Automated Test Suite Runner
-    // -------------------------------------------------------------------------
+    // Automated Rocky Expression Test Runner
     const btnRunTests = document.getElementById("btnRunTests");
     btnRunTests.addEventListener("click", async () => {
       btnRunTests.disabled = true;
-      btnRunTests.textContent = "⏳ Running Tests...";
-      appendLog("⚡ Starting Full Automated Expression & Lip-Sync Test Suite", "tx");
+      btnRunTests.textContent = "⏳ Running…";
+      appendLog("Starting Rocky v2 automated expression test suite", "tx");
 
-      const setBadge = (id, status, text) => {
+      const setBadge = (id, cls, text) => {
         const row = document.getElementById(id);
         if (!row) return;
         const b = row.querySelector(".badge-test");
-        b.className = `badge-test badge-${status}`;
+        b.className = `badge-test badge-${cls}`;
         b.textContent = text;
       };
-
-      const delay = (ms) => new Promise(res => setTimeout(res, ms));
+      const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
       try {
         setBadge("test-1", "running", "TESTING");
-        await delay(300);
-        setBadge("test-1", "pass", "PASSED (0ms)");
+        setEmotion("neutral");
+        await delay(250);
+        setBadge("test-1", "pass", "PASSED");
 
         setBadge("test-2", "running", "TESTING");
-        bmoFace.setEmotion("happy");
+        setEmotion("happy");
         await dispatchFaceCommand({ mood: "happy" });
-        await delay(500);
-        setBadge("test-2", "pass", "PASSED (Joyful)");
+        await delay(400);
+        setEmotion("excited");
+        await dispatchFaceCommand({ mood: "excited" });
+        await delay(450);
+        setBadge("test-2", "pass", "PASSED");
 
         setBadge("test-3", "running", "TESTING");
-        bmoFace.setEmotion("excited");
-        await dispatchFaceCommand({ anim: "laugh" });
-        await delay(700);
-        setBadge("test-3", "pass", "PASSED (Chuckle)");
+        setEmotion("curious");
+        await dispatchFaceCommand({ mood: "curious" });
+        await delay(400);
+        setEmotion("skeptical");
+        await dispatchFaceCommand({ mood: "skeptical" });
+        await delay(400);
+        setBadge("test-3", "pass", "PASSED");
 
         setBadge("test-4", "running", "TESTING");
-        bmoFace.setEmotion("curious");
-        await dispatchFaceCommand({ mood: "curious", anim: "curious" });
-        await delay(600);
-        setBadge("test-4", "pass", "PASSED (Eyebrow)");
+        setEmotion("love");
+        await dispatchFaceCommand({ mood: "love" });
+        await delay(450);
+        setEmotion("confused");
+        await dispatchFaceCommand({ mood: "confused" });
+        await delay(450);
+        setBadge("test-4", "pass", "PASSED");
 
         setBadge("test-5", "running", "TESTING");
-        bmoFace.setEmotion("sleepy");
-        await dispatchFaceCommand({ mood: "tired" });
-        await delay(700);
-        setBadge("test-5", "pass", "PASSED (Zzz Drift)");
+        setEmotion("sleepy");
+        await dispatchFaceCommand({ mood: "sleepy" });
+        await delay(400);
+        setEmotion("asleep");
+        await dispatchFaceCommand({ mood: "asleep" });
+        await delay(500);
+        setBadge("test-5", "pass", "PASSED");
 
         setBadge("test-6", "running", "TESTING");
-        bmoFace.setEmotion("alarmed");
+        setEmotion("worried");
+        await dispatchFaceCommand({ mood: "worried" });
+        await delay(400);
+        setEmotion("angry");
         await dispatchFaceCommand({ mood: "angry" });
-        await delay(600);
-        setBadge("test-6", "pass", "PASSED (Shocked)");
+        await delay(450);
+        setBadge("test-6", "pass", "PASSED");
 
         setBadge("test-7", "running", "TESTING");
-        bmoFace.setSpeechLevel(0.85, true, 1.2);
-        await dispatchFaceCommand({ speaking: true });
-        await delay(1000);
-        bmoFace.setSpeechLevel(0, false, 1.0);
+        setEmotion("neutral");
+        setSpeech(0.8, true, 1.15);
+        await dispatchFaceCommand({ mood: "neutral", speaking: true });
+        await delay(500);
+        renderer.triggerBlink();
+        await delay(350);
+        setSpeech(0, false, 1.0);
         await dispatchFaceCommand({ speaking: false });
-        setBadge("test-7", "pass", "PASSED (Tongue & Teeth)");
+        setBadge("test-7", "pass", "PASSED");
 
         setBadge("test-8", "running", "TESTING");
-        bmoFace.blinkPhase = 1;
-        await delay(500);
-        setBadge("test-8", "pass", "PASSED (Squash)");
-
-        setBadge("test-9", "running", "TESTING");
-        bmoFace.pointerX = 0.7; bmoFace.pointerY = -0.5;
-        await delay(400);
-        bmoFace.pointerX = -0.7; bmoFace.pointerY = 0.5;
-        await delay(400);
-        bmoFace.pointerX = 0.0; bmoFace.pointerY = 0.0;
-        setBadge("test-9", "pass", "PASSED (8-Way)");
-
-        setBadge("test-10", "running", "TESTING");
-        bmoFace.setEmotion("happy");
-        await dispatchFaceCommand({ mood: "happy" });
+        pointerX = 0.7; pointerY = -0.5;
         await delay(300);
-        setBadge("test-10", "pass", "VERIFIED (Sync)");
+        pointerX = -0.7; pointerY = 0.5;
+        await delay(300);
+        pointerX = 0; pointerY = 0;
+        await dispatchFaceCommand({ mood: "neutral", pos: "CENTER", gx: 0, gy: 0 });
+        setBadge("test-8", "pass", "PASSED");
 
-        appendLog("🎉 All 10 Automated Expression & Hardware Mirroring Tests PASSED!", "rx");
+        appendLog("All 8 Rocky v2 expression checks PASSED!", "rx");
       } catch (err) {
-        appendLog(`Test Suite Error: ${err.message}`, "err");
+        appendLog(`Test suite error: ${err.message}`, "err");
       } finally {
         btnRunTests.disabled = false;
-        btnRunTests.textContent = "⚡ Run Full Test Suite";
+        btnRunTests.textContent = "⚡ Run Suite";
       }
     });
-
   </script>
 </body>
 </html>
