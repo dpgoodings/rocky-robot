@@ -15,6 +15,12 @@
 #define AP_SSID             "Rocky-Robot-AP"
 #define AP_PASSWORD         "rocky1234"
 
+// Static IP Configuration
+#define STATIC_IP           192, 168, 4, 40
+#define STATIC_GATEWAY      192, 168, 4, 1
+#define STATIC_SUBNET       255, 255, 252, 0
+#define STATIC_DNS          192, 168, 4, 1
+
 // Rocky-Voice AI Brain Server (Running on your Mac at ~/rocky-voice)
 #define ROCKY_BRAIN_HOST    "http://192.168.4.135:7860"
 

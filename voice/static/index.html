@@ -167,10 +167,53 @@
       transition: border-color 0.3s ease;
     }
 
-    .fs-btn {
+    .stage-top-controls {
       position: absolute;
       top: 13px;
       right: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      z-index: 10;
+    }
+
+    .expr-target-btn {
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      color: #38bdf8;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 5px 11px;
+      border-radius: 9px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+      user-select: none;
+    }
+    .expr-target-btn:hover {
+      background: rgba(56, 189, 248, 0.22);
+      border-color: #38bdf8;
+      color: #fff;
+    }
+    .expr-target-btn.target-lcd {
+      background: rgba(34, 197, 94, 0.16);
+      border-color: rgba(34, 197, 94, 0.45);
+      color: #4ade80;
+    }
+    .expr-target-btn.target-macbook {
+      background: rgba(168, 85, 247, 0.16);
+      border-color: rgba(168, 85, 247, 0.45);
+      color: #c084fc;
+    }
+    .expr-target-btn.target-both {
+      background: rgba(245, 158, 11, 0.16);
+      border-color: rgba(245, 158, 11, 0.45);
+      color: #fbbf24;
+    }
+
+    .fs-btn {
       background: rgba(255, 255, 255, 0.07);
       border: 1px solid rgba(255, 255, 255, 0.15);
       color: var(--muted);
@@ -180,7 +223,6 @@
       border-radius: 9px;
       cursor: pointer;
       transition: all 0.2s ease;
-      z-index: 5;
     }
     .fs-btn:hover { color: var(--text); border-color: var(--accent); }
 
@@ -1118,7 +1160,7 @@
         <div class="cam-header-actions">
           <div id="camIpBox" class="cam-ip-box" title="ESP32-S3 Robot IP Address">
             <label for="camIpInput">Robot IP:</label>
-            <input type="text" id="camIpInput" class="cam-ip-input" value="192.168.4.173" spellcheck="false" />
+            <input type="text" id="camIpInput" class="cam-ip-input" value="192.168.4.40" spellcheck="false" />
           </div>
           <button type="button" id="camRefreshBtn" class="cam-btn" title="Refresh Telemetry & Feed">↻</button>
           <button type="button" id="camPauseBtn" class="cam-btn" title="Pause or Resume Video Stream">⏸ Pause</button>
@@ -1167,6 +1209,9 @@
           </button>
         </div>
         <div class="cam-btn-group">
+          <button type="button" id="camExprToggleBtn" class="cam-btn" title="Toggle Expression Target between LCD and MacBook">
+            🎭 Face: <span id="camExprTargetLabel">Rocky LCD</span>
+          </button>
           <button type="button" id="camPopoutBtn" class="cam-btn" title="Open feed in separate browser tab">
             ⛶ Popout
           </button>
@@ -1260,7 +1305,14 @@
     </section>
 
     <div id="stage" class="stage" data-state="idle">
-      <button type="button" id="fullscreenBtn" class="fs-btn" title="Toggle Full-Screen BMO Face (Esc to exit)">⛶ Full Face</button>
+      <div class="stage-top-controls">
+        <button type="button" id="exprTargetBtn" class="expr-target-btn target-lcd" title="Toggle robot expression target (LCD, MacBook, or Both)">
+          <span id="exprTargetIcon">📟</span>
+          <span id="exprTargetLabel">Expressions: Rocky LCD</span>
+        </button>
+        <a href="/emulator" target="_blank" class="fs-btn" style="text-decoration: none;" title="Open Waveshare 2.0 inch ST7789 IPS LCD Hardware Emulator">📟 LCD Emulator</a>
+        <button type="button" id="fullscreenBtn" class="fs-btn" title="Toggle Full-Screen BMO Face (Esc to exit)">⛶ Full Face</button>
+      </div>
 
       <div id="orbWrap" class="bmo-chassis" title="Click BMO's screen to enable microphone">
         <div class="bmo-top-row">
@@ -1338,16 +1390,20 @@
         </div>
       </div>
       <div class="emo-bar">
-        <span>Preview BMO Mood:</span>
+        <span>Preview Mood &amp; Eyes:</span>
         <button type="button" class="emo-chip" data-emo="neutral">Neutral</button>
         <button type="button" class="emo-chip" data-emo="happy">Happy</button>
-        <button type="button" class="emo-chip" data-emo="excited">Excited (Amaze!)</button>
-        <button type="button" class="emo-chip" data-emo="curious">Curious (Question?)</button>
-        <button type="button" class="emo-chip" data-emo="focused">Focused (Science)</button>
-        <button type="button" class="emo-chip" data-emo="alarmed">Alarmed (Danger!)</button>
+        <button type="button" class="emo-chip" data-emo="excited">Excited</button>
+        <button type="button" class="emo-chip" data-emo="curious">Curious</button>
+        <button type="button" class="emo-chip" data-emo="laugh">😂 Laugh</button>
+        <button type="button" class="emo-chip" data-emo="confused">😵 Confused</button>
+        <button type="button" class="emo-chip" data-emo="cyclops">👁️ Cyclops</button>
+        <button type="button" class="emo-chip" data-emo="sweat">💦 Sweat</button>
+        <button type="button" class="emo-chip" data-emo="focused">Focused</button>
+        <button type="button" class="emo-chip" data-emo="alarmed">Alarmed</button>
         <button type="button" class="emo-chip" data-emo="sad">Sad</button>
-        <button type="button" class="emo-chip" data-emo="bored">Bored (Marvin)</button>
-        <button type="button" class="emo-chip" data-emo="pained">Pained (Diodes)</button>
+        <button type="button" class="emo-chip" data-emo="bored">Bored</button>
+        <button type="button" class="emo-chip" data-emo="pained">Pained</button>
         <button type="button" class="emo-chip" data-emo="thinking">Thinking</button>
         <button type="button" class="emo-chip" data-emo="sleepy">Sleepy</button>
         <button type="button" id="testTalkBtn" class="emo-chip" style="border-color:var(--accent);color:var(--accent);">🗣 Test Mouth</button>
@@ -1635,7 +1691,7 @@
         const ctx = this.ctx;
         const w = this.w;
         const h = this.h;
-        const scale = Math.min(w / 320, h / 196);
+        const scale = Math.min(w / 320, h / 196) * 1.25;
 
         ctx.save();
         ctx.scale(this.dpr, this.dpr);
@@ -1658,13 +1714,16 @@
         const cx = w * 0.5;
         const cy = h * 0.48;
 
-        // Subtle emotion motion (excited bounce, alarmed tremble)
-        let bobY = Math.sin(now * 0.0028) * 1.4 * scale;
+        // Dynamic organic motion (continuous breath + emotion hop + jaw talk)
+        let bobY = Math.sin(now * 0.0032) * 2.8 * scale;
         let jitterX = 0;
-        if (this.mood === "excited") {
-          bobY += Math.abs(Math.sin(now * 0.011)) * -4.5 * scale;
+        if (this.mood === "excited" || this.mood === "happy") {
+          bobY += Math.abs(Math.sin(now * 0.014)) * -6.5 * scale;
         } else if (this.mood === "alarmed") {
-          jitterX = Math.sin(now * 0.055) * 1.6 * scale;
+          jitterX = Math.sin(now * 0.055) * 2.5 * scale;
+        }
+        if (this.cur.mouthOpen > 0.05) {
+          bobY += this.cur.mouthOpen * 2.2 * scale;
         }
 
         // Gaze offset (combines emotion preset + cursor + idle drift)
@@ -1675,15 +1734,15 @@
         ctx.translate(cx + jitterX, cy + bobY);
         ctx.rotate(this.cur.tilt);
 
-        const eyeSep = 62 * scale;
-        const eyeY = -10 * scale;
+        const eyeSep = 74 * scale;
+        const eyeY = -12 * scale;
 
         // 2. Listening Mic Ripple Rings
         if (this.mood === "listening" && this.micLevel > 0.004) {
           const pulse = Math.min(1, this.micLevel * 18);
           ctx.strokeStyle = `rgba(20, 40, 38, ${(0.14 + pulse * 0.25).toFixed(3)})`;
-          ctx.lineWidth = 2 * scale;
-          const rad = (108 + pulse * 24) * scale;
+          ctx.lineWidth = 2.4 * scale;
+          const rad = (118 + pulse * 26) * scale;
           ctx.beginPath();
           ctx.arc(0, 0, rad, -0.45, 0.45);
           ctx.stroke();
@@ -1694,10 +1753,12 @@
 
         // 3. Cute Rosy Cheek Blushes
         if (this.cur.blush > 0.02) {
-          ctx.fillStyle = `rgba(244, 142, 162, ${(this.cur.blush * 0.55).toFixed(3)})`;
+          ctx.fillStyle = `rgba(244, 142, 162, ${(this.cur.blush * 0.58).toFixed(3)})`;
+          const blushW = (this.mood === "happy" || this.mood === "excited" ? 18 : 16) * scale;
+          const blushH = (this.mood === "happy" || this.mood === "excited" ? 9.5 : 8.5) * scale;
           for (const dir of [-1, 1]) {
             ctx.beginPath();
-            ctx.ellipse(dir * (eyeSep + 14 * scale) + gx * 0.4, eyeY + 18 * scale + gy * 0.4, 13 * scale, 6.5 * scale, 0, 0, Math.PI * 2);
+            ctx.ellipse(dir * (eyeSep + 18 * scale) + gx * 0.4, eyeY + 22 * scale + gy * 0.4, blushW, blushH, 0, 0, Math.PI * 2);
             ctx.fill();
           }
         }
@@ -1711,7 +1772,7 @@
           ctx.save();
           ctx.globalAlpha = Math.min(1, this.cur.browAlpha);
           ctx.strokeStyle = ink;
-          ctx.lineWidth = 3.2 * scale;
+          ctx.lineWidth = 3.8 * scale;
           ctx.lineCap = "round";
 
           for (const [dir, lift, tilt] of [
@@ -1719,11 +1780,11 @@
             [ 1, this.cur.browLiftR, this.cur.browTiltR],
           ]) {
             ctx.save();
-            ctx.translate(dir * eyeSep + gx * 0.85, eyeY - (18 - lift) * scale + gy * 0.85);
+            ctx.translate(dir * eyeSep + gx * 0.85, eyeY - (22 - lift) * scale + gy * 0.85);
             ctx.rotate(tilt);
             ctx.beginPath();
-            ctx.moveTo(-10 * scale, 0);
-            ctx.quadraticCurveTo(0, -2.5 * scale, 10 * scale, 0);
+            ctx.moveTo(-13 * scale, 0);
+            ctx.quadraticCurveTo(0, -3.2 * scale, 13 * scale, 0);
             ctx.stroke();
             ctx.restore();
           }
@@ -1731,35 +1792,35 @@
         }
 
         // 6. BMO Mouth (Centered between/just below the eyes, lip-synced!)
-        this._drawMouth(ctx, gx * 0.55, (eyeY + 21 * scale) + gy * 0.55, scale, ink);
+        this._drawMouth(ctx, gx * 0.55, (eyeY + 26 * scale) + gy * 0.55, scale, ink);
 
         // 7. Extra Adventure Time Props: Sparkles / Sweat Drop / Thinking Dots / Sleepy Zzz
         if (this.cur.sparkle > 0.08) {
           const spA = this.cur.sparkle * (0.65 + 0.35 * Math.sin(now * 0.012));
-          this._drawSparkle(ctx, (-eyeSep - 26 * scale), (eyeY - 18 * scale), 7.5 * scale, spA, ink);
-          this._drawSparkle(ctx, ( eyeSep + 25 * scale), (eyeY - 12 * scale), 6.0 * scale, spA, ink);
+          this._drawSparkle(ctx, (-eyeSep - 30 * scale), (eyeY - 20 * scale), 9.0 * scale, spA, ink);
+          this._drawSparkle(ctx, ( eyeSep + 29 * scale), (eyeY - 14 * scale), 7.5 * scale, spA, ink);
         }
 
         if (this.cur.sweat > 0.08) {
-          const dropSlide = ((now * 0.03) % 14) * scale;
-          this._drawSweatDrop(ctx, eyeSep + 24 * scale, eyeY - 16 * scale + dropSlide, scale, this.cur.sweat);
+          const dropSlide = ((now * 0.03) % 16) * scale;
+          this._drawSweatDrop(ctx, eyeSep + 28 * scale, eyeY - 18 * scale + dropSlide, scale, this.cur.sweat);
         }
 
         if (this.mood === "thinking") {
           for (let i = 0; i < 3; i++) {
-            const bounce = Math.sin(now * 0.008 - i * 0.9) * 3 * scale;
+            const bounce = Math.sin(now * 0.008 - i * 0.9) * 3.5 * scale;
             ctx.fillStyle = ink;
             ctx.beginPath();
-            ctx.arc((78 + i * 11) * scale, (-54 + bounce) * scale, 2.8 * scale, 0, Math.PI * 2);
+            ctx.arc((86 + i * 12) * scale, (-58 + bounce) * scale, 3.2 * scale, 0, Math.PI * 2);
             ctx.fill();
           }
         } else if (this.mood === "sleepy") {
-          ctx.fillStyle = "rgba(20, 40, 38, 0.55)";
-          ctx.font = `700 ${Math.round(13 * scale)}px -apple-system, sans-serif`;
-          const drift = ((now * 0.02) % 18) * scale;
-          ctx.fillText("z", 78 * scale + drift * 0.4, -34 * scale - drift);
-          ctx.font = `700 ${Math.round(10 * scale)}px -apple-system, sans-serif`;
-          ctx.fillText("z", 66 * scale + drift * 0.2, -22 * scale - drift * 0.7);
+          ctx.fillStyle = "rgba(20, 40, 38, 0.60)";
+          ctx.font = `700 ${Math.round(15 * scale)}px -apple-system, sans-serif`;
+          const drift = ((now * 0.02) % 20) * scale;
+          ctx.fillText("z", 86 * scale + drift * 0.4, -38 * scale - drift);
+          ctx.font = `700 ${Math.round(11 * scale)}px -apple-system, sans-serif`;
+          ctx.fillText("z", 72 * scale + drift * 0.2, -24 * scale - drift * 0.7);
         }
 
         ctx.restore();
@@ -1772,13 +1833,13 @@
         // Marvin left-diode wince (`>`)
         if (isLeft && this.cur.winceL > 0.45) {
           ctx.strokeStyle = ink;
-          ctx.lineWidth = 3.8 * scale;
+          ctx.lineWidth = 4.2 * scale;
           ctx.lineCap = "round";
           ctx.lineJoin = "round";
           ctx.beginPath();
-          ctx.moveTo(-8 * scale, -7 * scale);
-          ctx.lineTo(6 * scale, 0);
-          ctx.lineTo(-8 * scale, 7 * scale);
+          ctx.moveTo(-10 * scale, -9 * scale);
+          ctx.lineTo(8 * scale, 0);
+          ctx.lineTo(-10 * scale, 9 * scale);
           ctx.stroke();
           ctx.restore();
           return;
@@ -1787,10 +1848,10 @@
         // Happy BMO `^ ^` curved crescent eye arcs
         if (this.cur.happyArc > 0.55 && this.blinkFactor > 0.4) {
           ctx.strokeStyle = ink;
-          ctx.lineWidth = 4.0 * scale;
+          ctx.lineWidth = 4.8 * scale;
           ctx.lineCap = "round";
           ctx.beginPath();
-          ctx.arc(0, 4 * scale, 10 * scale, Math.PI * 1.12, Math.PI * 1.88);
+          ctx.arc(0, 4.5 * scale, 13.5 * scale, Math.PI * 1.12, Math.PI * 1.88);
           ctx.stroke();
           ctx.restore();
           return;
@@ -1800,23 +1861,23 @@
         // Closed blink or sleepy curve
         if (effOpen < 0.16) {
           ctx.strokeStyle = ink;
-          ctx.lineWidth = 3.6 * scale;
+          ctx.lineWidth = 4.2 * scale;
           ctx.lineCap = "round";
           ctx.beginPath();
           if (this.mood === "sleepy") {
-            ctx.arc(0, -3 * scale, 8.5 * scale, Math.PI * 0.15, Math.PI * 0.85);
+            ctx.arc(0, -3.5 * scale, 11.5 * scale, Math.PI * 0.15, Math.PI * 0.85);
           } else {
-            ctx.moveTo(-8.5 * scale, 0);
-            ctx.lineTo(8.5 * scale, 0);
+            ctx.moveTo(-11.5 * scale, 0);
+            ctx.lineTo(11.5 * scale, 0);
           }
           ctx.stroke();
           ctx.restore();
           return;
         }
 
-        // Standard crisp BMO ink-oval eye
-        const rx = 7.4 * scale * scaleParam;
-        const ry = 9.4 * scale * scaleParam * Math.max(0.22, effOpen);
+        // Standard crisp BMO ink-oval eye with squash & stretch
+        const rx = 9.5 * scale * scaleParam * (1.0 + (1.0 - this.blinkFactor) * 0.32);
+        const ry = 13.0 * scale * scaleParam * Math.max(0.18, effOpen);
 
         ctx.save();
         ctx.beginPath();
@@ -1834,7 +1895,7 @@
         if (this.mood === "sad" || this.mood === "curious") {
           ctx.fillStyle = "#e6fff5";
           ctx.beginPath();
-          ctx.arc(-rx * 0.3, -ry * 0.3, 2.1 * scale, 0, Math.PI * 2);
+          ctx.arc(-rx * 0.3, -ry * 0.3, 2.6 * scale, 0, Math.PI * 2);
           ctx.fill();
         }
         ctx.restore();
@@ -1842,7 +1903,7 @@
         // Draw crisp top eyelid bar when flatLid is prominent (BMO deadpan look)
         if (this.cur.flatLid > 0.35) {
           ctx.strokeStyle = ink;
-          ctx.lineWidth = 3.2 * scale;
+          ctx.lineWidth = 3.8 * scale;
           ctx.lineCap = "round";
           const lidY = -ry + lidCut;
           ctx.beginPath();
@@ -1857,15 +1918,15 @@
       _drawMouth(ctx, x, y, scale, ink) {
         const open = this.cur.mouthOpen;
         const smile = this.cur.mouthSmile ?? this.cur.smile;
-        const halfW = 16.5 * scale * this.cur.mouthW * this.cur.visemeW;
-        const jawBob = open * 2.4 * scale;
+        const halfW = 20.5 * scale * this.cur.mouthW * this.cur.visemeW;
+        const jawBob = open * 2.8 * scale;
 
         ctx.save();
         ctx.translate(x, y + jawBob);
 
-        if (open >= 0.30) {
+        if (open >= 0.28) {
           // Stage 2: Full Adventure Time 2-tone open BMO "D" / bean mouth
-          const openH = (7 + open * 21) * scale;
+          const openH = (8 + open * 26) * scale;
           const drawShape = () => {
             ctx.beginPath();
             if (smile >= -0.05) {
@@ -1887,25 +1948,25 @@
           // Bouncing coral-pink BMO tongue arc
           ctx.fillStyle = "#f08c9e";
           ctx.beginPath();
-          ctx.ellipse(0, openH * (0.76 - open * 0.08), halfW * 0.70, openH * 0.44, 0, 0, Math.PI * 2);
+          ctx.ellipse(0, openH * (0.76 - open * 0.08), halfW * 0.72, openH * 0.46, 0, 0, Math.PI * 2);
           ctx.fill();
 
           // White top teeth strip on cheerful vowels
-          if (smile > 0.30 && open > 0.44) {
+          if (smile > 0.25 && open > 0.40) {
             ctx.fillStyle = "#f5fff9";
-            ctx.fillRect(-halfW * 1.1, -openH * 0.36, halfW * 2.2, openH * 0.27);
+            ctx.fillRect(-halfW * 1.1, -openH * 0.36, halfW * 2.2, openH * 0.28);
           }
           ctx.restore();
 
           ctx.strokeStyle = ink;
-          ctx.lineWidth = 3.1 * scale;
+          ctx.lineWidth = 3.6 * scale;
           ctx.lineJoin = "round";
           drawShape();
           ctx.stroke();
-        } else if (open >= 0.09) {
+        } else if (open >= 0.08) {
           // Stage 1: Intermediate cartoon syllable "o" / pill mouth
-          const rx = halfW * 0.56;
-          const ry = (3.2 + open * 17) * scale;
+          const rx = halfW * 0.58;
+          const ry = (3.8 + open * 20) * scale;
           ctx.save();
           ctx.beginPath();
           ctx.ellipse(0, ry * 0.25, rx, ry, 0, 0, Math.PI * 2);
@@ -1919,19 +1980,19 @@
           ctx.restore();
 
           ctx.strokeStyle = ink;
-          ctx.lineWidth = 3.0 * scale;
+          ctx.lineWidth = 3.4 * scale;
           ctx.beginPath();
           ctx.ellipse(0, ry * 0.25, rx, ry, 0, 0, Math.PI * 2);
           ctx.stroke();
         } else {
           // Stage 0: Closed BMO line / smile / frown (snaps shut on consonants & pauses!)
           ctx.strokeStyle = ink;
-          ctx.lineWidth = 3.3 * scale;
+          ctx.lineWidth = 3.8 * scale;
           ctx.lineCap = "round";
           ctx.beginPath();
-          const curve = smile * 10.5 * scale;
-          ctx.moveTo(-halfW * 0.82, -curve * 0.18);
-          ctx.quadraticCurveTo(0, curve, halfW * 0.82, -curve * 0.18);
+          const curve = smile * 13.0 * scale;
+          ctx.moveTo(-halfW * 0.85, -curve * 0.18);
+          ctx.quadraticCurveTo(0, curve, halfW * 0.85, -curve * 0.18);
           ctx.stroke();
         }
 
@@ -2091,6 +2152,156 @@
       document.getElementById("bmoCanvas"),
       document.getElementById("bmoMoodPill")
     );
+
+    // -------------------------------------------------------------------------
+    // Robot Expression Output Target Router (LCD vs MacBook vs Mirrored)
+    // -------------------------------------------------------------------------
+    const exprTargetBtn = document.getElementById("exprTargetBtn");
+    const exprTargetIcon = document.getElementById("exprTargetIcon");
+    const exprTargetLabel = document.getElementById("exprTargetLabel");
+    const camExprToggleBtn = document.getElementById("camExprToggleBtn");
+    const camExprTargetLabel = document.getElementById("camExprTargetLabel");
+
+    // Modes: "both" (Mirrored default) | "lcd" (Rocky ST7789 display) | "macbook" (MacBook Canvas)
+    let exprTarget = localStorage.getItem("rocky_expr_target") || "both";
+
+    function mapEmotionToRoboEyes(emotion) {
+      const e = (emotion || "").toLowerCase().trim();
+      switch (e) {
+        case "happy":
+        case "excited":
+        case "amaze":
+          return { mood: "happy", anim: "laugh" };
+        case "sleepy":
+        case "bored":
+        case "tired":
+        case "sad":
+          return { mood: "tired" };
+        case "angry":
+        case "alarmed":
+        case "pained":
+          return { mood: "angry" };
+        case "curious":
+        case "listening":
+          return { mood: "curious", anim: "curious" };
+        case "thinking":
+        case "confused":
+          return { mood: "thinking", anim: "confused" };
+        case "laugh":
+          return { mood: "happy", anim: "laugh" };
+        case "cyclops":
+          return { anim: "cyclops" };
+        case "sweat":
+          return { anim: "sweat" };
+        case "sigh":
+          return { anim: "sigh" };
+        case "neutral":
+        case "idle":
+        default:
+          return { mood: "default" };
+      }
+    }
+
+    let lastSentExprTime = 0;
+    let lastSentPayload = "";
+
+    async function sendExpressionToRobot(emotion, animOverride = null) {
+      const mapped = mapEmotionToRoboEyes(emotion);
+      if (animOverride) mapped.anim = animOverride;
+      const payloadStr = JSON.stringify(mapped);
+      const now = Date.now();
+      if (payloadStr === lastSentPayload && (now - lastSentExprTime) < 200) {
+        return;
+      }
+      lastSentPayload = payloadStr;
+      lastSentExprTime = now;
+
+      try {
+        await fetch("/api/robot/face", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(mapped)
+        });
+      } catch (err) {
+        console.warn("[Face] Robot face dispatch failed:", err);
+      }
+    }
+
+    function updateExprTargetUI() {
+      if (exprTargetBtn) {
+        exprTargetBtn.className = `expr-target-btn target-${exprTarget}`;
+        if (exprTarget === "both") {
+          exprTargetIcon.textContent = "🪞";
+          exprTargetLabel.textContent = "Expressions: Both (Mirror)";
+          exprTargetBtn.title = "Current: Mirrored across Rocky LCD and MacBook screen. Click to switch to Rocky LCD.";
+        } else if (exprTarget === "lcd") {
+          exprTargetIcon.textContent = "📟";
+          exprTargetLabel.textContent = "Expressions: Rocky LCD";
+          exprTargetBtn.title = "Current: Outputting expressions to Rocky physical ST7789 LCD. Click to switch to MacBook.";
+        } else {
+          exprTargetIcon.textContent = "💻";
+          exprTargetLabel.textContent = "Expressions: MacBook";
+          exprTargetBtn.title = "Current: Outputting expressions on MacBook screen canvas. Click to switch to Both.";
+        }
+      }
+      if (camExprTargetLabel) {
+        camExprTargetLabel.textContent = exprTarget === "both" ? "Both (Mirror)" : (exprTarget === "lcd" ? "Rocky LCD" : "MacBook");
+      }
+      localStorage.setItem("rocky_expr_target", exprTarget);
+    }
+
+    function cycleExprTarget() {
+      if (exprTarget === "both") exprTarget = "lcd";
+      else if (exprTarget === "lcd") exprTarget = "macbook";
+      else exprTarget = "both";
+      updateExprTargetUI();
+
+      // Dispatch to LCD immediately on switch if LCD or Both
+      if (exprTarget === "lcd" || exprTarget === "both") {
+        sendExpressionToRobot(bmoFace.mood || "happy");
+      }
+    }
+
+    if (exprTargetBtn) {
+      exprTargetBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        cycleExprTarget();
+      });
+    }
+    if (camExprToggleBtn) {
+      camExprToggleBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        cycleExprTarget();
+      });
+    }
+
+    // Intercept bmoFace.setEmotion to route expressions dynamically
+    const origSetEmotion = bmoFace.setEmotion.bind(bmoFace);
+    bmoFace.setEmotion = function(mood, forceRobot = false) {
+      origSetEmotion(mood);
+      if (exprTarget === "lcd" || exprTarget === "both" || forceRobot) {
+        sendExpressionToRobot(mood);
+      }
+    };
+
+    // Intercept bmoFace.setSpeechLevel to animate physical BMO mouth when speaking
+    let lastSpeakingState = false;
+    const origSetSpeechLevel = bmoFace.setSpeechLevel.bind(bmoFace);
+    bmoFace.setSpeechLevel = function(level, isSpeaking = true, visemeWidth = 1.0) {
+      origSetSpeechLevel(level, isSpeaking, visemeWidth);
+      if (exprTarget === "lcd" || exprTarget === "both") {
+        if (isSpeaking !== lastSpeakingState) {
+          lastSpeakingState = isSpeaking;
+          fetch("/api/robot/face", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ speaking: isSpeaking })
+          }).catch(() => {});
+        }
+      }
+    };
+
+    updateExprTargetUI();
 
     let activeChar = "rocky";
     let currentMode = "wake";
@@ -3324,7 +3535,7 @@
       const macCamCanvas = document.getElementById("macCamCanvas");
       const camIpBox = document.getElementById("camIpBox");
 
-      let robotIp = localStorage.getItem("rocky_robot_ip") || "192.168.4.173";
+      let robotIp = localStorage.getItem("rocky_robot_ip") || "192.168.4.40";
       let isVisible = localStorage.getItem("rocky_cam_visible") !== "false";
       let isPaused = false;
       let useDirect = false;

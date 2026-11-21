@@ -85,23 +85,28 @@ def test_connection() -> dict[str, Any]:
         return {"connected": False, "url": cfg["url"], "error": str(exc)}
 
 
-def fetch_entities(force_refresh: bool = False) -> list[dict[str, Any]]:
-    """Retrieves all devices, lights, switches, and sensors from Home Assistant."""
+def fetch_entities(force_refresh: bool = False, max_age: float = 60.0) -> list[dict[str, Any]]:
+    """Retrieves all devices, lights, switches, and sensors from Home Assistant with caching."""
     global _ENTITIES_CACHE, _CACHE_TIMESTAMP
+    now = time.time()
+    if not force_refresh and _ENTITIES_CACHE and (now - _CACHE_TIMESTAMP) < max_age:
+        return _ENTITIES_CACHE
+
     cfg = get_config()
     if not cfg["token"]:
         return []
 
     try:
-        with httpx.Client(timeout=4.0) as client:
+        with httpx.Client(timeout=3.0) as client:
             r = client.get(f"{cfg['url']}/api/states", headers=_headers())
             if r.status_code == 200:
                 _ENTITIES_CACHE = r.json()
+                _CACHE_TIMESTAMP = now
                 return _ENTITIES_CACHE
     except Exception as exc:
         print(f"[HomeAssistant] fetch_entities error: {exc}", flush=True)
 
-    return _ENTITIES_CACHE
+    return _ENTITIES_CACHE or []
 
 
 def check_config() -> dict[str, Any]:

@@ -63,11 +63,14 @@ def build_head_parts() -> tuple[bd.Part, bd.Part, bd.Part]:
         (0, -1.5, GEO.head_center_z - 40.0)
     )
 
+    # Split at Y = +9.0 mm so head_back encloses the entire Ø17mm tilt pivot bosses
+    # and both head_front & head_back sit 100% flat on Y=9.0 on the 3D print bed!
+    split_y = 9.0
     front_half = bd.Box(200, 200, 200, align=(Align.CENTER, Align.MIN, Align.CENTER)).translate(
-        (0, 0, GEO.head_center_z)
+        (0, split_y, GEO.head_center_z)
     )
     back_half = bd.Box(200, 200, 200, align=(Align.CENTER, Align.MAX, Align.CENTER)).translate(
-        (0, 0, GEO.head_center_z)
+        (0, split_y, GEO.head_center_z)
     )
 
     # 4x M3 split screw coordinates (outside visor & clear of Freenove S3 rails & pivot brackets)
@@ -93,23 +96,23 @@ def build_head_parts() -> tuple[bd.Part, bd.Part, bd.Part]:
     ) & inner
 
     # Vertical slide-in rail brackets in head_front for compact ESP32-S3 CAM (58x28.5 mm)
-    # Board sits upright at Y = 14.5 (facing +Y), X = +/-14.25, Z = 178..236 (camera aligns to cam_z)
+    # Rails extend all the way to split_y (Y=9.0) so they print flat on the bed with zero overhang!
     s3_y = 14.5
     s3_rail_x = ELEC.s3_cam_wid / 2 + 1.5  # +/-15.75 mm
     s3_slot_x = ELEC.s3_cam_wid / 2 - 0.3  # +/-13.95 mm
     s3_rails = []
     s3_slots = []
     for side in (-1, 1):
-        # Upper mounting arms (above LCD: Z = 221 .. 233) bridging from front bulkhead (Y=23.5) back to Y=12.5
-        arm_up = bd.Box(4.8, 11.5, 11.0, align=(Align.CENTER, Align.CENTER, Align.CENTER)).translate(
-            (side * s3_rail_x, 18.0, GEO.head_center_z + 22.0)
+        # Upper mounting arms (above LCD: Z = 221 .. 233) bridging from Y=9.0 to Y=23.5
+        arm_up = bd.Box(4.8, 14.5, 11.0, align=(Align.CENTER, Align.CENTER, Align.CENTER)).translate(
+            (side * s3_rail_x, 16.25, GEO.head_center_z + 22.0)
         ) & outer
         slot_up = bd.Box(3.0, ELEC.s3_cam_thick + 0.4, 14.0, align=(Align.CENTER, Align.CENTER, Align.CENTER)).translate(
             (side * s3_slot_x, s3_y, GEO.head_center_z + 22.0)
         )
-        # Lower support arms (below LCD: Z = 179 .. 184)
-        arm_lo = bd.Box(4.8, 11.5, 6.0, align=(Align.CENTER, Align.CENTER, Align.CENTER)).translate(
-            (side * s3_rail_x, 18.0, GEO.head_center_z - 23.0)
+        # Lower support arms (below LCD: Z = 179 .. 184) bridging from Y=9.0 to Y=23.5
+        arm_lo = bd.Box(4.8, 14.5, 6.0, align=(Align.CENTER, Align.CENTER, Align.CENTER)).translate(
+            (side * s3_rail_x, 16.25, GEO.head_center_z - 23.0)
         ) & outer
         slot_lo = bd.Box(3.0, ELEC.s3_cam_thick + 0.4, 8.0, align=(Align.CENTER, Align.CENTER, Align.CENTER)).translate(
             (side * s3_slot_x, s3_y, GEO.head_center_z - 23.0)
@@ -201,11 +204,11 @@ def build_head_parts() -> tuple[bd.Part, bd.Part, bd.Part]:
                 mode=Mode.SUBTRACT,
             )
 
-        # 4x M3 pilot bosses at Y = 0 facing -Y
+        # 4x M3 pilot bosses at Y = split_y (9.0) facing -Y
         for sx, sz in split_screws:
-            b_sol, b_hole = m3_boss(11.0, outer_d=7.2, pilot=True, hole_depth=9.5)
-            b_sol = b_sol.rotate(bd.Axis.X, -90).translate((sx, 0.0, sz))
-            b_hole = b_hole.rotate(bd.Axis.X, -90).translate((sx, -0.2, sz))
+            b_sol, b_hole = m3_boss(10.0, outer_d=7.2, pilot=True, hole_depth=8.5)
+            b_sol = b_sol.rotate(bd.Axis.X, -90).translate((sx, split_y, sz))
+            b_hole = b_hole.rotate(bd.Axis.X, -90).translate((sx, split_y - 0.2, sz))
             bd.add(b_sol)
             bd.add(b_hole, mode=Mode.SUBTRACT)
 
@@ -257,12 +260,12 @@ def build_head_parts() -> tuple[bd.Part, bd.Part, bd.Part]:
                 mode=Mode.SUBTRACT,
             )
 
-        # 4x M3 clearance holes + rear counterbores
+        # 4x M3 clearance holes + rear counterbores from Y = split_y (9.0) backward
         for sx, sz in split_screws:
-            b_sol, _ = m3_boss(13.0, outer_d=7.2, pilot=False)
-            b_sol = b_sol.rotate(bd.Axis.X, 90).translate((sx, 0.0, sz))
+            b_sol, _ = m3_boss(15.0, outer_d=7.2, pilot=False)
+            b_sol = b_sol.rotate(bd.Axis.X, 90).translate((sx, split_y, sz))
             bd.add(b_sol)
-            with bd.Locations((sx, -16.0, sz)):
+            with bd.Locations((sx, split_y - 16.0, sz)):
                 bd.Cylinder(
                     radius=1.7,
                     height=32.0,
@@ -270,7 +273,7 @@ def build_head_parts() -> tuple[bd.Part, bd.Part, bd.Part]:
                     align=(Align.CENTER, Align.CENTER, Align.CENTER),
                     mode=Mode.SUBTRACT,
                 )
-            with bd.Locations((sx, -21.0, sz)):
+            with bd.Locations((sx, split_y - 21.0, sz)):
                 bd.Cylinder(
                     radius=3.1,
                     height=22.0,

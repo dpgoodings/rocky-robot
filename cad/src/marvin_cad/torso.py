@@ -18,7 +18,7 @@ def _torso_outer_loft(inset: float = 0.0, z_min: float = 0.0, z_max: float = 74.
         (0.0, 26.5, 25.0),
         (16.0, 36.5, 31.0),
         (48.0, 39.0, 32.0),
-        (68.0, 31.5, 27.5),
+        (68.0, 33.5, 29.0),
         (74.0, 22.0, 22.0),
     ]
     sketches = []
@@ -84,11 +84,9 @@ def _shoulder_cavity_in_world(side: int) -> bd.Part:
     """
     cav = servo_9g_cavity(tol=TOL.slip, wire_slot=True, pilot_holes=True, shaft_clearance_d=13.2)
     # Local servo: shaft at +Z, long axis +X (far end at -X).
-    # Rotate so shaft (+Z) -> +X (for side=+1) and far end (-X) -> -Z (downward):
-    # Rotate -90 around Y -> local +Z becomes -X, local +X becomes +Z.
-    # For side=+1 (+X shaft): rotate +90 around Y -> local +Z becomes +X, local +X becomes -Z!
+    # Mirror-symmetric: both Left (+1) and Right (-1) have far end pointing -Z (downward)
     if side == 1:
-        cav = cav.rotate(bd.Axis.Y, 90)
+        cav = cav.rotate(bd.Axis.Y, 90).rotate(bd.Axis.X, 180)
         flange_x = GEO.shoulder_x - 6.5  # boss extends ~6.5..10.5 out to X=39..43
         cav = cav.translate((flange_x, 0, GEO.shoulder_z))
     else:
@@ -115,15 +113,24 @@ def build_torso_parts() -> tuple[bd.Part, bd.Part]:
     """Build Torso Front (Y >= 0) and Torso Back (Y <= 0) with all internal mounts."""
     shell = _base_torso_shell()
 
-    # Split planes (built outside BuildPart so no context side effects)
+    # Split planes & outer/inner clippers (built outside BuildPart so no context side effects)
     split_z = GEO.torso_z0 + GEO.torso_h / 2
     front_cutter = bd.Box(200, 200, 200, align=(Align.CENTER, Align.MIN, Align.CENTER)).translate((0, 0, split_z))
     back_cutter = bd.Box(200, 200, 200, align=(Align.CENTER, Align.MAX, Align.CENTER)).translate((0, 0, split_z))
+    outer_clip = _torso_outer_loft(inset=0.5).translate((0, 0, GEO.torso_z0))
     shell_front = shell & front_cutter
     shell_back = shell & back_cutter
     pan_cav = _pan_cavity_in_world()
     sh_cav_l = _shoulder_cavity_in_world(1)
     sh_cav_r = _shoulder_cavity_in_world(-1)
+
+    # Extra clean Ø13.4mm side bore around shoulder shafts to prevent tiny shell slivers
+    sh_bore = bd.Cylinder(
+        radius=6.7,
+        height=90.0,
+        rotation=(0, 90, 0),
+        align=(Align.CENTER, Align.CENTER, Align.CENTER),
+    ).translate((0, 0, GEO.shoulder_z))
 
     # Fastener boss coordinates (X, Z) verified clear of servos & speaker
     split_screws = [
@@ -133,16 +140,44 @@ def build_torso_parts() -> tuple[bd.Part, bd.Part]:
         (24.0, GEO.torso_z0 + 15.0),
     ]
 
+    # Precompute M3 front bosses clipped cleanly inside outer torso wall so they never float
+    front_bosses = []
+    front_holes = []
+    for sx, sz in split_screws:
+        b_sol, b_hole = m3_boss(36.0, outer_d=7.4, pilot=True, hole_depth=12.0)
+        b_sol = b_sol.rotate(bd.Axis.X, -90).translate((sx, 0.0, sz)) & outer_clip
+        b_hole = b_hole.rotate(bd.Axis.X, -90).translate((sx, -0.2, sz))
+        front_bosses.append(b_sol)
+        front_holes.append(b_hole)
+
+    # Reinforced Ø21 mm shoulder collar bosses (X = +/-34.75 .. +/-39.75, clear of saddles)
+    sh_collar_front = [
+        (
+            bd.Cylinder(radius=10.5, height=5.0, rotation=(0, 90, 0), align=(Align.CENTER, Align.CENTER, Align.CENTER))
+            .translate((side * (GEO.shoulder_x - 1.75), 0, GEO.shoulder_z))
+            & front_cutter
+        )
+        for side in (-1, 1)
+    ]
+    sh_collar_back = [
+        (
+            bd.Cylinder(radius=10.5, height=5.0, rotation=(0, 90, 0), align=(Align.CENTER, Align.CENTER, Align.CENTER))
+            .translate((side * (GEO.shoulder_x - 1.75), 0, GEO.shoulder_z))
+            & back_cutter
+        )
+        for side in (-1, 1)
+    ]
+
     # --- TORSO FRONT ---
     with bd.BuildPart() as tf:
         bd.add(shell_front)
+        for col in sh_collar_front:
+            bd.add(col)
 
-        # M3 screw pilot bosses on inside of front shell facing -Y
-        for sx, sz in split_screws:
-            b_sol, b_hole = m3_boss(12.0, outer_d=7.2, pilot=True, hole_depth=10.0)
-            b_sol = b_sol.rotate(bd.Axis.X, -90).translate((sx, 0.0, sz))
-            b_hole = b_hole.rotate(bd.Axis.X, -90).translate((sx, -0.2, sz))
+        # M3 screw pilot bosses fusing all the way to the front inner wall
+        for b_sol in front_bosses:
             bd.add(b_sol)
+        for b_hole in front_holes:
             bd.add(b_hole, mode=Mode.SUBTRACT)
 
         # Chest 28 mm speaker cradle (centered at X=0, Z=GEO.speaker_z=62)
@@ -182,36 +217,57 @@ def build_torso_parts() -> tuple[bd.Part, bd.Part]:
         # Subtract shoulder boss & pan boss clearance along Y=0 split seam
         bd.add(sh_cav_l, mode=Mode.SUBTRACT)
         bd.add(sh_cav_r, mode=Mode.SUBTRACT)
+        bd.add(sh_bore, mode=Mode.SUBTRACT)
         bd.add(pan_cav, mode=Mode.SUBTRACT)
 
-    inner_clear = _torso_outer_loft(inset=3.1, z_min=4.5, z_max=70.5).translate((0, 0, GEO.torso_z0))
-    shoulder_saddles = [
-        bd.Box(7.0, 25.0, 36.0, align=(Align.CENTER, Align.CENTER, Align.CENTER)).translate(
-            (side * (GEO.shoulder_x - 8.5), -6.0, GEO.shoulder_z - 5.6)
+    # Precompute shoulder saddles (fused to torso_back wall for Y<=0, 0.3mm clear of torso_front for Y>0)
+    inner_clear_front = _torso_outer_loft(inset=3.1, z_min=4.5, z_max=70.5).translate((0, 0, GEO.torso_z0))
+    back_clip = outer_clip & back_cutter
+    front_clear_clip = inner_clear_front & front_cutter
+    shoulder_saddles = []
+    for side in (-1, 1):
+        s_box = bd.Box(8.0, 26.0, 36.0, align=(Align.CENTER, Align.CENTER, Align.CENTER)).translate(
+            (side * (GEO.shoulder_x - 8.5), -6.5, GEO.shoulder_z - 5.6)
         )
-        & inner_clear
-        for side in (-1, 1)
-    ]
+        shoulder_saddles.append((s_box & back_clip) + (s_box & front_clear_clip))
+
+    # Precompute pan-servo tray & 45-deg gusset ribs fused to torso_back rear wall & neck crown
+    with bd.BuildPart() as pan_tray_bp:
+        with bd.Locations((0, -11.5, GEO.neck_pan_z - 12.5)):
+            bd.Box(24.0, 37.0, 4.0, align=(Align.CENTER, Align.CENTER, Align.MIN))
+        with bd.Locations((0, -8.5, GEO.neck_pan_z - 15.5)):
+            bd.Box(16.0, 41.0, 5.0, align=(Align.CENTER, Align.CENTER, Align.MIN))
+        for gx in (-9.5, 9.5):
+            with bd.BuildSketch(bd.Plane.YZ.offset(gx)) as gsk:
+                with bd.BuildLine():
+                    bd.Polyline(
+                        (-29.0, GEO.neck_pan_z - 12.5),
+                        (6.0, GEO.neck_pan_z - 12.5),
+                        (-29.0, GEO.neck_pan_z - 40.0),
+                        close=True,
+                    )
+                bd.make_face()
+            bd.extrude(gsk.sketch, amount=2.4, both=True)
+    pan_tray_solid = pan_tray_bp.part & outer_clip
+
+    back_bosses = []
+    for sx, sz in split_screws:
+        b_sol, _ = m3_boss(36.0, outer_d=7.4, pilot=False)
+        back_bosses.append(b_sol.rotate(bd.Axis.X, 90).translate((sx, 0.0, sz)) & outer_clip)
 
     # --- TORSO BACK ---
     with bd.BuildPart() as tb:
         bd.add(shell_back)
+        for col in sh_collar_back:
+            bd.add(col)
+        bd.add(pan_tray_solid)
 
-        # Internal pan-servo tray extending from rear wall (Y=-24) to Y=+7 at Z=94.5..98.5
-        with bd.Locations((0, -8.5, GEO.neck_pan_z - 12.5)):
-            bd.Box(24.0, 31.0, 4.0, align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # Extra material around pan servo mounting ears
-        with bd.Locations((0, -5.6, GEO.neck_pan_z - 15.5)):
-            bd.Box(16.0, 35.0, 5.0, align=(Align.CENTER, Align.CENTER, Align.MIN))
-
-        # Internal shoulder servo saddles (Left +X and Right -X), clipped with 0.3 mm wall clearance
+        # Internal shoulder servo saddles (fused into torso_back wall)
         for saddle in shoulder_saddles:
             bd.add(saddle)
 
         # M3 clearance holes + rear counterbores for split screws
-        for sx, sz in split_screws:
-            b_sol, _ = m3_boss(14.0, outer_d=7.2, pilot=False)
-            b_sol = b_sol.rotate(bd.Axis.X, 90).translate((sx, 0.0, sz))
+        for (sx, sz), b_sol in zip(split_screws, back_bosses):
             bd.add(b_sol)
             # Through clearance hole along Y (Y = -34 .. 0)
             with bd.Locations((sx, -17.0, sz)):
@@ -236,6 +292,7 @@ def build_torso_parts() -> tuple[bd.Part, bd.Part]:
         bd.add(pan_cav, mode=Mode.SUBTRACT)
         bd.add(sh_cav_l, mode=Mode.SUBTRACT)
         bd.add(sh_cav_r, mode=Mode.SUBTRACT)
+        bd.add(sh_bore, mode=Mode.SUBTRACT)
 
         # Cable routing slot behind neck pan servo (Y = -14.5)
         with bd.Locations((0, -14.5, GEO.neck_pan_z - 2.0)):
@@ -254,11 +311,13 @@ def build_torso_parts() -> tuple[bd.Part, bd.Part]:
                 bd.add(bp_sol)
                 bd.add(bp_hole, mode=Mode.SUBTRACT)
 
-    front = tf.part
+    front = max(tf.part.solids(), key=lambda s: s.volume)
+    front = bd.Part() + front
     front.label = "torso_front"
     front.color = bd.Color(0.86, 0.87, 0.89)
 
-    back = tb.part
+    back = max(tb.part.solids(), key=lambda s: s.volume)
+    back = bd.Part() + back
     back.label = "torso_back"
     back.color = bd.Color(0.80, 0.82, 0.85)
     return front, back

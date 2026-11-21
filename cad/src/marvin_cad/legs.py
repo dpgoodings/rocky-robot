@@ -114,6 +114,15 @@ def _build_left_leg() -> bd.Part:
     hip_horn = servo_horn_recess(arm_angle_deg=0.0, depth=2.6, through_screw=True)
     hip_horn = hip_horn.rotate(bd.Axis.Y, 90).translate((hip_x_in - 0.05, 0.0, hz))
 
+    # Decorative knee band computed outside BuildPart (flush with X=30..44)
+    knee_band = bd.Cylinder(
+        radius=12.5,
+        height=5.0,
+        align=(Align.CENTER, Align.CENTER, Align.CENTER),
+    ).translate((lx, -2.0, 39.0)) & bd.Box(
+        15.0, 30.0, 8.0, align=(Align.CENTER, Align.CENTER, Align.CENTER)
+    ).translate((lx, -2.0, 39.0))
+
     with bd.BuildPart() as leg:
         # Upper hip hub & thigh column (Z = 38 .. 68)
         with bd.BuildSketch(bd.Plane.XY.offset(38.0)) as sk_up:
@@ -130,13 +139,7 @@ def _build_left_leg() -> bd.Part:
                 align=(Align.CENTER, Align.CENTER, Align.CENTER),
             )
 
-        # Decorative Marvin knee band at Z = 39
-        with bd.Locations((lx, -2.0, 39.0)):
-            bd.Cylinder(
-                radius=13.0,
-                height=5.0,
-                align=(Align.CENTER, Align.CENTER, Align.CENTER),
-            )
+        bd.add(knee_band)
 
         # Lower shin housing Ankle Roll servo + solid rear pivot wall (Z = 10.5 .. 38)
         with bd.BuildSketch(bd.Plane.XY.offset(10.5)) as sk_lo:

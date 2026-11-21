@@ -44,44 +44,47 @@ flowchart LR
 > - USB-UART (`CH340`) / Native USB-OTG: `GPIO 43, 44` / `GPIO 19, 20`
 
 ### A. Waveshare 2.0" ST7789 IPS LCD (`SPI` — inside Head)
-| LCD Pin | Connect To (ESP32-S3) | Wire Color (suggested) | Notes |
+| LCD Pin | Connect To | Wire Type / Location | Notes |
 |---|---|---|---|
-| **VCC** | `3V3` | Red | 3.3V power |
-| **GND** | `GND` | Black | Common ground |
-| **DIN (MOSI)** | `GPIO 47` | Blue | SPI Data |
-| **CLK (SCLK)** | `GPIO 21` | Yellow | SPI Clock |
-| **CS** | `GPIO 14` | Orange | Chip Select |
-| **DC** | `GPIO 41` | Green | Data/Command |
-| **RST** | `GPIO 42` | White | Reset |
-| **BL** | `3V3` *(or `GPIO 45`)* | Purple | Tie to `3V3` for always-on backlight |
+| **VCC** | ESP32-S3 `3V3` | Short wire (~4 cm) inside Head | 3.3V power |
+| **GND** | ESP32-S3 `GND` | Short wire inside Head | Common ground |
+| **DIN (MOSI)** | ESP32-S3 `GPIO 47` | Short wire inside Head | SPI Data |
+| **CLK (SCLK)** | ESP32-S3 `GPIO 21` | Short wire inside Head | SPI Clock |
+| **CS** | ESP32-S3 `GPIO 41` | Short wire inside Head | Chip Select |
+| **DC** | ESP32-S3 `GPIO 42` | Short wire inside Head | Data/Command |
+| **RST** | ESP32-S3 `GPIO 2` | Short wire inside Head | Hardware Reset |
+| **BL (Backlight)** | ESP32-S3 `GPIO 45` | Short wire inside Head | Backlight Enable (driven HIGH) |
 
-### B. PCA9685 16-Channel PWM Driver (`I2C` — Head → Neck → Backpack)
-| PCA9685 Pin | Connect To | Notes |
-|---|---|---|
-| **VCC** | ESP32-S3 `3V3` | **MUST be `3.3V`** so I2C stays 3.3V-safe! |
-| **GND** | Common `GND` | Tied to ESP32-S3 `GND` and UBEC `GND` |
-| **SDA** | `GPIO 1` | I2C Data (pull-ups are already on PCA9685) |
-| **SCL** | `GPIO 2` | I2C Clock |
-| **V+ / GND Terminal** | `5V 5A UBEC` Out (`+` / `-`) | Add **`1000 µF 16V` cap** across `+` and `-` |
+### B. PCA9685 16-Channel PWM Driver (`I2C` — Backpack)
+| PCA9685 Pin | Connect To | Wire Type / Location | Notes |
+|---|---|---|---|
+| **VCC** | ESP32-S3 `3V3` | Runs through Neck Arch | **MUST be `3.3V`** so I2C stays 3.3V-safe! |
+| **GND** | Common `GND` | Torso / Backpack ground bus | Tied to ESP32 `GND` and UBEC `GND` |
+| **SDA** | ESP32-S3 `GPIO 1` | Runs through Neck Arch | I2C Data (pull-ups onboard) |
+| **SCL** | ESP32-S3 `GPIO 14` | Runs through Neck Arch | I2C Clock (pull-ups onboard) |
+| **OE** | 🚫 **DO NOT CONNECT** | *Leave Floating* | Onboard pull-down keeps outputs **always enabled**. No wire needed! |
+| **V+ / GND Terminal**| `5V 5A UBEC` Out (`+` / `-`)| Heavy gauge inside Backpack | Add **`1000 µF 16V` cap** across screw terminals |
+| **Right Cascade Header** | 🚫 **DO NOT CONNECT** | *Leave Floating* | Only for chaining a 2nd board (unused) |
 
 ### C. Shared Full-Duplex `I2S0` Audio (`INMP441` Mic + `MAX98357A` Amp)
 *(Note: Uses `GPIO 38, 39, 40` assuming the onboard MicroSD card slot is left empty. If you want to use MicroSD, move `38, 39, 40` to `GPIO 45` + `GPIO 19, 20` and flash/debug only via the `UART` USB-C port.)*
 
-| Device | Pin | Connect To | Notes |
-|---|---|---|---|
-| **INMP441 Mic** *(Head)* | `VDD` | ESP32-S3 `3V3` | 3.3V only |
-| | `GND` | `GND` | Common ground |
-| | `L/R` | `GND` | Selects Left I2S channel |
-| | `SD` | `GPIO 3` | I2S Data In to ESP32-S3 |
-| | `SCK` | `GPIO 38` | Shared `BCLK` |
-| | `WS` | `GPIO 39` | Shared `LRC / WS` |
-| **MAX98357A Amp** *(Torso/Backpack)* | `VIN` | `5V` (from UBEC) | 5V gives full 3W speaker volume |
-| | `GND` | `GND` | Common ground |
-| | `BCLK` | `GPIO 38` | Shared `BCLK` |
-| | `LRC` | `GPIO 39` | Shared `LRC / WS` |
-| | `DIN` | `GPIO 40` | I2S Data Out from ESP32-S3 |
-| | `SD` | Leave floating | Amp enabled (or tie to `3V3` for Left+Right/2) |
-| | `+ / -` | **28 mm 8Ω Speaker** | Route 2 speaker wires to `torso_front` |
+| Device | Pin | Connect To | Wire Type / Location | Notes |
+|---|---|---|---|---|
+| **INMP441 Mic** *(Head)* | **VDD** | ESP32-S3 `3V3` | Short wire inside Head | 3.3V logic |
+| | **GND** | ESP32-S3 `GND` | Short wire inside Head | Common ground |
+| | **L/R** | **Adjacent GND pad** | ⚡ **Local solder bridge on Mic PCB** | **NO wire to ESP32!** Solder blob selects Left channel |
+| | **SD** | ESP32-S3 `GPIO 3` | Short wire inside Head | I2S Data In to ESP32 |
+| | **SCK** | ESP32-S3 `GPIO 38` | Short wire inside Head | Shared `BCLK` trunk |
+| | **WS** | ESP32-S3 `GPIO 39` | Short wire inside Head | Shared `LRC / WS` trunk |
+| **MAX98357A Amp** *(Backpack)* | **VIN** | `5V` (from UBEC) | Inside Backpack | 5V gives full 3W volume |
+| | **GND** | Common `GND` | Inside Backpack | Common ground |
+| | **BCLK** | ESP32-S3 `GPIO 38` | Runs through Neck Arch | Shared `BCLK` |
+| | **LRC** | ESP32-S3 `GPIO 39` | Runs through Neck Arch | Shared `LRC / WS` |
+| | **DIN** | ESP32-S3 `GPIO 40` | Runs through Neck Arch | I2S Audio Data Out from ESP32 |
+| | **GAIN** | 🚫 **DO NOT CONNECT** | *Leave Floating* | Internal pull-up sets gain to **9 dB** |
+| | **SD** | 🚫 **DO NOT CONNECT** | *Leave Floating* | Left floating = **Always ON, mono mix (L+R)/2** |
+| | **+ / -** | **28 mm 8Ω Speaker** | 2 wires into `torso_front` | Route speaker wires into front chest pocket |
 
 ---
 

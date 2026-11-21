@@ -39,28 +39,36 @@ def build_all_parts() -> list[PartItem]:
     head_front, head_back, head_visor = build_head_parts()
     hp_band, hp_cup_l, hp_cup_r = build_headphone_parts()
 
-    return [
-        PartItem("foot_left", foot_l, "#3b404a", (0, 0, 0), "Left waddle boot with double-shear ankle fork"),
-        PartItem("foot_right", foot_r, "#3b404a", (0, 0, 0), "Right waddle boot with double-shear ankle fork"),
-        PartItem("leg_left", leg_l, "#d6d9de", (0, -90, 0), "Left leg housing Ankle Roll servo & Hip horn recess"),
-        PartItem("leg_right", leg_r, "#d6d9de", (0, 90, 0), "Right leg housing Ankle Roll servo & Hip horn recess"),
-        PartItem("pelvis", pelvis, "#474c57", (0, 0, 0), "Bipedal pelvis housing 2x Hip Pitch 9g servos"),
-        PartItem("torso_front", torso_front, "#dce0e6", (0, 0, 0), "Front capsule torso with 28mm speaker grille"),
-        PartItem("torso_back", torso_back, "#cdd2d9", (0, 0, 0), "Rear torso with head-pan & 2x shoulder servo cradles"),
-        PartItem("backpack_shell", bp_shell, "#474c57", (-90, 0, 0), "Rear backpack for PCA9685, CyberBrick switch & power"),
-        PartItem("backpack_lid", bp_lid, "#2b303a", (90, 0, 0), "Backpack lid with CyberBrick 7.4V battery cradle & 5V UBEC mount"),
-        PartItem("neck_yoke", neck_yoke, "#474c57", (0, 0, 0), "2-axis pan/tilt neck yoke with wire arch"),
-        PartItem("shoulder_yoke_left", yoke_l, "#474c57", (0, -90, 0), "Left shoulder clevis holding arm-raise servo"),
-        PartItem("shoulder_yoke_right", yoke_r, "#474c57", (0, 90, 0), "Right shoulder clevis holding arm-raise servo"),
-        PartItem("arm_left", arm_l, "#d6d9de", (0, 90, 0), "Left articulated Marvin arm & rounded mitt"),
-        PartItem("arm_right", arm_r, "#d6d9de", (0, -90, 0), "Right articulated Marvin arm & rounded mitt"),
-        PartItem("head_front", head_front, "#dce0e6", (90, 0, 0), "Front head dome with 2.0\" LCD, vertical ESP32-S3 CAM rails, cam & mic"),
-        PartItem("head_back", head_back, "#cdd2d9", (-90, 0, 0), "Rear head dome with double-shear tilt pivot brackets"),
-        PartItem("head_visor_bezel", head_visor, "#1f2129", (90, 0, 0), "Dark front visor bezel with Marvin downcast brow"),
-        PartItem("headphone_band", hp_band, "#2d323d", (90, 0, 0), "Over-the-head faux studio headphone arch"),
-        PartItem("headphone_cup_left", hp_cup_l, "#415672", (0, -90, 0), "Left faux headphone ear cup"),
-        PartItem("headphone_cup_right", hp_cup_r, "#415672", (0, 90, 0), "Right faux headphone ear cup"),
+    white = bd.Color(0.95, 0.96, 0.98)
+    black = bd.Color(0.10, 0.11, 0.14)
+    blue = bd.Color(0.15, 0.39, 0.92)
+
+    items = [
+        PartItem("foot_left", foot_l, "#181b22", (0, 0, 0), "Left waddle boot with double-shear ankle fork"),
+        PartItem("foot_right", foot_r, "#181b22", (0, 0, 0), "Right waddle boot with double-shear ankle fork"),
+        PartItem("leg_left", leg_l, "#f1f5f9", (0, -90, 0), "Left leg housing Ankle Roll servo & Hip horn recess"),
+        PartItem("leg_right", leg_r, "#f1f5f9", (0, 90, 0), "Right leg housing Ankle Roll servo & Hip horn recess"),
+        PartItem("pelvis", pelvis, "#181b22", (0, 0, 0), "Bipedal pelvis housing 2x Hip Pitch 9g servos"),
+        PartItem("torso_front", torso_front, "#f1f5f9", (90, 0, 0), "Front capsule torso with 28mm speaker grille"),
+        PartItem("torso_back", torso_back, "#f1f5f9", (0, 0, 0), "Rear torso with head-pan & 2x shoulder servo cradles"),
+        PartItem("backpack_shell", bp_shell, "#181b22", (-90, 0, 0), "Rear backpack for PCA9685, CyberBrick switch & power"),
+        PartItem("backpack_lid", bp_lid, "#181b22", (90, 0, 0), "Backpack lid with CyberBrick 7.4V battery cradle & 5V UBEC mount"),
+        PartItem("neck_yoke", neck_yoke, "#181b22", (0, 0, 0), "2-axis pan/tilt neck yoke with wire arch"),
+        PartItem("shoulder_yoke_left", yoke_l, "#181b22", (0, -90, 0), "Left shoulder clevis holding arm-raise servo"),
+        PartItem("shoulder_yoke_right", yoke_r, "#181b22", (0, 90, 0), "Right shoulder clevis holding arm-raise servo"),
+        PartItem("arm_left", arm_l, "#f1f5f9", (0, 90, 0), "Left articulated Marvin arm & rounded mitt"),
+        PartItem("arm_right", arm_r, "#f1f5f9", (0, -90, 0), "Right articulated Marvin arm & rounded mitt"),
+        PartItem("head_front", head_front, "#f1f5f9", (90, 0, 0), "Front head dome with 2.0\" LCD, vertical ESP32-S3 CAM rails, cam & mic"),
+        PartItem("head_back", head_back, "#f1f5f9", (-90, 0, 0), "Rear head dome with double-shear tilt pivot brackets"),
+        PartItem("head_visor_bezel", head_visor, "#181b22", (90, 0, 0), "Dark front visor bezel with Marvin downcast brow"),
+        PartItem("headphone_band", hp_band, "#2563eb", (90, 0, 0), "Over-the-head faux studio headphone arch"),
+        PartItem("headphone_cup_left", hp_cup_l, "#2563eb", (0, -90, 0), "Left faux headphone ear cup"),
+        PartItem("headphone_cup_right", hp_cup_r, "#2563eb", (0, 90, 0), "Right faux headphone ear cup"),
     ]
+    cmap = {"#f1f5f9": white, "#181b22": black, "#2563eb": blue}
+    for it in items:
+        it.part.color = cmap[it.color_hex]
+    return items
 
 
 def _orient_for_print(part: bd.Part, rot_xyz: tuple[float, float, float]) -> bd.Part:
@@ -550,11 +558,25 @@ def export_all(output_dir: Path) -> list[dict]:
         })
     full_mesher.write(str(mf3_dir / "marvin_with_internals.3mf"))
 
-    plate_mesher = bd.Mesher(unit=bd.Unit.MM)
-    for item, placed_part in _layout_print_plate(items):
-        plate_mesher.add_shape(placed_part, linear_deflection=0.015, angular_deflection=0.05, part_number=item.name)
+    # Build 3 color-grouped build plates (White, Black, Blue) each fitting <= 250x250 mm
+    plate_defs = [
+        ("plate_1_white", [it for it in items if it.color_hex == "#f1f5f9"], -280.0),
+        ("plate_2_black", [it for it in items if it.color_hex == "#181b22"], 0.0),
+        ("plate_3_blue", [it for it in items if it.color_hex == "#2563eb"], 280.0),
+    ]
+    all_plate_mesher = bd.Mesher(unit=bd.Unit.MM)
+    for plate_name, plate_items, x_offset in plate_defs:
+        p_mesher = bd.Mesher(unit=bd.Unit.MM)
+        for item, placed_part in _layout_print_plate(plate_items, gap=12.5, max_row_w=248.0):
+            p_mesher.add_shape(placed_part, linear_deflection=0.015, angular_deflection=0.05, part_number=item.name)
+            shifted = bd.Part() + placed_part.translate((x_offset, 0.0, 0.0))
+            shifted.color = item.part.color
+            shifted.label = item.name
+            all_plate_mesher.add_shape(shifted, linear_deflection=0.015, angular_deflection=0.05, part_number=item.name)
+        p_mesher.write(str(mf3_dir / f"{plate_name}.3mf"))
+
     plate_path = mf3_dir / "marvin_print_plate.3mf"
-    plate_mesher.write(str(plate_path))
+    all_plate_mesher.write(str(plate_path))
 
     _write_viewer_html(output_dir / "viewer.html", viewer_entries)
     return report

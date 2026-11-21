@@ -64,6 +64,8 @@ CAMERA_SWITCH_RE = re.compile(
 )
 
 _CACHED_ROBOT_IP: str | None = None
+_CACHED_ROBOT_IP_TIME: float = 0.0
+_IP_CACHE_TTL: float = 15.0  # Trust cached IP for 15s to eliminate redundant HTTP handshake latency
 
 
 def _probe_ip(ip: str) -> bool:
@@ -75,10 +77,21 @@ def _probe_ip(ip: str) -> bool:
         return False
 
 
-def resolve_robot_ip() -> str:
-    global _CACHED_ROBOT_IP
-    if _CACHED_ROBOT_IP and _probe_ip(_CACHED_ROBOT_IP):
-        return _CACHED_ROBOT_IP
+def invalidate_robot_ip() -> None:
+    global _CACHED_ROBOT_IP, _CACHED_ROBOT_IP_TIME
+    _CACHED_ROBOT_IP = None
+    _CACHED_ROBOT_IP_TIME = 0.0
+
+
+def resolve_robot_ip(force_probe: bool = False) -> str:
+    global _CACHED_ROBOT_IP, _CACHED_ROBOT_IP_TIME
+    now = time.time()
+    if _CACHED_ROBOT_IP:
+        if not force_probe and (now - _CACHED_ROBOT_IP_TIME) < _IP_CACHE_TTL:
+            return _CACHED_ROBOT_IP
+        if _probe_ip(_CACHED_ROBOT_IP):
+            _CACHED_ROBOT_IP_TIME = now
+            return _CACHED_ROBOT_IP
 
     env_ip = os.environ.get("ROBOT_HOST")
     if env_ip and _probe_ip(env_ip):
@@ -98,8 +111,8 @@ def resolve_robot_ip() -> str:
     except Exception:
         pass
 
-    # High-probability DHCP candidates
-    candidates = ["192.168.4.173", "192.168.4.147", "192.168.4.136", "192.168.4.100", "192.168.4.150"]
+    # High-probability DHCP / Static candidates
+    candidates = ["192.168.4.40", "192.168.4.46", "192.168.4.39", "192.168.4.173", "192.168.4.147", "192.168.4.136", "192.168.4.100", "192.168.4.150"]
     for c in candidates:
         if _probe_ip(c):
             _CACHED_ROBOT_IP = c
@@ -141,7 +154,7 @@ def resolve_robot_ip() -> str:
                     pass
                 return result
 
-    return _CACHED_ROBOT_IP or "192.168.4.173"
+    return _CACHED_ROBOT_IP or "192.168.4.40"
 
 
 def fetch_robot_vision(timeout: float = 25.0) -> str | None:

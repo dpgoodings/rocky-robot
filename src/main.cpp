@@ -14,6 +14,8 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
+#include <ArduinoOTA.h>
+#include <Update.h>
 #include "esp_http_server.h"
 #include "esp_timer.h"
 #include <esp_camera.h>
@@ -30,6 +32,7 @@
 // Globals
 httpd_handle_t camera_httpd = NULL;
 httpd_handle_t stream_httpd = NULL;
+static SemaphoreHandle_t cameraMutex = nullptr;
 
 bool sdAvailable = false;
 bool cameraAvailable = false;
@@ -44,15 +47,20 @@ void logMissionEvent(const char* event);
 
 static void marvinLoopTask(void* arg) {
     (void)arg;
+    unsigned long lastMotionTick = 0;
     TickType_t lastWake = xTaskGetTickCount();
     for (;;) {
+        unsigned long now = millis();
+        unsigned long dt = (lastMotionTick == 0) ? 20 : (now - lastMotionTick);
+        lastMotionTick = now;
         #if ENABLE_PCA9685
-        marvin_motion::tick(20);
+        marvin_motion::tick(min((uint32_t)dt, (uint32_t)100));
         #endif
         #if ENABLE_ST7789
         marvin_face::tick();
         #endif
-        vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(20));
+        ArduinoOTA.handle();
+        vTaskDelay(pdMS_TO_TICKS(20));
     }
 }
 
@@ -127,7 +135,7 @@ void setup() {
     #if ENABLE_ST7789
     marvin_face::init();
     #endif
-    xTaskCreatePinnedToCore(marvinLoopTask, "marvin_loop", 4096, nullptr, 1, nullptr, 1);
+    xTaskCreatePinnedToCore(marvinLoopTask, "marvin_loop", 8192, nullptr, 2, nullptr, 1);
 
     // 4. Test snapshot to SD Card
     if (cameraAvailable && sdAvailable) {
@@ -148,12 +156,21 @@ void setup() {
         }
     }
 
-    // 5. Connect to Wi-Fi
+    // 5. Connect to Wi-Fi (Static IP)
     Serial.print("[Network] Connecting to Wi-Fi SSID: ");
     Serial.println(WIFI_SSID);
 
     WiFi.mode(WIFI_STA);
     WiFi.setSleep(false); // Disable Wi-Fi modem sleep to prevent DMA starvation
+
+    IPAddress staticIP(STATIC_IP);
+    IPAddress gateway(STATIC_GATEWAY);
+    IPAddress subnet(STATIC_SUBNET);
+    IPAddress dns(STATIC_DNS);
+    if (!WiFi.config(staticIP, gateway, subnet, dns)) {
+        Serial.println("[Network] WARNING: Static IP config failed, defaulting to DHCP.");
+    }
+
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
     int attempts = 0;
@@ -165,9 +182,14 @@ void setup() {
     Serial.println();
 
     if (WiFi.status() == WL_CONNECTED) {
-        Serial.printf("[Network] Connected! IP Address: %s\n", WiFi.localIP().toString().c_str());
+        Serial.printf("[Network] Connected! Static IP Address: %s\n", WiFi.localIP().toString().c_str());
         Serial.printf("[Network] Web Console: http://%s/\n", WiFi.localIP().toString().c_str());
         Serial.printf("[Network] Stream Port: http://%s:81/stream\n", WiFi.localIP().toString().c_str());
+
+        // Initialize Over-The-Air (OTA) Wireless Flashing
+        ArduinoOTA.setHostname("rocky-robot");
+        ArduinoOTA.begin();
+        Serial.println("[OTA] ArduinoOTA service ready for wireless firmware upload.");
     } else {
         Serial.println("[Network] Wi-Fi connection timed out. Starting fallback Access Point...");
         WiFi.mode(WIFI_AP);
@@ -182,6 +204,7 @@ void setup() {
 }
 
 void loop() {
+    ArduinoOTA.handle();
     // Non-blocking loop: esp_http_server runs asynchronously in its own FreeRTOS tasks!
     // Serial console commands
     if (Serial.available()) {
@@ -207,8 +230,46 @@ void loop() {
             Serial.printf("Free Heap: %lu bytes | Free PSRAM: %lu bytes | Uptime: %lu s | SD: %s\n",
                           (unsigned long)ESP.getFreeHeap(), (unsigned long)ESP.getFreePsram(),
                           millis() / 1000, sdAvailable ? "Mounted" : "Not mounted");
+        } else if (cmd == "red" || cmd == "alarmed") {
+            Serial.println("[Console] Setting LCD color: RED (Alarmed)");
+            marvin_face::setState("red", 0.0f, 0.0f, false);
+        } else if (cmd == "green" || cmd == "happy") {
+            Serial.println("[Console] Setting LCD color: GREEN (Happy)");
+            marvin_face::setState("green", 0.0f, 0.0f, false);
+        } else if (cmd == "blue" || cmd == "sad") {
+            Serial.println("[Console] Setting LCD color: BLUE (Sad)");
+            marvin_face::setState("blue", 0.0f, 0.0f, false);
+        } else if (cmd == "yellow" || cmd == "eyeroll" || cmd == "eye_roll" || cmd == "roll") {
+            Serial.println("[Console] Setting LCD color: YELLOW (Eye Roll)");
+            marvin_face::triggerSequence("eye_roll");
+        } else if (cmd == "purple" || cmd == "magenta" || cmd == "glitch" || cmd == "twitch") {
+            Serial.println("[Console] Setting LCD color: PURPLE (Glitch)");
+            marvin_face::triggerSequence("glitch");
+        } else if (cmd == "cyan" || cmd == "scan" || cmd == "sentry") {
+            Serial.println("[Console] Setting LCD color: CYAN (Scan)");
+            marvin_face::triggerSequence("scan");
+        } else if (cmd == "orange" || cmd == "thinking") {
+            Serial.println("[Console] Setting LCD color: ORANGE (Thinking)");
+            marvin_face::setState("orange", 0.0f, 0.0f, false);
+        } else if (cmd == "white") {
+            Serial.println("[Console] Setting LCD color: WHITE");
+            marvin_face::setState("white", 0.0f, 0.0f, false);
+        } else if (cmd == "black" || cmd == "bored" || cmd == "reset") {
+            Serial.println("[Console] Setting LCD color: BLACK / MARVIN VISOR");
+            marvin_face::setState("bored", 0.0f, 0.0f, false);
+        } else if (cmd == "hello" || cmd == "hi") {
+            Serial.println("[Console] Writing HELLO on LCD...");
+            marvin_face::showMessage("HELLO");
+        } else if (cmd.startsWith("text:") || cmd.startsWith("msg:")) {
+            String txt = cmd.substring(cmd.indexOf(':') + 1);
+            txt.trim();
+            Serial.printf("[Console] Writing '%s' on LCD...\n", txt.c_str());
+            marvin_face::showMessage(txt);
+        } else if (cmd == "sigh") {
+            Serial.println("[Console] Triggering sigh on LCD...");
+            marvin_face::triggerSequence("sigh");
         } else if (cmd == "help") {
-            Serial.println("Available serial commands: 'capture', 'sdinit', 'status', 'help'");
+            Serial.println("Available serial commands: 'red', 'green', 'blue', 'yellow', 'purple', 'cyan', 'orange', 'white', 'black', 'eyeroll', 'glitch', 'scan', 'sigh', 'status', 'help'");
         }
     }
     delay(100);
@@ -269,6 +330,10 @@ bool initSDCard() {
 bool initCamera() {
     Serial.println("[Camera] Initializing OV2640 sensor...");
 
+    if (!cameraMutex) {
+        cameraMutex = xSemaphoreCreateMutex();
+    }
+
     camera_config_t config;
     memset(&config, 0, sizeof(camera_config_t));
     config.ledc_channel = LEDC_CHANNEL_0;
@@ -292,7 +357,7 @@ bool initCamera() {
     config.xclk_freq_hz = 20000000;
     config.pixel_format = PIXFORMAT_JPEG;
     config.frame_size = FRAMESIZE_UXGA; // Pre-allocate buffer for up to UXGA in PSRAM
-    config.jpeg_quality = 12;
+    config.jpeg_quality = 14;           // Balanced compression: faster Wi-Fi bursts, zero DMA starvation
     config.fb_count = 2;
     config.fb_location = CAMERA_FB_IN_PSRAM;
     config.grab_mode = CAMERA_GRAB_LATEST;
@@ -372,52 +437,112 @@ static const char PROGMEM INDEX_HTML[] = R"rawliteral(
         <p style="color: #94a3b8; margin-top: 0;">Connected to local AI Brain at ~/rocky-voice</p>
         
         <div class="stream-box">
-            <img class="stream" src="/stream" alt="Live Video Stream">
+            <img class="stream" id="stream-img" src="" alt="Live Video Stream (Port 81)">
         </div>
 
         <div class="controls">
-            <button onclick="sendGesture('step_forward')">🚶 Waddle</button>
-            <button onclick="sendGesture('nod')">🟢 Nod</button>
-            <button onclick="sendGesture('shake')">🔴 Shake</button>
-            <button onclick="sendGesture('wave')">👋 Wave</button>
-            <button onclick="sendGesture('sigh')">😔 Sigh</button>
-            <button class="secondary" onclick="sendGesture('home')">🏠 Home</button>
-            <button class="secondary" onclick="setMood('bored')">😒 Bored</button>
-            <button class="secondary" onclick="setMood('happy')">🙂 Happy</button>
-            <button class="secondary" onclick="setMood('surprised')">😮 Surprised</button>
+            <div style="grid-column: 1 / -1; display: flex; gap: 10px;">
+                <button style="flex: 1; background: #cdeee0; color: #142826; font-size: 15px; padding: 12px; font-weight: bold; border-radius: 8px; border: none; cursor: pointer;" onclick="setStyle('bmo')">🎮 Mimic BMO Face (Mint CRT)</button>
+                <button style="flex: 1; background: #080c12; color: #38bdf8; border: 1.5px solid #38bdf8; font-size: 15px; padding: 12px; font-weight: bold; border-radius: 8px; cursor: pointer;" onclick="setStyle('roboeyes')">🤖 RoboEyes (Cyber Cyan)</button>
+            </div>
+            <button style="grid-column: 1 / -1; background: #38bdf8; color: #000; font-size: 16px; padding: 12px; font-weight: bold;" onclick="sendText('HELLO')">👋 Write "HELLO" Banner</button>
+            <button style="background: #22c55e; color: #000;" onclick="setMood('happy')">😄 Happy (RoboEyes)</button>
+            <button style="background: #eab308; color: #000;" onclick="setMood('tired')">😴 Tired (RoboEyes)</button>
+            <button style="background: #ef4444;" onclick="setMood('angry')">😠 Angry (RoboEyes)</button>
+            <button style="background: #334155;" onclick="setMood('default')">😐 Neutral (Default)</button>
+            <button style="background: #8b5cf6;" onclick="triggerAnim('laugh')">😂 Laugh (anim_laugh)</button>
+            <button style="background: #ec4899;" onclick="triggerAnim('confused')">😵 Confused (anim_confused)</button>
+            <button style="background: #0ea5e9;" onclick="triggerAnim('sweat')">💧 Sweat Drop</button>
+            <button style="background: #f59e0b; color: #000;" onclick="triggerAnim('curious')">🧐 Curious Glance</button>
+            <button style="background: #14b8a6; color: #000;" onclick="triggerAnim('cyclops')">👁️ Cyclops Mode</button>
+            <button style="background: #6366f1;" onclick="triggerAnim('eye_roll')">🙄 Eye Roll (360°)</button>
+            <button style="background: #64748b;" onclick="triggerAnim('blink')">😉 Blink</button>
             <button class="secondary" onclick="savePhoto()">📸 Save Photo</button>
-            <button class="secondary" onclick="window.open('/capture', '_blank')">🖼️ Frame</button>
             <button class="secondary" onclick="refreshStatus()">📊 Status</button>
         </div>
+
+        <div style="display: flex; gap: 8px; margin: 12px 0;">
+            <input id="custom-text" type="text" placeholder="Type custom text for LCD (e.g. HELLO, ROCKY)..." style="flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #fff; font-size: 15px;">
+            <button onclick="sendCustomText()" style="padding: 12px 20px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">Send to LCD</button>
+        </div>
+
+        <div id="cmd-status" style="padding: 10px 14px; margin-bottom: 16px; border-radius: 8px; background: #1e293b; color: #38bdf8; font-weight: 600; font-size: 14px; text-align: center; min-height: 20px;">Ready for commands.</div>
 
         <div class="stats" id="stats-panel">Loading telemetry...</div>
     </div>
 
     <script>
+        document.getElementById('stream-img').src = 'http://' + window.location.hostname + ':81/stream';
+
         async function sendGesture(act) {
-            await fetch('/gesture?action=' + encodeURIComponent(act), {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({action: act})
-            });
+            const st = document.getElementById('cmd-status');
+            if (st) st.innerText = '⏳ Sending action: ' + act + '...';
+            try {
+                const res = await fetch('/gesture?action=' + encodeURIComponent(act), {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({action: act})
+                });
+                if (res.ok && st) st.innerText = '✅ Executed: ' + act.toUpperCase();
+            } catch (e) {
+                if (st) st.innerText = '❌ Failed: ' + e;
+            }
         }
         async function setMood(mood) {
-            await fetch('/face', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({mood, gx: 0, gy: 0, speaking: false})
-            });
+            const st = document.getElementById('cmd-status');
+            if (st) st.innerText = '⏳ Sending face: ' + mood + '...';
+            try {
+                const res = await fetch('/face?mood=' + encodeURIComponent(mood), { method: 'GET' });
+                if (res.ok && st) st.innerText = '✅ Active on LCD: ' + mood.toUpperCase();
+            } catch (e) {
+                if (st) st.innerText = '❌ Failed: ' + e;
+            }
+        }
+        async function setStyle(stName) {
+            const st = document.getElementById('cmd-status');
+            if (st) st.innerText = '⏳ Switching style: ' + stName + '...';
+            try {
+                await fetch('/face?style=' + encodeURIComponent(stName));
+                if (st) st.innerText = '✅ Active Style: ' + stName.toUpperCase();
+            } catch (e) {
+                if (st) st.innerText = '❌ Failed: ' + e;
+            }
+        }
+        async function triggerAnim(anim) {
+            const st = document.getElementById('cmd-status');
+            if (st) st.innerText = '⏳ Triggering anim: ' + anim + '...';
+            try {
+                const res = await fetch('/face?anim=' + encodeURIComponent(anim), { method: 'GET' });
+                if (res.ok && st) st.innerText = '✅ Active on LCD: ' + anim.toUpperCase();
+            } catch (e) {
+                if (st) st.innerText = '❌ Failed: ' + e;
+            }
+        }
+        async function sendText(txt) {
+            const st = document.getElementById('cmd-status');
+            if (st) st.innerText = '⏳ Writing "' + txt + '" on LCD...';
+            try {
+                const res = await fetch('/face?text=' + encodeURIComponent(txt));
+                if (res.ok && st) st.innerText = '✅ Displaying "' + txt.toUpperCase() + '" on LCD';
+            } catch(e) {
+                if (st) st.innerText = '❌ Failed: ' + e;
+            }
+        }
+        function sendCustomText() {
+            const val = document.getElementById('custom-text').value.trim();
+            if (val) sendText(val);
         }
         async function setRes(val) {
             await fetch(`/control?var=framesize&val=${val}`);
         }
         async function savePhoto() {
+            const st = document.getElementById('cmd-status');
             try {
                 const res = await fetch('/save', { method: 'POST' });
                 const data = await res.json();
-                alert(data.file ? 'Photo captured: ' + data.file : (data.error || 'Saved!'));
+                if (st) st.innerText = data.file ? '📸 Photo captured: ' + data.file : 'Saved!';
             } catch (e) {
-                alert('Save failed: ' + e);
+                if (st) st.innerText = '❌ Save failed: ' + e;
             }
         }
         async function refreshStatus() {
@@ -431,7 +556,7 @@ static const char PROGMEM INDEX_HTML[] = R"rawliteral(
                 document.getElementById('stats-panel').innerText = 'Telemetry offline';
             }
         }
-        setInterval(refreshStatus, 4000);
+        setInterval(refreshStatus, 8000);
         refreshStatus();
     </script>
 </body>
@@ -445,7 +570,14 @@ static const char PROGMEM INDEX_HTML[] = R"rawliteral(
 static esp_err_t index_handler(httpd_req_t *req) {
     httpd_resp_set_type(req, "text/html");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_set_hdr(req, "Connection", "close");
     return httpd_resp_send(req, INDEX_HTML, HTTPD_RESP_USE_STRLEN);
+}
+
+static esp_err_t favicon_handler(httpd_req_t *req) {
+    httpd_resp_set_status(req, "204 No Content");
+    httpd_resp_set_hdr(req, "Connection", "close");
+    return httpd_resp_send(req, NULL, 0);
 }
 
 static esp_err_t capture_handler(httpd_req_t *req) {
@@ -453,8 +585,13 @@ static esp_err_t capture_handler(httpd_req_t *req) {
         httpd_resp_send_500(req);
         return ESP_FAIL;
     }
+    if (cameraMutex && xSemaphoreTake(cameraMutex, pdMS_TO_TICKS(250)) != pdTRUE) {
+        httpd_resp_set_status(req, "503 Service Unavailable");
+        return httpd_resp_send(req, "Camera busy", HTTPD_RESP_USE_STRLEN);
+    }
     camera_fb_t *fb = esp_camera_fb_get();
     if (!fb) {
+        if (cameraMutex) xSemaphoreGive(cameraMutex);
         httpd_resp_send_500(req);
         return ESP_FAIL;
     }
@@ -463,6 +600,7 @@ static esp_err_t capture_handler(httpd_req_t *req) {
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
     esp_err_t res = httpd_resp_send(req, (const char *)fb->buf, fb->len);
     esp_camera_fb_return(fb);
+    if (cameraMutex) xSemaphoreGive(cameraMutex);
     return res;
 }
 
@@ -474,12 +612,18 @@ static esp_err_t stream_handler(httpd_req_t *req) {
     res = httpd_resp_set_type(req, _STREAM_CONTENT_TYPE);
     if (res != ESP_OK) return res;
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-    httpd_resp_set_hdr(req, "X-Framerate", "30");
+    httpd_resp_set_hdr(req, "X-Framerate", "25");
 
     while (true) {
+        if (cameraMutex && xSemaphoreTake(cameraMutex, pdMS_TO_TICKS(120)) != pdTRUE) {
+            vTaskDelay(pdMS_TO_TICKS(20));
+            continue;
+        }
+
         fb = esp_camera_fb_get();
         if (!fb) {
-            vTaskDelay(pdMS_TO_TICKS(10));
+            if (cameraMutex) xSemaphoreGive(cameraMutex);
+            vTaskDelay(pdMS_TO_TICKS(20));
             continue;
         }
 
@@ -493,9 +637,10 @@ static esp_err_t stream_handler(httpd_req_t *req) {
         }
         esp_camera_fb_return(fb);
         fb = NULL;
+        if (cameraMutex) xSemaphoreGive(cameraMutex);
 
         if (res != ESP_OK) break;
-        vTaskDelay(pdMS_TO_TICKS(15)); // Yield cleanly to FreeRTOS
+        vTaskDelay(pdMS_TO_TICKS(30)); // ~25 FPS, yields cleanly to network and FreeRTOS tasks
     }
     return res;
 }
@@ -515,6 +660,7 @@ static esp_err_t status_handler(httpd_req_t *req) {
     );
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_set_hdr(req, "Connection", "keep-alive");
     return httpd_resp_send(req, json, strlen(json));
 }
 
@@ -525,8 +671,12 @@ static esp_err_t save_handler(httpd_req_t *req) {
     if (!cameraAvailable || !sdAvailable) {
         return httpd_resp_send(req, "{\"error\":\"Camera or SD card not available\"}", HTTPD_RESP_USE_STRLEN);
     }
+    if (cameraMutex && xSemaphoreTake(cameraMutex, pdMS_TO_TICKS(350)) != pdTRUE) {
+        return httpd_resp_send(req, "{\"error\":\"Camera busy\"}", HTTPD_RESP_USE_STRLEN);
+    }
     camera_fb_t *fb = esp_camera_fb_get();
     if (!fb) {
+        if (cameraMutex) xSemaphoreGive(cameraMutex);
         return httpd_resp_send(req, "{\"error\":\"Capture failed\"}", HTTPD_RESP_USE_STRLEN);
     }
 
@@ -537,6 +687,7 @@ static esp_err_t save_handler(httpd_req_t *req) {
     File file = SD_MMC.open(filename, FILE_WRITE);
     if (!file) {
         esp_camera_fb_return(fb);
+        if (cameraMutex) xSemaphoreGive(cameraMutex);
         return httpd_resp_send(req, "{\"error\":\"Could not open file on SD\"}", HTTPD_RESP_USE_STRLEN);
     }
 
@@ -544,6 +695,7 @@ static esp_err_t save_handler(httpd_req_t *req) {
     file.close();
     uint32_t bytesWritten = fb->len;
     esp_camera_fb_return(fb);
+    if (cameraMutex) xSemaphoreGive(cameraMutex);
 
     char eventMsg[128];
     snprintf(eventMsg, sizeof(eventMsg), "PHOTO_CAPTURED: %s (%u bytes)", filename, bytesWritten);
@@ -628,7 +780,13 @@ static esp_err_t action_handler(httpd_req_t *req) {
         Serial.printf("[Action] Executing '%s' (%lu ms)\n", action.c_str(), (unsigned long)dur);
         marvin_motion::triggerAction(action, (unsigned long)dur);
         if (action == "sigh" || action == "crouch" || action == "brood") {
-            marvin_face::setState("sad", 0.0f, -0.3f, false);
+            marvin_face::triggerSequence("sigh");
+        } else if (action == "eyeroll" || action == "eye_roll") {
+            marvin_face::triggerSequence("eye_roll");
+        } else if (action == "glitch" || action == "twitch") {
+            marvin_face::triggerSequence("glitch");
+        } else if (action == "scan" || action == "sentry") {
+            marvin_face::triggerSequence("scan");
         } else if (action == "wave" || action == "fist_bump") {
             marvin_face::setState("happy", 0.0f, 0.0f, false);
         }
@@ -637,6 +795,7 @@ static esp_err_t action_handler(httpd_req_t *req) {
 
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_set_hdr(req, "Connection", "close");
     return httpd_resp_send(req, "{\"status\":\"executed\"}", HTTPD_RESP_USE_STRLEN);
 }
 
@@ -667,44 +826,194 @@ static esp_err_t servo_handler(httpd_req_t *req) {
 
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_set_hdr(req, "Connection", "keep-alive");
     return httpd_resp_send(req, "{\"status\":\"ok\"}", HTTPD_RESP_USE_STRLEN);
 }
 
 static esp_err_t face_handler(httpd_req_t *req) {
-    char content[256] = {0};
-    size_t recv_size = min(req->content_len, sizeof(content) - 1);
-    int ret = httpd_req_recv(req, content, recv_size);
-    if (ret <= 0) {
-        if (ret == HTTPD_SOCK_ERR_TIMEOUT) httpd_resp_send_408(req);
-        return ESP_FAIL;
-    }
-    content[ret] = '\0';
-    String body(content);
-
-    String mood = extractJsonStr(body, "mood");
+    String mood = "";
+    String seq = "";
     float gx = marvin_face::gazeX;
     float gy = marvin_face::gazeY;
-    extractJsonFloat(body, "gx", gx);
-    extractJsonFloat(body, "gy", gy);
-    bool speaking = (body.indexOf("\"speaking\":true") >= 0 || body.indexOf("\"speaking\": true") >= 0);
-    marvin_face::setState(mood, gx, gy, speaking);
+    bool speaking = false;
+
+    // 1. Support GET Query Parameters: /face?mood=happy or /face?sequence=eye_roll
+    char qbuf[128] = {0};
+    if (httpd_req_get_url_query_str(req, qbuf, sizeof(qbuf)) == ESP_OK) {
+        char val[48] = {0};
+        if (httpd_query_key_value(qbuf, "mood", val, sizeof(val)) == ESP_OK) mood = String(val);
+        if (httpd_query_key_value(qbuf, "color", val, sizeof(val)) == ESP_OK) mood = String(val);
+        if (httpd_query_key_value(qbuf, "col", val, sizeof(val)) == ESP_OK) mood = String(val);
+        if (httpd_query_key_value(qbuf, "seq", val, sizeof(val)) == ESP_OK) seq = String(val);
+        if (httpd_query_key_value(qbuf, "sequence", val, sizeof(val)) == ESP_OK) seq = String(val);
+        if (httpd_query_key_value(qbuf, "anim", val, sizeof(val)) == ESP_OK) seq = String(val);
+
+        char posVal[16] = {0};
+        if (httpd_query_key_value(qbuf, "pos", posVal, sizeof(posVal)) == ESP_OK) {
+            marvin_face::setRoboPosition(String(posVal));
+        }
+
+        char styleVal[32] = {0};
+        if (httpd_query_key_value(qbuf, "style", styleVal, sizeof(styleVal)) == ESP_OK) {
+            marvin_face::setFaceStyle(String(styleVal));
+        }
+
+        char textBuf[64] = {0};
+        if (httpd_query_key_value(qbuf, "text", textBuf, sizeof(textBuf)) == ESP_OK ||
+            httpd_query_key_value(qbuf, "msg", textBuf, sizeof(textBuf)) == ESP_OK) {
+            Serial.printf("[Server] Face Message: %s\n", textBuf);
+            marvin_face::showMessage(String(textBuf));
+            httpd_resp_set_type(req, "application/json");
+            httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+            httpd_resp_set_hdr(req, "Connection", "keep-alive");
+            return httpd_resp_send(req, "{\"status\":\"ok\",\"displayed\":\"text\"}", HTTPD_RESP_USE_STRLEN);
+        }
+    }
+
+    if (mood == "hello" || mood == "hi") {
+        Serial.println("[Server] Writing HELLO on LCD");
+        marvin_face::showMessage("HELLO");
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+        httpd_resp_set_hdr(req, "Connection", "keep-alive");
+        return httpd_resp_send(req, "{\"status\":\"ok\",\"displayed\":\"HELLO\"}", HTTPD_RESP_USE_STRLEN);
+    }
+
+    // 2. Support POST JSON Body
+    if (req->method == HTTP_POST && req->content_len > 0) {
+        char content[256] = {0};
+        size_t recv_size = min(req->content_len, sizeof(content) - 1);
+        int ret = httpd_req_recv(req, content, recv_size);
+        if (ret > 0) {
+            content[ret] = '\0';
+            String body(content);
+            String m = extractJsonStr(body, "mood");
+            if (!m.isEmpty()) mood = m;
+            String c = extractJsonStr(body, "color");
+            if (!c.isEmpty()) mood = c;
+            String s = extractJsonStr(body, "sequence");
+            if (s.isEmpty()) s = extractJsonStr(body, "anim");
+            if (s.isEmpty()) s = extractJsonStr(body, "action");
+            if (!s.isEmpty()) seq = s;
+            String st = extractJsonStr(body, "style");
+            if (!st.isEmpty()) marvin_face::setFaceStyle(st);
+            extractJsonFloat(body, "gx", gx);
+            extractJsonFloat(body, "gy", gy);
+            speaking = (body.indexOf("\"speaking\":true") >= 0 || body.indexOf("\"speaking\": true") >= 0);
+
+            #if ENABLE_PCA9685
+            // Unified head servo dispatch: pan & tilt directly in /face
+            float pan = -1.0f, tilt = -1.0f, speed = 240.0f;
+            extractJsonFloat(body, "speed", speed);
+            if (extractJsonFloat(body, "pan", pan)) {
+                marvin_motion::setTarget(CH_HEAD_PAN, pan, speed);
+            }
+            if (extractJsonFloat(body, "tilt", tilt)) {
+                marvin_motion::setTarget(CH_HEAD_TILT, tilt, speed);
+            }
+            #endif
+        }
+    }
+
+    // Direct mood to sequence conversion if mood is an action name
+    if (seq.isEmpty() && (mood == "eye_roll" || mood == "eyeroll" || mood == "roll" ||
+                          mood == "glitch" || mood == "twitch" || mood == "sigh" ||
+                          mood == "scan" || mood == "sentry")) {
+        seq = mood;
+        mood = "";
+    }
+
+    if (!mood.isEmpty()) {
+        Serial.printf("[Server] Face Mood: %s\n", mood.c_str());
+        if (mood == "cyan") marvin_face::setRoboColor(marvin_face::COL_CYAN);
+        else if (mood == "green") marvin_face::setRoboColor(marvin_face::COL_GREEN);
+        else if (mood == "red") marvin_face::setRoboColor(marvin_face::COL_RED);
+        else if (mood == "yellow") marvin_face::setRoboColor(marvin_face::COL_YELLOW);
+        else if (mood == "purple" || mood == "magenta") marvin_face::setRoboColor(marvin_face::COL_MAGENTA);
+        else if (mood == "orange") marvin_face::setRoboColor(marvin_face::COL_ORANGE);
+        else if (mood == "white") marvin_face::setRoboColor(marvin_face::COL_WHITE);
+        else if (mood == "blue") marvin_face::setRoboColor(marvin_face::COL_BLUE);
+        else marvin_face::setState(mood, gx, gy, speaking);
+    } else {
+        marvin_face::setState("", gx, gy, speaking);
+    }
+
+    if (!seq.isEmpty()) {
+        Serial.printf("[Server] Face Sequence: %s\n", seq.c_str());
+        marvin_face::triggerSequence(seq);
+        if (seq == "eye_roll" || seq == "eyeroll" || seq == "roll") {
+            marvin_motion::triggerAction("eyeroll", 2000);
+        } else if (seq == "sigh" || seq == "crouch" || seq == "brood") {
+            marvin_motion::triggerAction("sigh", 2200);
+        }
+    }
 
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_set_hdr(req, "Connection", "keep-alive");
     return httpd_resp_send(req, "{\"status\":\"ok\"}", HTTPD_RESP_USE_STRLEN);
+}
+
+static esp_err_t ota_update_handler(httpd_req_t *req) {
+    size_t total_len = req->content_len;
+    if (total_len == 0) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Zero length");
+        return ESP_FAIL;
+    }
+    Serial.printf("[OTA] Receiving HTTP firmware image (%u bytes)...\n", (unsigned int)total_len);
+    if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+        Update.printError(Serial);
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Update.begin failed");
+        return ESP_FAIL;
+    }
+
+    char buf[1024];
+    size_t remaining = total_len;
+    while (remaining > 0) {
+        int recv_len = httpd_req_recv(req, buf, min(remaining, sizeof(buf)));
+        if (recv_len <= 0) {
+            if (recv_len == HTTPD_SOCK_ERR_TIMEOUT) continue;
+            Update.abort();
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Socket receive failed");
+            return ESP_FAIL;
+        }
+        if (Update.write((uint8_t*)buf, recv_len) != (size_t)recv_len) {
+            Update.abort();
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Flash write failed");
+            return ESP_FAIL;
+        }
+        remaining -= recv_len;
+    }
+
+    if (!Update.end(true)) {
+        Update.printError(Serial);
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Update validation failed");
+        return ESP_FAIL;
+    }
+
+    Serial.println("[OTA] Firmware update complete! Rebooting into new image...");
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_send(req, "{\"status\":\"ok\",\"rebooting\":true}", HTTPD_RESP_USE_STRLEN);
+    delay(500);
+    esp_restart();
+    return ESP_OK;
 }
 
 void startCameraServer() {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = 80;
     config.ctrl_port = 32768;
-    config.max_uri_handlers = 14;
-    config.max_open_sockets = 7;
+    config.max_uri_handlers = 18;
+    config.max_open_sockets = 12;
     config.backlog_conn = 5;
+    config.recv_wait_timeout = 2;
+    config.send_wait_timeout = 2;
     config.stack_size = 8192;
     config.lru_purge_enable = true;
 
     httpd_uri_t index_uri = { .uri = "/", .method = HTTP_GET, .handler = index_handler, .user_ctx = NULL };
+    httpd_uri_t favicon_uri = { .uri = "/favicon.ico", .method = HTTP_GET, .handler = favicon_handler, .user_ctx = NULL };
     httpd_uri_t status_uri = { .uri = "/status", .method = HTTP_GET, .handler = status_handler, .user_ctx = NULL };
     httpd_uri_t capture_uri = { .uri = "/capture", .method = HTTP_GET, .handler = capture_handler, .user_ctx = NULL };
     httpd_uri_t save_uri = { .uri = "/save", .method = HTTP_POST, .handler = save_handler, .user_ctx = NULL };
@@ -712,11 +1021,15 @@ void startCameraServer() {
     httpd_uri_t action_uri = { .uri = "/action", .method = HTTP_POST, .handler = action_handler, .user_ctx = NULL };
     httpd_uri_t gesture_uri = { .uri = "/gesture", .method = HTTP_POST, .handler = action_handler, .user_ctx = NULL };
     httpd_uri_t servo_uri = { .uri = "/servo", .method = HTTP_POST, .handler = servo_handler, .user_ctx = NULL };
-    httpd_uri_t face_uri = { .uri = "/face", .method = HTTP_POST, .handler = face_handler, .user_ctx = NULL };
-    httpd_uri_t stream_uri = { .uri = "/stream", .method = HTTP_GET, .handler = stream_handler, .user_ctx = NULL };
+    httpd_uri_t face_post_uri = { .uri = "/face", .method = HTTP_POST, .handler = face_handler, .user_ctx = NULL };
+    httpd_uri_t face_get_uri = { .uri = "/face", .method = HTTP_GET, .handler = face_handler, .user_ctx = NULL };
+    httpd_uri_t api_face_post_uri = { .uri = "/api/face", .method = HTTP_POST, .handler = face_handler, .user_ctx = NULL };
+    httpd_uri_t api_face_get_uri = { .uri = "/api/face", .method = HTTP_GET, .handler = face_handler, .user_ctx = NULL };
+    httpd_uri_t update_post_uri = { .uri = "/update", .method = HTTP_POST, .handler = ota_update_handler, .user_ctx = NULL };
 
     if (httpd_start(&camera_httpd, &config) == ESP_OK) {
         httpd_register_uri_handler(camera_httpd, &index_uri);
+        httpd_register_uri_handler(camera_httpd, &favicon_uri);
         httpd_register_uri_handler(camera_httpd, &status_uri);
         httpd_register_uri_handler(camera_httpd, &capture_uri);
         httpd_register_uri_handler(camera_httpd, &save_uri);
@@ -724,7 +1037,11 @@ void startCameraServer() {
         httpd_register_uri_handler(camera_httpd, &action_uri);
         httpd_register_uri_handler(camera_httpd, &gesture_uri);
         httpd_register_uri_handler(camera_httpd, &servo_uri);
-        httpd_register_uri_handler(camera_httpd, &face_uri);
+        httpd_register_uri_handler(camera_httpd, &face_post_uri);
+        httpd_register_uri_handler(camera_httpd, &face_get_uri);
+        httpd_register_uri_handler(camera_httpd, &api_face_post_uri);
+        httpd_register_uri_handler(camera_httpd, &api_face_get_uri);
+        httpd_register_uri_handler(camera_httpd, &update_post_uri);
         Serial.println("[Server] Command, Servo, Face & Telemetry Server active on Port 80.");
     }
 
@@ -738,6 +1055,7 @@ void startCameraServer() {
     stream_config.stack_size = 8192;
     stream_config.lru_purge_enable = true;
 
+    httpd_uri_t stream_uri = { .uri = "/stream", .method = HTTP_GET, .handler = stream_handler, .user_ctx = NULL };
     if (httpd_start(&stream_httpd, &stream_config) == ESP_OK) {
         httpd_register_uri_handler(stream_httpd, &stream_uri);
         Serial.println("[Server] Isolated Video Stream Server active on Port 81.");

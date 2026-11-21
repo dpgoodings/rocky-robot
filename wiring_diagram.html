@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Marvin Bipedal Robot — ESP32-S3 Simplified Wiring Schematic</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: #111827;
+      --card-border: #1f2937;
+      --accent: #38bdf8;
+      --accent-glow: rgba(56, 189, 248, 0.25);
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --success: #10b981;
+      --purple: #a855f7;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.5;
+      padding: 24px;
+      overflow-x: hidden;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .title-group h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .title-group p {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .badge-primary { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); }
+    .badge-warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .badge-success { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .badge-danger { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .badge-jumper { background: rgba(234, 179, 8, 0.15); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.4); }
+    .badge-float { background: rgba(100, 116, 139, 0.2); color: #94a3b8; border: 1px dashed #64748b; }
+
+    /* Filter Controls */
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      background: var(--card-bg);
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--card-border);
+      margin-bottom: 20px;
+      align-items: center;
+    }
+
+    .filter-label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-right: 6px;
+    }
+
+    .filter-btn {
+      background: #1e293b;
+      color: var(--text-muted);
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .filter-btn:hover {
+      background: #334155;
+      color: #fff;
+    }
+
+    .filter-btn.active {
+      background: #0284c7;
+      color: #fff;
+      border-color: #38bdf8;
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+
+    .color-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    /* Main Container */
+    .schematic-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+      position: relative;
+      margin-bottom: 28px;
+      overflow-x: auto;
+    }
+
+    .diagram-controls {
+      position: absolute;
+      top: 24px;
+      right: 24px;
+      display: flex;
+      gap: 8px;
+      z-index: 10;
+    }
+
+    .ctrl-btn {
+      background: rgba(30, 41, 59, 0.8);
+      backdrop-filter: blur(8px);
+      border: 1px solid #475569;
+      color: var(--text);
+      width: 34px;
+      height: 34px;
+      border-radius: 6px;
+      font-size: 1.1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+    .ctrl-btn:hover { background: #334155; color: #38bdf8; }
+
+    /* SVG Diagram Styling */
+    svg.schematic {
+      width: 100%;
+      min-width: 1180px;
+      height: auto;
+      display: block;
+      user-select: none;
+    }
+
+    .module-box {
+      fill: #1e293b;
+      stroke: #334155;
+      stroke-width: 2;
+      rx: 10;
+      filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.4));
+      transition: all 0.25s ease;
+    }
+
+    .module-box:hover {
+      stroke: #38bdf8;
+      filter: drop-shadow(0 0 12px rgba(56, 189, 248, 0.3));
+    }
+
+    .module-title {
+      font-size: 13px;
+      font-weight: 700;
+      fill: #f8fafc;
+      letter-spacing: 0.5px;
+    }
+
+    .module-subtitle {
+      font-size: 10px;
+      fill: #94a3b8;
+    }
+
+    /* Pins */
+    .pin-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      fill: #cbd5e1;
+    }
+
+    .pin-pad {
+      fill: #0f172a;
+      stroke: #64748b;
+      stroke-width: 1.5;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .pin-pad:hover {
+      fill: #38bdf8;
+      stroke: #fff;
+      stroke-width: 2.5;
+      r: 6 !important;
+    }
+
+    .pin-pad-floating {
+      fill: #1e293b;
+      stroke: #64748b;
+      stroke-width: 1.5;
+      stroke-dasharray: 2, 2;
+      cursor: pointer;
+    }
+
+    .pin-pad-floating:hover {
+      stroke: #94a3b8;
+      fill: #334155;
+      r: 6 !important;
+    }
+
+    .pin-pad-jumper {
+      fill: #ca8a04;
+      stroke: #fef08a;
+      stroke-width: 1.5;
+      cursor: pointer;
+    }
+
+    .pin-pad-jumper:hover {
+      fill: #eab308;
+      r: 6 !important;
+    }
+
+    /* Wires */
+    .wire {
+      fill: none;
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      opacity: 0.9;
+      transition: opacity 0.25s ease, stroke-width 0.25s ease, filter 0.25s ease;
+      cursor: pointer;
+    }
+
+    .wire:hover {
+      stroke-width: 4.5 !important;
+      opacity: 1 !important;
+      filter: drop-shadow(0 0 8px currentColor) !important;
+    }
+
+    .wire-glow {
+      stroke-width: 5 !important;
+      opacity: 1 !important;
+      filter: drop-shadow(0 0 8px currentColor) !important;
+    }
+
+    .wire-dimmed {
+      opacity: 0.06 !important;
+    }
+
+    /* Wire Colors */
+    .wire-pwr-5v { stroke: #ef4444; }        /* Red */
+    .wire-pwr-3v3 { stroke: #f97316; }       /* Orange */
+    .wire-pwr-batt { stroke: #dc2626; }      /* Crimson */
+    .wire-gnd { stroke: #64748b; stroke-dasharray: 4, 3; } /* Grey Dashed */
+    .wire-i2c-sda { stroke: #10b981; }      /* Emerald */
+    .wire-i2c-scl { stroke: #06b6d4; }      /* Cyan */
+    .wire-spi-mosi { stroke: #3b82f6; }     /* Blue */
+    .wire-spi-sclk { stroke: #8b5cf6; }     /* Violet */
+    .wire-spi-cs { stroke: #f59e0b; }       /* Amber */
+    .wire-spi-dc { stroke: #ec4899; }       /* Pink */
+    .wire-spi-rst { stroke: #14b8a6; }      /* Teal */
+    .wire-i2s-bclk { stroke: #eab308; }     /* Yellow */
+    .wire-i2s-lrc { stroke: #a855f7; }      /* Purple */
+    .wire-i2s-micsd { stroke: #2dd4bf; }    /* Cyan-green */
+    .wire-i2s-ampdin { stroke: #f43f5e; }   /* Rose */
+    .wire-jumper { stroke: #facc15; stroke-dasharray: 2, 2; stroke-width: 2; } /* Gold Dotted */
+
+    /* Grid of Information Panels */
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 20px;
+      margin-bottom: 28px;
+    }
+
+    .info-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 18px;
+    }
+
+    .info-card h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #fff;
+    }
+
+    /* Pin Table */
+    .table-container {
+      overflow-x: auto;
+      margin-top: 10px;
+    }
+
+    table.pin-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      text-align: left;
+    }
+
+    table.pin-table th {
+      background: #1e293b;
+      color: #94a3b8;
+      font-weight: 600;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    table.pin-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #1e293b;
+      color: #cbd5e1;
+    }
+
+    table.pin-table tr:hover {
+      background: rgba(56, 189, 248, 0.05);
+    }
+
+    .code-pin {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      color: #38bdf8;
+    }
+
+    .code-net {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #1e293b;
+      color: #f1f5f9;
+    }
+
+    /* Callouts & Warnings */
+    .callout {
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 12px;
+      font-size: 0.85rem;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .callout-warning { background: rgba(245, 158, 11, 0.1); border-left: 4px solid var(--warning); color: #fde68a; }
+    .callout-danger { background: rgba(239, 68, 68, 0.1); border-left: 4px solid var(--danger); color: #fca5a5; }
+    .callout-info { background: rgba(56, 189, 248, 0.1); border-left: 4px solid var(--accent); color: #bae6fd; }
+    .callout-success { background: rgba(16, 185, 129, 0.1); border-left: 4px solid var(--success); color: #a7f3d0; }
+
+    /* Tooltip */
+    #tooltip {
+      position: fixed;
+      display: none;
+      background: #0f172a;
+      border: 1px solid #38bdf8;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 0.8rem;
+      color: #fff;
+      pointer-events: none;
+      z-index: 1000;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.7);
+      max-width: 320px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="title-group">
+      <h1>🤖 Marvin Bipedal Robot — Optimized Wiring Schematic</h1>
+      <p>Cleaned hookup highlighting <strong>Only Necessary Pins</strong>, local bridges, and the 8 critical neck-crossing wires.</p>
+    </div>
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+      <span class="badge badge-primary">Freenove ESP32-S3 (N16R8)</span>
+      <span class="badge badge-success">Only 8 Neck Wires</span>
+      <span class="badge badge-jumper">Local Bridges Used</span>
+      <span class="badge badge-float">4 Pins Left Floating</span>
+    </div>
+  </header>
+
+  <!-- Filter & Subsystem Highlights -->
+  <div class="filter-bar">
+    <span class="filter-label">Filter View:</span>
+    <button class="filter-btn active" data-filter="all">🌐 Show All Wires</button>
+    <button class="filter-btn" data-filter="neck"><span class="color-dot" style="background:#f59e0b;"></span>🔗 The 8 Neck Wires Only</button>
+    <button class="filter-btn" data-filter="power"><span class="color-dot" style="background:#ef4444;"></span>⚡ Power & Battery (7.4V / 5V / 3.3V)</button>
+    <button class="filter-btn" data-filter="lcd"><span class="color-dot" style="background:#3b82f6;"></span>🖥️ Waveshare 2.0" LCD (SPI)</button>
+    <button class="filter-btn" data-filter="servos"><span class="color-dot" style="background:#10b981;"></span>🤖 Servos & PCA9685 (I2C)</button>
+    <button class="filter-btn" data-filter="audio"><span class="color-dot" style="background:#a855f7;"></span>🎙️ & 🔊 Audio (I2S Mic & Amp)</button>
+    <button class="filter-btn" data-filter="jumper"><span class="color-dot" style="background:#facc15;"></span>⚡ Local Bridges & Floating</button>
+  </div>
+
+  <!-- Interactive SVG Schematic Card -->
+  <div class="schematic-card">
+    <div class="diagram-controls">
+      <button class="ctrl-btn" id="btn-zoom-reset" title="Reset View">↺</button>
+    </div>
+
+    <svg class="schematic" viewBox="0 0 1200 840" id="circuit-svg">
+      <defs>
+        <!-- Gradients -->
+        <linearGradient id="grad-esp" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#1e293b"/>
+          <stop offset="100%" stop-color="#0f172a"/>
+        </linearGradient>
+        <linearGradient id="grad-lcd" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#1e1b4b"/>
+          <stop offset="100%" stop-color="#312e81"/>
+        </linearGradient>
+        <linearGradient id="grad-pca" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#064e3b"/>
+          <stop offset="100%" stop-color="#047857"/>
+        </linearGradient>
+        <linearGradient id="grad-batt" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#311010"/>
+          <stop offset="100%" stop-color="#1f1111"/>
+        </linearGradient>
+      </defs>
+
+      <!-- PHYSICAL ZONES / REGIONS BACKGROUND -->
+      <!-- Head Zone -->
+      <rect x="20" y="20" width="580" height="790" rx="16" fill="#0f172a" stroke="#334155" stroke-width="1.5" stroke-dasharray="6,4" opacity="0.6"/>
+      <text x="35" y="48" fill="#64748b" font-weight="700" font-size="12" letter-spacing="1">ZONE A: HEAD DOME (SHORT ~4CM WIRES)</text>
+
+      <!-- Neck Tunnel Arch -->
+      <rect x="610" y="240" width="60" height="360" rx="8" fill="#1e293b" stroke="#f59e0b" stroke-width="1.5" opacity="0.8"/>
+      <text x="640" y="420" fill="#f59e0b" font-weight="700" font-size="11" text-anchor="middle" transform="rotate(-90 640 420)">8 WIRES THROUGH NECK ARCH</text>
+
+      <!-- Torso & Backpack Zone -->
+      <rect x="680" y="20" width="500" height="790" rx="16" fill="#0f172a" stroke="#334155" stroke-width="1.5" stroke-dasharray="6,4" opacity="0.6"/>
+      <text x="695" y="48" fill="#64748b" font-weight="700" font-size="12" letter-spacing="1">ZONE B: TORSO & BACKPACK SHELL</text>
+
+
+      <!-- ======================================================== -->
+      <!-- 1. MODULE: FREENOVE ESP32-S3 WROOM CAM (N16R8) [HEAD] -->
+      <!-- ======================================================== -->
+      <g id="mod-esp32" transform="translate(160, 70)">
+        <rect class="module-box" width="260" height="490" fill="url(#grad-esp)" stroke="#38bdf8" stroke-width="2"/>
+        <text x="130" y="28" text-anchor="middle" class="module-title">FREENOVE ESP32-S3 CAM</text>
+        <text x="130" y="44" text-anchor="middle" class="module-subtitle">N16R8 (16MB Flash • 8MB Octal PSRAM)</text>
+
+        <!-- Camera Lens Graphics -->
+        <circle cx="130" cy="85" r="22" fill="#020617" stroke="#475569" stroke-width="2"/>
+        <circle cx="130" cy="85" r="14" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
+        <circle cx="130" cy="85" r="6" fill="#0284c7"/>
+        <text x="130" y="120" text-anchor="middle" font-size="9" fill="#94a3b8">OV2640 Camera (Internal GPIO 4-18)</text>
+
+        <!-- MicroSD Slot Graphics -->
+        <rect x="95" y="132" width="70" height="36" rx="4" fill="#090d16" stroke="#334155"/>
+        <text x="130" y="154" text-anchor="middle" font-size="8.5" fill="#64748b">Empty SD Slot (Frees GPIO 38-40)</text>
+
+        <!-- Dual USB-C Ports -->
+        <rect x="70" y="466" width="34" height="20" rx="3" fill="#334155" stroke="#64748b"/>
+        <text x="87" y="480" text-anchor="middle" font-size="7.5" fill="#cbd5e1">UART</text>
+        <rect x="156" y="466" width="34" height="20" rx="3" fill="#334155" stroke="#64748b"/>
+        <text x="173" y="480" text-anchor="middle" font-size="7.5" fill="#cbd5e1">OTG</text>
+
+        <!-- LEFT PIN HEADER (ESP32-S3) -->
+        <!-- Pin: 3V3 (y=190) -->
+        <circle class="pin-pad" id="pin-esp-3v3" cx="12" cy="190" r="4.5" data-net="3V3" data-name="ESP32 3V3 (Powers LCD, Mic & PCA9685 Logic)"/>
+        <text x="24" y="193" class="pin-label">3V3</text>
+
+        <!-- Pin: GND (y=220) -->
+        <circle class="pin-pad" id="pin-esp-gnd" cx="12" cy="220" r="4.5" data-net="GND" data-name="ESP32 GND (Common Ground)"/>
+        <text x="24" y="223" class="pin-label">GND</text>
+
+        <!-- Pin: GPIO 47 (MOSI) (y=250) -->
+        <circle class="pin-pad" id="pin-esp-47" cx="12" cy="250" r="4.5" data-net="SPI_MOSI" data-name="GPIO 47 (LCD MOSI)"/>
+        <text x="24" y="253" class="pin-label">IO 47 (MOSI)</text>
+
+        <!-- Pin: GPIO 21 (SCLK) (y=280) -->
+        <circle class="pin-pad" id="pin-esp-21" cx="12" cy="280" r="4.5" data-net="SPI_SCLK" data-name="GPIO 21 (LCD SCLK)"/>
+        <text x="24" y="283" class="pin-label">IO 21 (SCLK)</text>
+
+        <!-- Pin: GPIO 14 (CS) (y=310) -->
+        <circle class="pin-pad" id="pin-esp-14" cx="12" cy="310" r="4.5" data-net="SPI_CS" data-name="GPIO 14 (LCD CS)"/>
+        <text x="24" y="313" class="pin-label">IO 14 (CS)</text>
+
+        <!-- Pin: GPIO 41 (DC) (y=340) -->
+        <circle class="pin-pad" id="pin-esp-41" cx="12" cy="340" r="4.5" data-net="SPI_DC" data-name="GPIO 41 (LCD DC)"/>
+        <text x="24" y="343" class="pin-label">IO 41 (DC)</text>
+
+        <!-- Pin: GPIO 42 (RST) (y=370) -->
+        <circle class="pin-pad" id="pin-esp-42" cx="12" cy="370" r="4.5" data-net="SPI_RST" data-name="GPIO 42 (LCD RST)"/>
+        <text x="24" y="373" class="pin-label">IO 42 (RST)</text>
+
+        <!-- Pin: GPIO 3 (MIC SD) (y=400) -->
+        <circle class="pin-pad" id="pin-esp-3" cx="12" cy="400" r="4.5" data-net="I2S_MIC_SD" data-name="GPIO 3 (Mic Data In)"/>
+        <text x="24" y="403" class="pin-label">IO 3 (MIC SD)</text>
+
+        <!-- RIGHT PIN HEADER (ESP32-S3) -->
+        <!-- Pin: 5V / VIN (y=190) -->
+        <circle class="pin-pad" id="pin-esp-5v" cx="248" cy="190" r="4.5" data-net="UBEC_5V" data-name="ESP32 5V (VIN In from 5V UBEC)"/>
+        <text x="236" y="193" class="pin-label" text-anchor="end">5V (VIN)</text>
+
+        <!-- Pin: GND (y=220) -->
+        <circle class="pin-pad" id="pin-esp-gnd-r" cx="248" cy="220" r="4.5" data-net="GND" data-name="ESP32 GND (Common Ground Return)"/>
+        <text x="236" y="223" class="pin-label" text-anchor="end">GND</text>
+
+        <!-- Pin: GPIO 1 (SDA) (y=250) -->
+        <circle class="pin-pad" id="pin-esp-1" cx="248" cy="250" r="4.5" data-net="I2C_SDA" data-name="GPIO 1 (PCA9685 SDA)"/>
+        <text x="236" y="253" class="pin-label" text-anchor="end">IO 1 (SDA)</text>
+
+        <!-- Pin: GPIO 2 (SCL) (y=280) -->
+        <circle class="pin-pad" id="pin-esp-2" cx="248" cy="280" r="4.5" data-net="I2C_SCL" data-name="GPIO 2 (PCA9685 SCL)"/>
+        <text x="236" y="283" class="pin-label" text-anchor="end">IO 2 (SCL)</text>
+
+        <!-- Pin: GPIO 38 (BCLK) (y=310) -->
+        <circle class="pin-pad" id="pin-esp-38" cx="248" cy="310" r="4.5" data-net="I2S_BCLK" data-name="GPIO 38 (Shared I2S BCLK Clock)"/>
+        <text x="236" y="313" class="pin-label" text-anchor="end">IO 38 (BCLK)</text>
+
+        <!-- Pin: GPIO 39 (LRC/WS) (y=340) -->
+        <circle class="pin-pad" id="pin-esp-39" cx="248" cy="340" r="4.5" data-net="I2S_LRC" data-name="GPIO 39 (Shared I2S LRC/WS Sync)"/>
+        <text x="236" y="343" class="pin-label" text-anchor="end">IO 39 (LRC)</text>
+
+        <!-- Pin: GPIO 40 (AMP DIN) (y=370) -->
+        <circle class="pin-pad" id="pin-esp-40" cx="248" cy="370" r="4.5" data-net="I2S_AMP_DIN" data-name="GPIO 40 (Amp Audio Out)"/>
+        <text x="236" y="373" class="pin-label" text-anchor="end">IO 40 (AMP DIN)</text>
+
+        <!-- Pin: Reserved / Onboard PSRAM Callout -->
+        <text x="130" y="440" text-anchor="middle" font-size="8.5" fill="#f87171">⚠ GPIO 35-37 Locked by Octal PSRAM</text>
+      </g>
+
+
+      <!-- ======================================================== -->
+      <!-- 2. MODULE: WAVESHARE 2.0" ST7789 IPS LCD [HEAD VISOR] -->
+      <!-- ======================================================== -->
+      <g id="mod-lcd" transform="translate(30, 200)">
+        <rect class="module-box" width="105" height="240" fill="url(#grad-lcd)" stroke="#818cf8"/>
+        <text x="52" y="22" text-anchor="middle" class="module-title" font-size="11">2.0" IPS LCD</text>
+        <text x="52" y="36" text-anchor="middle" class="module-subtitle">ST7789 320x240</text>
+
+        <!-- Animated Face Eyes Miniature -->
+        <rect x="18" y="48" width="70" height="40" rx="4" fill="#000"/>
+        <ellipse cx="38" cy="68" rx="10" ry="4" fill="#38bdf8"/>
+        <ellipse cx="68" cy="68" rx="10" ry="4" fill="#38bdf8"/>
+
+        <!-- LCD Pins on Right Edge -->
+        <circle class="pin-pad" id="pin-lcd-vcc" cx="95" cy="100" r="4" data-net="3V3" data-name="LCD VCC (3.3V)"/>
+        <text x="85" y="103" class="pin-label" text-anchor="end">VCC</text>
+
+        <circle class="pin-pad" id="pin-lcd-gnd" cx="95" cy="118" r="4" data-net="GND" data-name="LCD GND"/>
+        <text x="85" y="121" class="pin-label" text-anchor="end">GND</text>
+
+        <circle class="pin-pad" id="pin-lcd-din" cx="95" cy="136" r="4" data-net="SPI_MOSI" data-name="LCD DIN (MOSI)"/>
+        <text x="85" y="139" class="pin-label" text-anchor="end">DIN</text>
+
+        <circle class="pin-pad" id="pin-lcd-clk" cx="95" cy="154" r="4" data-net="SPI_SCLK" data-name="LCD CLK (SCLK)"/>
+        <text x="85" y="157" class="pin-label" text-anchor="end">CLK</text>
+
+        <circle class="pin-pad" id="pin-lcd-cs" cx="95" cy="172" r="4" data-net="SPI_CS" data-name="LCD CS"/>
+        <text x="85" y="175" class="pin-label" text-anchor="end">CS</text>
+
+        <circle class="pin-pad" id="pin-lcd-dc" cx="95" cy="190" r="4" data-net="SPI_DC" data-name="LCD DC"/>
+        <text x="85" y="193" class="pin-label" text-anchor="end">DC</text>
+
+        <circle class="pin-pad" id="pin-lcd-rst" cx="95" cy="208" r="4" data-net="SPI_RST" data-name="LCD RST"/>
+        <text x="85" y="211" class="pin-label" text-anchor="end">RST</text>
+
+        <!-- Backlight BL Jumpered to VCC locally -->
+        <circle class="pin-pad-jumper" id="pin-lcd-bl" cx="95" cy="226" r="4" data-net="3V3" data-name="LCD BL (Backlight): Bridged directly to VCC (No ESP32 wire!)"/>
+        <text x="85" y="229" class="pin-label" text-anchor="end" fill="#facc15">BL ⚡</text>
+
+        <!-- Local Jumper Arc from BL to VCC -->
+        <path d="M 95 226 C 115 226, 115 100, 95 100" fill="none" stroke="#facc15" stroke-width="1.8" stroke-dasharray="3,2"/>
+        <text x="108" y="165" font-size="7" fill="#fde047" transform="rotate(90 108 165)">LOCAL BRIDGE TO VCC</text>
+      </g>
+
+
+      <!-- ======================================================== -->
+      <!-- 3. MODULE: INMP441 I2S MEMS MICROPHONE [HEAD VISOR] -->
+      <!-- ======================================================== -->
+      <g id="mod-mic" transform="translate(45, 590)">
+        <rect class="module-box" width="90" height="170" fill="#1e293b" stroke="#2dd4bf"/>
+        <text x="45" y="22" text-anchor="middle" class="module-title" font-size="10.5">INMP441</text>
+        <text x="45" y="34" text-anchor="middle" class="module-subtitle">I2S MEMS Mic</text>
+        <circle cx="45" cy="50" r="5" fill="#020617" stroke="#64748b"/>
+
+        <!-- Mic Pins on Right Edge -->
+        <circle class="pin-pad" id="pin-mic-vdd" cx="80" cy="70" r="4" data-net="3V3" data-name="Mic VDD (3.3V)"/>
+        <text x="70" y="73" class="pin-label" text-anchor="end">VDD</text>
+
+        <circle class="pin-pad" id="pin-mic-gnd" cx="80" cy="88" r="4" data-net="GND" data-name="Mic GND"/>
+        <text x="70" y="91" class="pin-label" text-anchor="end">GND</text>
+
+        <!-- L/R Soldered directly to adjacent GND pad -->
+        <circle class="pin-pad-jumper" id="pin-mic-lr" cx="80" cy="104" r="4" data-net="GND" data-name="Mic L/R: Soldered locally to GND on PCB (Selects Left Channel - NO wire to ESP32!)"/>
+        <text x="70" y="107" class="pin-label" text-anchor="end" fill="#facc15">L/R ⚡</text>
+
+        <!-- Solder Bridge Blob between GND and L/R -->
+        <path d="M 80 88 C 86 96, 86 96, 80 104" fill="none" stroke="#facc15" stroke-width="2.5"/>
+        <circle cx="83" cy="96" r="2.5" fill="#eab308"/>
+
+        <circle class="pin-pad" id="pin-mic-sd" cx="80" cy="120" r="4" data-net="I2S_MIC_SD" data-name="Mic SD (Serial Data)"/>
+        <text x="70" y="123" class="pin-label" text-anchor="end">SD</text>
+
+        <circle class="pin-pad" id="pin-mic-sck" cx="80" cy="136" r="4" data-net="I2S_BCLK" data-name="Mic SCK (Bit Clock)"/>
+        <text x="70" y="139" class="pin-label" text-anchor="end">SCK</text>
+
+        <circle class="pin-pad" id="pin-mic-ws" cx="80" cy="152" r="4" data-net="I2S_LRC" data-name="Mic WS (Word Select)"/>
+        <text x="70" y="155" class="pin-label" text-anchor="end">WS</text>
+      </g>
+
+
+      <!-- ======================================================== -->
+      <!-- 4. MODULE: POWER SUBSYSTEM [BACKPACK LOWER] -->
+      <!-- ======================================================== -->
+      <!-- CyberBrick 7.4V Battery -->
+      <g id="mod-battery" transform="translate(930, 620)">
+        <rect class="module-box" width="220" height="85" fill="url(#grad-batt)" stroke="#ef4444"/>
+        <text x="110" y="24" text-anchor="middle" class="module-title" font-size="11">CYBERBRICK 7.4V LI-ION</text>
+        <text x="110" y="38" text-anchor="middle" class="module-subtitle">2S 14500 Pack (800mAh, XH2.54)</text>
+
+        <circle class="pin-pad" id="pin-batt-plus" cx="20" cy="60" r="5" data-net="BATT_RAW" data-name="Battery 7.4V (+)"/>
+        <text x="32" y="64" class="pin-label">BAT (+)</text>
+
+        <circle class="pin-pad" id="pin-batt-gnd" cx="130" cy="60" r="5" data-net="GND" data-name="Battery GND (-)"/>
+        <text x="142" y="64" class="pin-label">GND (-)</text>
+      </g>
+
+      <!-- CyberBrick Power Switch -->
+      <g id="mod-switch" transform="translate(730, 620)">
+        <rect class="module-box" width="160" height="70" fill="#1e293b" stroke="#f59e0b"/>
+        <text x="80" y="22" text-anchor="middle" class="module-title" font-size="11">POWER SWITCH</text>
+        <text x="80" y="36" text-anchor="middle" class="module-subtitle">CyberBrick XH2.54 Toggle</text>
+
+        <circle class="pin-pad" id="pin-sw-in" cx="140" cy="52" r="4.5" data-net="BATT_RAW" data-name="Switch IN from Battery (+)"/>
+        <text x="130" y="55" class="pin-label" text-anchor="end">IN</text>
+
+        <circle class="pin-pad" id="pin-sw-out" cx="20" cy="52" r="4.5" data-net="BATT_SW" data-name="Switched 7.4V Out to UBEC"/>
+        <text x="30" y="55" class="pin-label">OUT</text>
+      </g>
+
+      <!-- 5V 5A UBEC Step-Down Buck Converter -->
+      <g id="mod-ubec" transform="translate(710, 470)">
+        <rect class="module-box" width="200" height="110" fill="#1e293b" stroke="#ef4444" stroke-width="2.5"/>
+        <text x="100" y="24" text-anchor="middle" class="module-title" font-size="12">5V 5A UBEC STEP-DOWN</text>
+        <text x="100" y="38" text-anchor="middle" class="module-subtitle">High-Current Buck Regulator</text>
+
+        <!-- Inputs from Battery Switch -->
+        <circle class="pin-pad" id="pin-ubec-in-plus" cx="40" cy="95" r="4.5" data-net="BATT_SW" data-name="UBEC IN+ (7.4V Switched)"/>
+        <text x="40" y="85" class="pin-label" text-anchor="middle">IN+</text>
+
+        <circle class="pin-pad" id="pin-ubec-in-gnd" cx="80" cy="95" r="4.5" data-net="GND" data-name="UBEC IN- (GND)"/>
+        <text x="80" y="85" class="pin-label" text-anchor="middle">IN-</text>
+
+        <!-- Outputs 5V High Current -->
+        <circle class="pin-pad" id="pin-ubec-out-5v" cx="130" cy="65" r="5.5" data-net="UBEC_5V" data-name="UBEC OUT+ 5.0V (High Current Rail)"/>
+        <text x="130" y="55" class="pin-label" text-anchor="middle" fill="#ef4444" font-weight="700">5V OUT</text>
+
+        <circle class="pin-pad" id="pin-ubec-out-gnd" cx="170" cy="65" r="5" data-net="GND" data-name="UBEC OUT- GND"/>
+        <text x="170" y="55" class="pin-label" text-anchor="middle">GND</text>
+      </g>
+
+      <!-- 2S 8.4V USB-C Boost Charger (Backpack Bottom) -->
+      <g id="mod-charger" transform="translate(930, 725)">
+        <rect class="module-box" width="220" height="75" fill="#1e293b" stroke="#3b82f6"/>
+        <text x="110" y="20" text-anchor="middle" class="module-title" font-size="10.5">2S 8.4V USB-C BOOST CHARGER</text>
+        <text x="110" y="34" text-anchor="middle" class="module-subtitle">Bottom USB-C Port (Charge when OFF)</text>
+
+        <circle class="pin-pad" id="pin-chg-bplus" cx="30" cy="54" r="4.5" data-net="BATT_RAW" data-name="Charger B+ (8.4V)"/>
+        <text x="42" y="58" class="pin-label">B+</text>
+
+        <circle class="pin-pad" id="pin-chg-bgnd" cx="120" cy="54" r="4.5" data-net="GND" data-name="Charger B- (GND)"/>
+        <text x="132" y="58" class="pin-label">B-</text>
+      </g>
+
+
+      <!-- ======================================================== -->
+      <!-- 5. MODULE: PCA9685 16-CHANNEL SERVO DRIVER [BACKPACK] -->
+      <!-- ======================================================== -->
+      <g id="mod-pca9685" transform="translate(710, 70)">
+        <rect class="module-box" width="440" height="230" fill="url(#grad-pca)" stroke="#34d399" stroke-width="2"/>
+        <text x="220" y="26" text-anchor="middle" class="module-title" font-size="13">PCA9685 16-CHANNEL PWM SERVO DRIVER</text>
+        <text x="220" y="42" text-anchor="middle" class="module-subtitle">I2C: 0x40 • Logic VCC MUST be 3.3V • Servos get 5V from UBEC</text>
+
+        <!-- Logic Input Header (Left Edge) -->
+        <circle class="pin-pad" id="pin-pca-vcc" cx="14" cy="70" r="4.5" data-net="3V3" data-name="PCA9685 VCC: MUST connect to 3.3V from ESP32!"/>
+        <text x="26" y="74" class="pin-label">VCC (3.3V)</text>
+
+        <circle class="pin-pad" id="pin-pca-gnd" cx="14" cy="95" r="4.5" data-net="GND" data-name="PCA9685 GND"/>
+        <text x="26" y="99" class="pin-label">GND</text>
+
+        <circle class="pin-pad" id="pin-pca-sda" cx="14" cy="120" r="4.5" data-net="I2C_SDA" data-name="PCA9685 SDA (GPIO 1)"/>
+        <text x="26" y="124" class="pin-label">SDA</text>
+
+        <circle class="pin-pad" id="pin-pca-scl" cx="14" cy="145" r="4.5" data-net="I2C_SCL" data-name="PCA9685 SCL (GPIO 2)"/>
+        <text x="26" y="149" class="pin-label">SCL</text>
+
+        <!-- OE Pin: FLOATING (No wire needed!) -->
+        <circle class="pin-pad-floating" id="pin-pca-oe" cx="14" cy="170" r="4" data-net="FLOAT" data-name="PCA9685 OE: LEAVE FLOATING! Onboard pull-down keeps PWM always active. No wire needed!"/>
+        <text x="26" y="174" class="pin-label" fill="#94a3b8">OE (Floating 🚫)</text>
+
+        <!-- High-Current V+ Screw Terminal Block (Left-Center) -->
+        <rect x="85" y="178" width="55" height="42" rx="4" fill="#1e293b" stroke="#f59e0b" stroke-width="1.5"/>
+        <circle class="pin-pad" id="pin-pca-vp" cx="100" cy="202" r="5.5" data-net="UBEC_5V" data-name="PCA9685 V+ Screw Terminal (5.0V from UBEC)"/>
+        <text x="100" y="194" class="pin-label" text-anchor="middle" fill="#ef4444" font-weight="700">V+</text>
+
+        <circle class="pin-pad" id="pin-pca-vpgnd" cx="125" cy="202" r="5" data-net="GND" data-name="PCA9685 Power GND Terminal"/>
+        <text x="125" y="194" class="pin-label" text-anchor="middle">GND</text>
+
+        <!-- 1000uF Electrolytic Capacitor graphic across V+ -->
+        <circle cx="165" cy="200" r="14" fill="#0f172a" stroke="#cbd5e1"/>
+        <line x1="165" y1="188" x2="165" y2="212" stroke="#cbd5e1" stroke-width="1.5"/>
+        <line x1="153" y1="200" x2="177" y2="200" stroke="#cbd5e1" stroke-width="1.5"/>
+        <text x="165" y="224" font-size="8" fill="#94a3b8" text-anchor="middle">1000µF 16V</text>
+
+        <!-- 10 Servo Channel Output Pins (CH0 .. CH9) -->
+        <g id="pca-channels" transform="translate(195, 60)">
+          <!-- CH 0: Head Pan -->
+          <circle class="pin-pad" id="pin-ch0" cx="10" cy="30" r="3.5" data-net="CH0" data-name="CH0: Head Pan (CyberBrick PG001)"/>
+          <text x="10" y="20" font-size="8" fill="#cbd5e1" text-anchor="middle">CH0</text>
+          <text x="10" y="50" font-size="7" fill="#94a3b8" text-anchor="middle">Pan</text>
+
+          <!-- CH 1: Head Tilt -->
+          <circle class="pin-pad" id="pin-ch1" cx="34" cy="30" r="3.5" data-net="CH1" data-name="CH1: Head Tilt (MG90S)"/>
+          <text x="34" y="20" font-size="8" fill="#cbd5e1" text-anchor="middle">CH1</text>
+          <text x="34" y="50" font-size="7" fill="#94a3b8" text-anchor="middle">Tilt</text>
+
+          <!-- CH 2: L Shoulder Pitch -->
+          <circle class="pin-pad" id="pin-ch2" cx="58" cy="30" r="3.5" data-net="CH2" data-name="CH2: L-Shoulder Pitch"/>
+          <text x="58" y="20" font-size="8" fill="#cbd5e1" text-anchor="middle">CH2</text>
+          <text x="58" y="50" font-size="7" fill="#94a3b8" text-anchor="middle">L.ShP</text>
+
+          <!-- CH 3: L Shoulder Roll -->
+          <circle class="pin-pad" id="pin-ch3" cx="82" cy="30" r="3.5" data-net="CH3" data-name="CH3: L-Shoulder Roll"/>
+          <text x="82" y="20" font-size="8" fill="#cbd5e1" text-anchor="middle">CH3</text>
+          <text x="82" y="50" font-size="7" fill="#94a3b8" text-anchor="middle">L.ShR</text>
+
+          <!-- CH 4: R Shoulder Pitch -->
+          <circle class="pin-pad" id="pin-ch4" cx="106" cy="30" r="3.5" data-net="CH4" data-name="CH4: R-Shoulder Pitch"/>
+          <text x="106" y="20" font-size="8" fill="#cbd5e1" text-anchor="middle">CH4</text>
+          <text x="106" y="50" font-size="7" fill="#94a3b8" text-anchor="middle">R.ShP</text>
+
+          <!-- CH 5: R Shoulder Roll -->
+          <circle class="pin-pad" id="pin-ch5" cx="130" cy="30" r="3.5" data-net="CH5" data-name="CH5: R-Shoulder Roll"/>
+          <text x="130" y="20" font-size="8" fill="#cbd5e1" text-anchor="middle">CH5</text>
+          <text x="130" y="50" font-size="7" fill="#94a3b8" text-anchor="middle">R.ShR</text>
+
+          <!-- CH 6: L Hip Pitch -->
+          <circle class="pin-pad" id="pin-ch6" cx="154" cy="30" r="3.5" data-net="CH6" data-name="CH6: L-Hip Pitch"/>
+          <text x="154" y="20" font-size="8" fill="#cbd5e1" text-anchor="middle">CH6</text>
+          <text x="154" y="50" font-size="7" fill="#94a3b8" text-anchor="middle">L.Hip</text>
+
+          <!-- CH 7: L Ankle Roll -->
+          <circle class="pin-pad" id="pin-ch7" cx="178" cy="30" r="3.5" data-net="CH7" data-name="CH7: L-Ankle Roll (Waddle)"/>
+          <text x="178" y="20" font-size="8" fill="#cbd5e1" text-anchor="middle">CH7</text>
+          <text x="178" y="50" font-size="7" fill="#94a3b8" text-anchor="middle">L.Ank</text>
+
+          <!-- CH 8: R Hip Pitch -->
+          <circle class="pin-pad" id="pin-ch8" cx="202" cy="30" r="3.5" data-net="CH8" data-name="CH8: R-Hip Pitch"/>
+          <text x="202" y="20" font-size="8" fill="#cbd5e1" text-anchor="middle">CH8</text>
+          <text x="202" y="50" font-size="7" fill="#94a3b8" text-anchor="middle">R.Hip</text>
+
+          <!-- CH 9: R Ankle Roll -->
+          <circle class="pin-pad" id="pin-ch9" cx="226" cy="30" r="3.5" data-net="CH9" data-name="CH9: R-Ankle Roll (Waddle)"/>
+          <text x="226" y="20" font-size="8" fill="#cbd5e1" text-anchor="middle">CH9</text>
+          <text x="226" y="50" font-size="7" fill="#94a3b8" text-anchor="middle">R.Ank</text>
+        </g>
+      </g>
+
+
+      <!-- ======================================================== -->
+      <!-- 6. MODULE: MAX98357A I2S 3W CLASS-D AMP & 28MM SPEAKER -->
+      <!-- ======================================================== -->
+      <g id="mod-audio-out" transform="translate(930, 310)">
+        <rect class="module-box" width="220" height="150" fill="#1e293b" stroke="#f43f5e"/>
+        <text x="110" y="20" text-anchor="middle" class="module-title" font-size="11">MAX98357A I2S AMP</text>
+        <text x="110" y="34" text-anchor="middle" class="module-subtitle">3W Mono Class-D Audio</text>
+
+        <!-- Amp Input Pins -->
+        <circle class="pin-pad" id="pin-amp-vin" cx="18" cy="52" r="4.5" data-net="UBEC_5V" data-name="Amp VIN (5.0V from UBEC)"/>
+        <text x="28" y="55" class="pin-label">VIN (5V)</text>
+
+        <circle class="pin-pad" id="pin-amp-gnd" cx="18" cy="69" r="4.5" data-net="GND" data-name="Amp GND"/>
+        <text x="28" y="72" class="pin-label">GND</text>
+
+        <circle class="pin-pad" id="pin-amp-bclk" cx="18" cy="86" r="4.5" data-net="I2S_BCLK" data-name="Amp BCLK (GPIO 38)"/>
+        <text x="28" y="89" class="pin-label">BCLK</text>
+
+        <circle class="pin-pad" id="pin-amp-lrc" cx="18" cy="103" r="4.5" data-net="I2S_LRC" data-name="Amp LRC / WS (GPIO 39)"/>
+        <text x="28" y="106" class="pin-label">LRC</text>
+
+        <circle class="pin-pad" id="pin-amp-din" cx="18" cy="120" r="4" data-net="I2S_AMP_DIN" data-name="Amp DIN (GPIO 40)"/>
+        <text x="28" y="123" class="pin-label">DIN</text>
+
+        <!-- GAIN & SD: FLOATING -->
+        <circle class="pin-pad-floating" id="pin-amp-gain" cx="18" cy="135" r="3.5" data-net="FLOAT" data-name="MAX98357A GAIN: LEAVE FLOATING! Defaults to 9 dB gain. No wire needed."/>
+        <text x="28" y="138" class="pin-label" font-size="8.5" fill="#94a3b8">GAIN (Floating 9dB 🚫)</text>
+
+        <circle class="pin-pad-floating" id="pin-amp-sd" cx="110" cy="135" r="3.5" data-net="FLOAT" data-name="MAX98357A SD: LEAVE FLOATING! Defaults to Always-ON Mono mix (L+R)/2. No wire needed."/>
+        <text x="120" y="138" class="pin-label" font-size="8.5" fill="#94a3b8">SD (Floating Mono 🚫)</text>
+
+        <!-- Speaker Terminals & 28mm Speaker -->
+        <circle class="pin-pad" id="pin-spk-plus" cx="150" cy="65" r="4.5" data-net="SPK_OUT" data-name="Speaker (+)"/>
+        <text x="140" y="68" class="pin-label" text-anchor="end">SPK+</text>
+
+        <circle class="pin-pad" id="pin-spk-minus" cx="150" cy="85" r="4.5" data-net="SPK_OUT" data-name="Speaker (-)"/>
+        <text x="140" y="88" class="pin-label" text-anchor="end">SPK-</text>
+
+        <!-- Speaker Visual -->
+        <circle cx="185" cy="75" r="18" fill="#0f172a" stroke="#fb923c" stroke-width="2"/>
+        <circle cx="185" cy="75" r="7" fill="#334155"/>
+        <text x="185" y="104" font-size="7.5" fill="#cbd5e1" text-anchor="middle">28mm 8Ω</text>
+      </g>
+
+
+      <!-- ======================================================== -->
+      <!-- INTERCONNECT WIRES (THE NECESSARY CONNECTIONS ONLY) -->
+      <!-- ======================================================== -->
+      <g id="wires-layer">
+
+        <!-- --- A. DISPLAY (SPI) IN HEAD --- -->
+        <!-- LCD VCC to ESP32 3V3 -->
+        <path class="wire wire-pwr-3v3" data-net="3V3" data-category="lcd power"
+              d="M 125 300 C 140 300, 150 260, 172 260"/>
+
+        <!-- LCD GND to ESP32 GND -->
+        <path class="wire wire-gnd" data-net="GND" data-category="lcd power"
+              d="M 125 318 C 140 318, 150 290, 172 290"/>
+
+        <!-- LCD DIN to GPIO 47 -->
+        <path class="wire wire-spi-mosi" data-net="SPI_MOSI" data-category="lcd"
+              d="M 125 336 C 145 336, 150 320, 172 320"/>
+
+        <!-- LCD CLK to GPIO 21 -->
+        <path class="wire wire-spi-sclk" data-net="SPI_SCLK" data-category="lcd"
+              d="M 125 354 C 145 354, 150 350, 172 350"/>
+
+        <!-- LCD CS to GPIO 14 -->
+        <path class="wire wire-spi-cs" data-net="SPI_CS" data-category="lcd"
+              d="M 125 372 C 145 372, 150 380, 172 380"/>
+
+        <!-- LCD DC to GPIO 41 -->
+        <path class="wire wire-spi-dc" data-net="SPI_DC" data-category="lcd"
+              d="M 125 390 C 145 390, 150 410, 172 410"/>
+
+        <!-- LCD RST to GPIO 42 -->
+        <path class="wire wire-spi-rst" data-net="SPI_RST" data-category="lcd"
+              d="M 125 408 C 145 408, 150 440, 172 440"/>
+
+
+        <!-- --- B. MICROPHONE (I2S) IN HEAD --- -->
+        <!-- Mic VDD to ESP32 3V3 -->
+        <path class="wire wire-pwr-3v3" data-net="3V3" data-category="audio power"
+              d="M 125 660 C 150 660, 155 350, 172 260"/>
+
+        <!-- Mic GND to Common GND -->
+        <path class="wire wire-gnd" data-net="GND" data-category="audio power"
+              d="M 125 678 C 148 678, 150 380, 172 290"/>
+
+        <!-- Mic SD to GPIO 3 -->
+        <path class="wire wire-i2s-micsd" data-net="I2S_MIC_SD" data-category="audio"
+              d="M 125 710 C 150 710, 150 470, 172 470"/>
+
+        <!-- Mic SCK to GPIO 38 trunk -->
+        <path class="wire wire-i2s-bclk" data-net="I2S_BCLK" data-category="audio"
+              d="M 125 726 C 160 726, 280 620, 408 380"/>
+
+        <!-- Mic WS to GPIO 39 trunk -->
+        <path class="wire wire-i2s-lrc" data-net="I2S_LRC" data-category="audio"
+              d="M 125 742 C 160 742, 290 640, 408 410"/>
+
+
+        <!-- --- C. THE EXACT 8 WIRES CROSSING THE NECK --- -->
+        <!-- 1. UBEC 5V Output to ESP32 5V (VIN) -->
+        <path class="wire wire-pwr-5v" data-net="UBEC_5V" data-category="power neck"
+              d="M 840 535 C 720 535, 630 330, 408 260"/>
+
+        <!-- 2. Common Ground across neck to ESP32 GND -->
+        <path class="wire wire-gnd" data-net="GND" data-category="power neck"
+              d="M 880 535 C 740 535, 630 350, 408 290"/>
+
+        <!-- 3. ESP32 3V3 Out to PCA9685 VCC (CRITICAL 3.3V LOGIC) -->
+        <path class="wire wire-pwr-3v3" data-net="3V3" data-category="servos power neck"
+              d="M 172 260 C 230 180, 600 120, 724 140"/>
+
+        <!-- 4. I2C SDA: GPIO 1 to PCA9685 SDA -->
+        <path class="wire wire-i2c-sda" data-net="I2C_SDA" data-category="servos neck"
+              d="M 408 320 C 520 320, 620 190, 724 190"/>
+
+        <!-- 5. I2C SCL: GPIO 2 to PCA9685 SCL -->
+        <path class="wire wire-i2c-scl" data-net="I2C_SCL" data-category="servos neck"
+              d="M 408 350 C 520 350, 620 215, 724 215"/>
+
+        <!-- 6. I2S BCLK: GPIO 38 to MAX98357A BCLK -->
+        <path class="wire wire-i2s-bclk" data-net="I2S_BCLK" data-category="audio neck"
+              d="M 408 380 C 580 380, 760 410, 948 396"/>
+
+        <!-- 7. I2S LRC: GPIO 39 to MAX98357A LRC -->
+        <path class="wire wire-i2s-lrc" data-net="I2S_LRC" data-category="audio neck"
+              d="M 408 410 C 580 410, 780 430, 948 413"/>
+
+        <!-- 8. I2S AMP DIN: GPIO 40 to MAX98357A DIN -->
+        <path class="wire wire-i2s-ampdin" data-net="I2S_AMP_DIN" data-category="audio neck"
+              d="M 408 440 C 580 440, 800 445, 948 430"/>
+
+
+        <!-- --- D. POWER DISTRIBUTION IN BACKPACK --- -->
+        <!-- Battery BAT(+) to Power Switch IN -->
+        <path class="wire wire-pwr-batt" data-net="BATT_RAW" data-category="power"
+              d="M 950 680 C 910 680, 890 672, 870 672"/>
+
+        <!-- Power Switch OUT to UBEC IN+ -->
+        <path class="wire wire-pwr-batt" data-net="BATT_SW" data-category="power"
+              d="M 750 672 C 730 672, 730 580, 750 565"/>
+
+        <!-- Battery BAT(-) to Common Ground -->
+        <path class="wire wire-gnd" data-net="GND" data-category="power"
+              d="M 1060 680 C 950 680, 820 600, 790 565"/>
+
+        <!-- Charger B+ to Battery BAT(+) -->
+        <path class="wire wire-pwr-batt" data-net="BATT_RAW" data-category="power"
+              d="M 960 779 C 940 779, 940 710, 950 680"/>
+
+        <!-- Charger B- to Battery GND -->
+        <path class="wire wire-gnd" data-net="GND" data-category="power"
+              d="M 1050 779 C 1060 779, 1060 710, 1060 680"/>
+
+        <!-- UBEC 5V OUT to PCA9685 V+ Screw Terminal -->
+        <path class="wire wire-pwr-5v" data-net="UBEC_5V" data-category="servos power"
+              d="M 840 535 C 800 480, 790 320, 810 272"/>
+
+        <!-- UBEC GND to PCA9685 GND Terminal -->
+        <path class="wire wire-gnd" data-net="GND" data-category="servos power"
+              d="M 880 535 C 830 480, 820 320, 835 272"/>
+
+        <!-- UBEC 5V OUT to MAX98357A Amp VIN -->
+        <path class="wire wire-pwr-5v" data-net="UBEC_5V" data-category="audio power"
+              d="M 840 535 C 880 535, 920 420, 948 362"/>
+
+        <!-- Amp GND to Common GND -->
+        <path class="wire wire-gnd" data-net="GND" data-category="audio power"
+              d="M 880 535 C 910 535, 920 440, 948 379"/>
+
+        <!-- PCA9685 Logic GND to UBEC GND -->
+        <path class="wire wire-gnd" data-net="GND" data-category="servos power"
+              d="M 724 165 C 700 165, 700 380, 835 272"/>
+
+      </g>
+    </svg>
+  </div>
+
+  <!-- Information Grid -->
+  <div class="info-grid">
+
+    <!-- Card: What to Connect vs What to Skip -->
+    <div class="info-card" style="grid-column: span 2;">
+      <h3>✂️ Wiring Simplification: What to Connect vs. What to Skip</h3>
+      <div class="table-container">
+        <table class="pin-table">
+          <thead>
+            <tr>
+              <th>Device & Pin</th>
+              <th>Status</th>
+              <th>Where It Goes</th>
+              <th>Why You Can Skip Or Bridge It</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>PCA9685 OE</strong></td>
+              <td><span class="badge badge-float">LEAVE FLOATING</span></td>
+              <td><em>No wire connected</em></td>
+              <td>Onboard pull-down resistor keeps PWM outputs active by default. Connecting to ESP32 is completely unnecessary!</td>
+            </tr>
+            <tr>
+              <td><strong>MAX98357A GAIN</strong></td>
+              <td><span class="badge badge-float">LEAVE FLOATING</span></td>
+              <td><em>No wire connected</em></td>
+              <td>Internal pull-up automatically selects <strong>9 dB gain</strong> (perfect loudness for 28mm mini speaker).</td>
+            </tr>
+            <tr>
+              <td><strong>MAX98357A SD</strong></td>
+              <td><span class="badge badge-float">LEAVE FLOATING</span></td>
+              <td><em>No wire connected</em></td>
+              <td>Left floating = amp is <strong>always enabled</strong> and downmixes stereo I2S audio into <strong>(L+R)/2 mono</strong>.</td>
+            </tr>
+            <tr>
+              <td><strong>INMP441 L/R</strong></td>
+              <td><span class="badge badge-jumper">LOCAL BRIDGE</span></td>
+              <td>Solder blob to adjacent GND on Mic PCB</td>
+              <td><strong>Zero wires to ESP32!</strong> Bridging to the adjacent GND pin selects the Left audio channel right at the board.</td>
+            </tr>
+            <tr>
+              <td><strong>Waveshare ST7789 BL</strong></td>
+              <td><span class="badge badge-jumper">LOCAL JUMPER</span></td>
+              <td>Jumper wire to LCD VCC (3.3V)</td>
+              <td><strong>Zero wires to ESP32!</strong> Bridge BL to VCC right on the 8-pin display header for full-brightness display.</td>
+            </tr>
+            <tr>
+              <td><strong>PCA9685 Right Header</strong></td>
+              <td><span class="badge badge-float">LEAVE FLOATING</span></td>
+              <td><em>No wire connected</em></td>
+              <td>Only used for cascading a second PCA9685 board. Unused for 10 servos.</td>
+            </tr>
+            <tr>
+              <td><strong>ESP32 GPIO 4-18, 35-37</strong></td>
+              <td><span class="badge badge-danger">DO NOT WIRE</span></td>
+              <td><em>Internal only</em></td>
+              <td>Used internally on the Freenove CAM board for OV2640 camera bus and 8MB Octal PSRAM.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Card: The 8 Neck Wires -->
+    <div class="info-card">
+      <h3>🔗 The Exact 8 Wires Crossing the Neck Arch</h3>
+      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:10px;">
+        Only these 8 flexible silicone wires pass through the hollow neck pivot between the Head and the Backpack:
+      </p>
+      <table class="pin-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Signal</th>
+            <th>Wire Color</th>
+            <th>Function</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td><span class="code-net">UBEC 5V</span></td><td><span style="color:#ef4444; font-weight:700;">Red</span></td><td>5V power from UBEC up to ESP32 VIN</td></tr>
+          <tr><td>2</td><td><span class="code-net">Common GND</span></td><td><span style="color:#94a3b8; font-weight:700;">Black</span></td><td>Unified ground return plane</td></tr>
+          <tr><td>3</td><td><span class="code-net">ESP 3V3</span></td><td><span style="color:#f97316; font-weight:700;">Orange</span></td><td>3.3V logic supply down to PCA9685 VCC</td></tr>
+          <tr><td>4</td><td><span class="code-net">GPIO 1</span></td><td><span style="color:#10b981; font-weight:700;">Green</span></td><td>I2C SDA (Servo driver data)</td></tr>
+          <tr><td>5</td><td><span class="code-net">GPIO 2</span></td><td><span style="color:#06b6d4; font-weight:700;">Cyan</span></td><td>I2C SCL (Servo driver clock)</td></tr>
+          <tr><td>6</td><td><span class="code-net">GPIO 38</span></td><td><span style="color:#eab308; font-weight:700;">Yellow</span></td><td>I2S BCLK (Shared audio bit clock down to amp)</td></tr>
+          <tr><td>7</td><td><span class="code-net">GPIO 39</span></td><td><span style="color:#a855f7; font-weight:700;">Purple</span></td><td>I2S LRC (Shared audio sync down to amp)</td></tr>
+          <tr><td>8</td><td><span class="code-net">GPIO 40</span></td><td><span style="color:#f43f5e; font-weight:700;">Rose</span></td><td>I2S DIN (Audio stream out down to MAX98357A)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Card: PCA9685 Servo Channels -->
+    <div class="info-card">
+      <h3>🦾 PCA9685 Servo Joint Assignments</h3>
+      <table class="pin-table">
+        <thead>
+          <tr>
+            <th>Channel</th>
+            <th>Joint</th>
+            <th>Location</th>
+            <th>Model</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="code-pin">CH 0</span></td><td>Head Pan (Yaw)</td><td>torso_back</td><td>CyberBrick PG001</td></tr>
+          <tr><td><span class="code-pin">CH 1</span></td><td>Head Tilt (Pitch)</td><td>neck_yoke</td><td>MG90S Metal</td></tr>
+          <tr><td><span class="code-pin">CH 2</span></td><td>Left Shoulder Pitch</td><td>torso_back (+X)</td><td>MG90S Metal</td></tr>
+          <tr><td><span class="code-pin">CH 3</span></td><td>Left Shoulder Roll</td><td>shoulder_yoke_l</td><td>MG90S Metal</td></tr>
+          <tr><td><span class="code-pin">CH 4</span></td><td>Right Shoulder Pitch</td><td>torso_back (-X)</td><td>MG90S Metal</td></tr>
+          <tr><td><span class="code-pin">CH 5</span></td><td>Right Shoulder Roll</td><td>shoulder_yoke_r</td><td>MG90S Metal</td></tr>
+          <tr><td><span class="code-pin">CH 6</span></td><td>Left Hip Pitch</td><td>pelvis (+X)</td><td>MG90S Metal</td></tr>
+          <tr><td><span class="code-pin">CH 7</span></td><td>Left Ankle Roll (Waddle)</td><td>leg_left</td><td>MG90S Metal</td></tr>
+          <tr><td><span class="code-pin">CH 8</span></td><td>Right Hip Pitch</td><td>pelvis (-X)</td><td>MG90S Metal</td></tr>
+          <tr><td><span class="code-pin">CH 9</span></td><td>Right Ankle Roll (Waddle)</td><td>leg_right</td><td>MG90S Metal</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Card: Safety Checklist -->
+    <div class="info-card" style="grid-column: span 2;">
+      <h3>⚡ Assembly & Safety Rules</h3>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:14px;">
+        <div class="callout callout-danger">
+          <div><strong>PCA9685 VCC MUST BE 3.3V:</strong> Never power PCA9685 logic from 5V! It will push 5V back onto GPIO 1 and 2 and fry the ESP32-S3 I2C pins.</div>
+        </div>
+        <div class="callout callout-warning">
+          <div><strong>ZERO SERVOS FIRST:</strong> Center CH0–9 to 90° (1500 µs) with horns detached before screwing into limbs to prevent stripped gears.</div>
+        </div>
+        <div class="callout callout-info">
+          <div><strong>1000 µF BUFFER CAPACITOR:</strong> Install directly across PCA9685 V+ and GND screw terminals (negative stripe to GND) to absorb servo current surges.</div>
+        </div>
+        <div class="callout callout-success">
+          <div><strong>CHARGING ISOLATION:</strong> Turn the CyberBrick power toggle OFF when charging via the 2S boost USB-C port so charger current goes purely into the battery.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Subsystem filter handler
+    const filterButtons = document.querySelectorAll('.filter-btn');
+    const allWires = document.querySelectorAll('.wire');
+    const tooltip = document.createElement('div');
+    tooltip.id = 'tooltip';
+    document.body.appendChild(tooltip);
+
+    filterButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        filterButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const filter = btn.dataset.filter;
+
+        allWires.forEach(wire => {
+          if (filter === 'all') {
+            wire.classList.remove('wire-dimmed', 'wire-glow');
+          } else {
+            const categories = (wire.dataset.category || '').split(' ');
+            if (categories.includes(filter)) {
+              wire.classList.remove('wire-dimmed');
+              wire.classList.add('wire-glow');
+            } else {
+              wire.classList.add('wire-dimmed');
+              wire.classList.remove('wire-glow');
+            }
+          }
+        });
+      });
+    });
+
+    // Interactive Wire & Pin Pad Hover Highlighting
+    const pinPads = document.querySelectorAll('.pin-pad, .pin-pad-jumper, .pin-pad-floating');
+
+    function highlightNet(netName, showTooltip, e) {
+      if (!netName || netName === 'FLOAT') {
+        if (showTooltip && e) {
+          tooltip.style.display = 'block';
+          tooltip.innerHTML = `<strong style="color:#94a3b8;">Status:</strong> Unconnected<br><span style="font-size:0.75rem; color:#cbd5e1;">${e.target.dataset.name || 'Leave Floating'}</span>`;
+          tooltip.style.left = (e.clientX + 14) + 'px';
+          tooltip.style.top = (e.clientY + 14) + 'px';
+        }
+        return;
+      }
+
+      allWires.forEach(wire => {
+        if (wire.dataset.net === netName) {
+          wire.classList.add('wire-glow');
+          wire.classList.remove('wire-dimmed');
+        } else {
+          wire.classList.add('wire-dimmed');
+        }
+      });
+
+      if (showTooltip && e) {
+        tooltip.style.display = 'block';
+        tooltip.innerHTML = `<strong>Net:</strong> ${netName}<br><span style="font-size:0.75rem; color:#94a3b8;">${e.target.dataset.name || 'Connection Trace'}</span>`;
+        tooltip.style.left = (e.clientX + 14) + 'px';
+        tooltip.style.top = (e.clientY + 14) + 'px';
+      }
+    }
+
+    function resetHighlight() {
+      const activeFilter = document.querySelector('.filter-btn.active').dataset.filter;
+      allWires.forEach(wire => {
+        if (activeFilter === 'all') {
+          wire.classList.remove('wire-dimmed', 'wire-glow');
+        } else {
+          const categories = (wire.dataset.category || '').split(' ');
+          if (categories.includes(activeFilter)) {
+            wire.classList.remove('wire-dimmed');
+            wire.classList.add('wire-glow');
+          } else {
+            wire.classList.add('wire-dimmed');
+            wire.classList.remove('wire-glow');
+          }
+        }
+      });
+      tooltip.style.display = 'none';
+    }
+
+    pinPads.forEach(pad => {
+      pad.addEventListener('mouseenter', (e) => highlightNet(pad.dataset.net, true, e));
+      pad.addEventListener('mousemove', (e) => {
+        tooltip.style.left = (e.clientX + 14) + 'px';
+        tooltip.style.top = (e.clientY + 14) + 'px';
+      });
+      pad.addEventListener('mouseleave', resetHighlight);
+    });
+
+    allWires.forEach(wire => {
+      wire.addEventListener('mouseenter', (e) => highlightNet(wire.dataset.net, true, e));
+      wire.addEventListener('mousemove', (e) => {
+        tooltip.style.left = (e.clientX + 14) + 'px';
+        tooltip.style.top = (e.clientY + 14) + 'px';
+      });
+      wire.addEventListener('mouseleave', resetHighlight);
+    });
+
+    // Reset View Button
+    document.getElementById('btn-zoom-reset').addEventListener('click', () => {
+      document.querySelector('.filter-btn[data-filter="all"]').click();
+      resetHighlight();
+    });
+  </script>
+</body>
+</html>

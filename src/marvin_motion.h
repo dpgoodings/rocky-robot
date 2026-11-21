@@ -166,6 +166,10 @@ static void triggerAction(const String& actionRaw, unsigned long durationMs = 22
         activeGait = GaitMode::GESTURE_SEQ;
         activeGestureId = 5;
         gaitDurationMs = 2000;
+    } else if (act == "eyeroll" || act == "eye_roll") {
+        activeGait = GaitMode::GESTURE_SEQ;
+        activeGestureId = 6;
+        gaitDurationMs = 2000;
     } else if (act == "stand_tall" || act == "home" || act == "center") {
         setHomePose(150.0f);
     }
@@ -225,6 +229,18 @@ static void tick(uint32_t dtMs) {
                     setTarget(CH_R_HIP_PITCH, 108.0f, 120.0f);
                     setTarget(CH_L_SHOULDER_PITCH, 75.0f, 120.0f);
                     setTarget(CH_R_SHOULDER_PITCH, 75.0f, 120.0f);
+                } else if (activeGestureId == 6) {  // eyeroll: head looks up & pans, then droops
+                    float p = (float)elapsed / 2000.0f;
+                    if (p < 0.25f) {
+                        setTarget(CH_HEAD_TILT, 108.0f, 180.0f); // tilt up
+                        setTarget(CH_HEAD_PAN, 72.0f, 160.0f);   // pan left
+                    } else if (p < 0.70f) {
+                        setTarget(CH_HEAD_TILT, 112.0f, 180.0f); // stay tilted up
+                        setTarget(CH_HEAD_PAN, 108.0f, 160.0f);  // pan across to right
+                    } else {
+                        setTarget(CH_HEAD_TILT, 66.0f, 140.0f);  // deep dejected droop
+                        setTarget(CH_HEAD_PAN, 90.0f, 140.0f);   // center
+                    }
                 }
             }
         }

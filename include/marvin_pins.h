@@ -5,15 +5,16 @@
 
 // PCA9685 16-Channel PWM Servo Driver (I2C @ 0x40, VCC=3.3V, V+=5V UBEC)
 #define MARVIN_I2C_SDA       1
-#define MARVIN_I2C_SCL       2
+#define MARVIN_I2C_SCL       14
 #define PCA9685_I2C_ADDR     0x40
 
-// Waveshare 2.0" IPS LCD (320x240 ST7789 SPI, VCC=3.3V, BL=3.3V)
+// Waveshare 2.0" IPS LCD (320x240 ST7789 SPI, VCC=3.3V, BL=GPIO 45)
 #define LCD_PIN_MOSI         47
 #define LCD_PIN_SCLK         21
-#define LCD_PIN_CS           14
-#define LCD_PIN_DC           41
-#define LCD_PIN_RST          42
+#define LCD_PIN_CS           41
+#define LCD_PIN_DC           42
+#define LCD_PIN_RST          2
+#define LCD_PIN_BL           45
 #define LCD_WIDTH            320
 #define LCD_HEIGHT           240
 

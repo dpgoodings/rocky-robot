@@ -274,6 +274,15 @@ def index():
     )
 
 
+@app.get("/emulator")
+@app.get("/lcd-emulator")
+def emulator_page():
+    return FileResponse(
+        os.path.join(STATIC_DIR, "emulator.html"),
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+    )
+
+
 @app.get("/api/health")
 def health() -> dict[str, Any]:
     return {
@@ -925,6 +934,19 @@ class RobotSaveRequest(BaseModel):
     robot_ip: str | None = None
 
 
+class RobotFaceRequest(BaseModel):
+    mood: str | None = None
+    anim: str | None = None
+    action: str | None = None
+    seq: str | None = None
+    pos: str | None = None
+    gx: float | None = None
+    gy: float | None = None
+    speaking: bool | None = None
+    text: str | None = None
+    robot_ip: str | None = None
+
+
 def _ask_ollama_vision(image_bytes: bytes, prompt: str, char_id: str) -> str:
     b64_img = base64.b64encode(image_bytes).decode("utf-8")
     spec = REGISTRY.get(char_id)
@@ -1110,13 +1132,26 @@ async def robot_capture(robot_ip: str | None = None):
 
 _LATEST_CAMERA_FRAME: bytes | None = None
 _LAST_FRAME_TIME: float = 0.0
+_ROBOT_ASYNC_CLIENT: httpx.AsyncClient | None = None
+
+
+def get_robot_async_client() -> httpx.AsyncClient:
+    global _ROBOT_ASYNC_CLIENT
+    if _ROBOT_ASYNC_CLIENT is None or _ROBOT_ASYNC_CLIENT.is_closed:
+        limits = httpx.Limits(max_keepalive_connections=10, max_connections=20, keepalive_expiry=30.0)
+        timeout = httpx.Timeout(connect=0.7, read=2.0, write=0.7, pool=0.7)
+        _ROBOT_ASYNC_CLIENT = httpx.AsyncClient(limits=limits, timeout=timeout)
+    return _ROBOT_ASYNC_CLIENT
+
+
+_FRAME_LOCK: asyncio.Lock | None = None
 
 
 async def _fetch_cached_camera_frame(ip: str) -> bytes | None:
-    global _LATEST_CAMERA_FRAME, _LAST_FRAME_TIME
+    global _LATEST_CAMERA_FRAME, _LAST_FRAME_TIME, _FRAME_LOCK
     now = time.time()
-    # Cache for 70ms (~14 FPS) to prevent DMA/PSRAM starvation on ESP32
-    if _LATEST_CAMERA_FRAME is not None and (now - _LAST_FRAME_TIME) < 0.07:
+    # Fast-path cache hit (max 12 FPS to avoid bus/DMA starvation on ESP32-S3)
+    if _LATEST_CAMERA_FRAME is not None and (now - _LAST_FRAME_TIME) < 0.08:
         return _LATEST_CAMERA_FRAME
 
     cfg = robot_vision.load_camera_config()
@@ -1127,16 +1162,25 @@ async def _fetch_cached_camera_frame(ip: str) -> bytes | None:
             _LAST_FRAME_TIME = now
             return up_bytes
 
-    try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
+    if _FRAME_LOCK is None:
+        _FRAME_LOCK = asyncio.Lock()
+
+    # Single-flight lock: never allow multiple concurrent HTTP GET /capture requests to the ESP32
+    async with _FRAME_LOCK:
+        now = time.time()
+        if _LATEST_CAMERA_FRAME is not None and (now - _LAST_FRAME_TIME) < 0.08:
+            return _LATEST_CAMERA_FRAME
+
+        try:
+            client = get_robot_async_client()
             resp = await client.get(f"http://{ip}/capture")
             if resp.status_code == 200 and resp.content:
                 _LATEST_CAMERA_FRAME = resp.content
                 _LAST_FRAME_TIME = now
                 return resp.content
-    except Exception:
-        pass
-    return _LATEST_CAMERA_FRAME
+        except Exception:
+            pass
+        return _LATEST_CAMERA_FRAME
 
 
 @app.get("/api/robot/stream")
@@ -1183,6 +1227,129 @@ async def robot_save(req: RobotSaveRequest) -> dict[str, Any]:
             return resp.json()
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Failed to trigger SD card save: {exc}")
+
+
+_CURRENT_FACE_STATE: dict[str, Any] = {
+    "mood": "happy",
+    "anim": None,
+    "action": None,
+    "seq": None,
+    "pos": "CENTER",
+    "gx": 0.0,
+    "gy": 0.0,
+    "speaking": False,
+    "text": None,
+    "updated_at": time.time(),
+}
+
+
+@app.get("/api/robot/ping")
+async def robot_ping(robot_ip: str | None = None) -> dict[str, Any]:
+    ip = robot_ip if (robot_ip and _probe_ip(robot_ip)) else resolve_robot_ip()
+    try:
+        t0 = time.time()
+        async with httpx.AsyncClient(timeout=1.5) as client:
+            resp = await client.get(f"http://{ip}/ping")
+            latency_ms = round((time.time() - t0) * 1000, 1)
+            return {
+                "online": resp.status_code == 200,
+                "status_code": resp.status_code,
+                "robot_ip": ip,
+                "latency_ms": latency_ms,
+            }
+    except Exception as exc:
+        return {
+            "online": False,
+            "robot_ip": ip,
+            "error": str(exc),
+        }
+
+
+@app.get("/api/robot/face/state")
+def robot_face_state() -> dict[str, Any]:
+    return dict(_CURRENT_FACE_STATE)
+
+
+@app.post("/api/robot/face")
+async def robot_face_post(req: RobotFaceRequest) -> dict[str, Any]:
+    ip = req.robot_ip or resolve_robot_ip()
+    payload: dict[str, Any] = {}
+    if req.mood is not None:
+        payload["mood"] = req.mood
+        _CURRENT_FACE_STATE["mood"] = req.mood
+    if req.anim is not None:
+        payload["anim"] = req.anim
+        _CURRENT_FACE_STATE["anim"] = req.anim
+    if req.action is not None:
+        payload["action"] = req.action
+        _CURRENT_FACE_STATE["action"] = req.action
+    if req.seq is not None:
+        payload["seq"] = req.seq
+        _CURRENT_FACE_STATE["seq"] = req.seq
+    if req.pos is not None:
+        payload["pos"] = req.pos
+        _CURRENT_FACE_STATE["pos"] = req.pos
+    if req.gx is not None:
+        payload["gx"] = req.gx
+        _CURRENT_FACE_STATE["gx"] = req.gx
+    if req.gy is not None:
+        payload["gy"] = req.gy
+        _CURRENT_FACE_STATE["gy"] = req.gy
+    if req.speaking is not None:
+        payload["speaking"] = req.speaking
+        _CURRENT_FACE_STATE["speaking"] = req.speaking
+    if req.text is not None:
+        payload["text"] = req.text
+        _CURRENT_FACE_STATE["text"] = req.text
+    _CURRENT_FACE_STATE["updated_at"] = time.time()
+
+    try:
+        client = get_robot_async_client()
+        resp = await client.post(f"http://{ip}/face", json=payload)
+        if resp.status_code == 200:
+            try:
+                return resp.json()
+            except Exception:
+                return {"status": "ok", "robot_ip": ip, "state": _CURRENT_FACE_STATE}
+        return {"status": "error", "code": resp.status_code, "robot_ip": ip, "state": _CURRENT_FACE_STATE}
+    except Exception as exc:
+        return {"status": "error", "message": str(exc), "robot_ip": ip, "state": _CURRENT_FACE_STATE}
+
+
+@app.get("/api/robot/face")
+async def robot_face_get(
+    mood: str | None = None,
+    anim: str | None = None,
+    pos: str | None = None,
+    text: str | None = None,
+    robot_ip: str | None = None,
+) -> dict[str, Any]:
+    ip = robot_ip or resolve_robot_ip()
+    params: dict[str, str] = {}
+    if mood:
+        params["mood"] = mood
+        _CURRENT_FACE_STATE["mood"] = mood
+    if anim:
+        params["anim"] = anim
+        _CURRENT_FACE_STATE["anim"] = anim
+    if pos:
+        params["pos"] = pos
+        _CURRENT_FACE_STATE["pos"] = pos
+    if text:
+        params["text"] = text
+        _CURRENT_FACE_STATE["text"] = text
+    _CURRENT_FACE_STATE["updated_at"] = time.time()
+    try:
+        client = get_robot_async_client()
+        resp = await client.get(f"http://{ip}/face", params=params)
+        if resp.status_code == 200:
+            try:
+                return resp.json()
+            except Exception:
+                return {"status": "ok", "robot_ip": ip}
+        return {"status": "error", "code": resp.status_code, "robot_ip": ip}
+    except Exception as exc:
+        return {"status": "error", "message": str(exc), "robot_ip": ip}
 
 
 @app.post("/api/robot/inspect")
